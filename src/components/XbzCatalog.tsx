@@ -4,27 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
-import { sentenceCaseProductName, type CatalogProduct, type ProductsResponse } from "@/lib/xbz";
+import { sentenceCaseProductName } from "@/lib/xbz";
+import type { PublicCatalogProduct, PublicProductsResponse } from "@/lib/publicCatalog";
 
 const PAGE_SIZE = 24;
 
 type CategoryCount = { name: string; count: number };
 
-function formatPrice(product: CatalogProduct) {
-  if (product.formattedPrice) {
-    return product.formattedPrice.startsWith("R$")
-      ? product.formattedPrice
-      : `R$ ${product.formattedPrice}`;
-  }
-  if (product.price !== null) {
-    return product.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  }
-  return "Sob consulta";
-}
-
-function XbzProductCard({ product }: { product: CatalogProduct }) {
+function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const href = `/brindes/${encodeURIComponent(product.internalCode)}`;
+  const href = `/brindes/${encodeURIComponent(product.publicId)}`;
 
   return (
     <article className="product-card">
@@ -50,12 +39,12 @@ function XbzProductCard({ product }: { product: CatalogProduct }) {
         <p>
           {product.colors.length
             ? `${product.colors.length} ${product.colors.length === 1 ? "cor disponível" : "cores disponíveis"}`
-            : `Código interno ${product.internalCode}`}
+            : "Personalização sob consulta"}
         </p>
         <div className="product-card-footer">
           <div>
-            <small>A partir de</small>
-            <strong>{formatPrice(product)}</strong>
+            <small>Atendimento Fare Foto</small>
+            <strong>Solicite um orçamento</strong>
           </div>
           <Link aria-label={`Ver ${product.name}`} href={href}>
             <ArrowUpRight aria-hidden="true" size={20} />
@@ -67,7 +56,7 @@ function XbzProductCard({ product }: { product: CatalogProduct }) {
 }
 
 export function XbzCatalog() {
-  const [data, setData] = useState<ProductsResponse | null>(null);
+  const [data, setData] = useState<PublicProductsResponse | null>(null);
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
@@ -85,7 +74,7 @@ export function XbzCatalog() {
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
-        const payload = (await response.json()) as ProductsResponse & { error?: string };
+        const payload = (await response.json()) as PublicProductsResponse & { error?: string };
         if (!response.ok) throw new Error(payload.error || "Não foi possível consultar o catálogo.");
         setData(payload);
         if (payload.categories?.length) setCategories(payload.categories);
@@ -109,7 +98,7 @@ export function XbzCatalog() {
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
-        const payload = (await response.json()) as ProductsResponse & { error?: string };
+        const payload = (await response.json()) as PublicProductsResponse & { error?: string };
         if (!active) return;
         if (!response.ok) throw new Error(payload.error || "Não foi possível consultar o catálogo.");
         setData(payload);
@@ -247,7 +236,7 @@ export function XbzCatalog() {
         {!error && data?.products.length ? (
           <div className="product-grid catalog-product-grid">
             {data.products.map((product) => (
-              <XbzProductCard key={product.id} product={product} />
+              <XbzProductCard key={product.publicId} product={product} />
             ))}
           </div>
         ) : null}

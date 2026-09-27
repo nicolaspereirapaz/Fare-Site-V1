@@ -2,23 +2,39 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { ArrowLeft, FileWarning, MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { buildQuoteMessage, buildWhatsAppUrl } from "@/lib/commerce";
-import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
+import { requestCheckout } from "@/lib/requestCheckout";
 
 export function CartView() {
+  const router = useRouter();
   const { items, removeItem, updateQuantity } = useCart();
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [pending, setPending] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  function finishOnWhatsApp(event: FormEvent<HTMLFormElement>) {
+  async function finishOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const message = buildQuoteMessage({ name, company, phone, notes }, items);
-    window.open(buildWhatsAppUrl(FARE_FOTO_WHATSAPP, message), "_blank", "noopener,noreferrer");
+    setPending(true);
+    setCheckoutError(null);
+
+    try {
+      const result = await requestCheckout({ customer: { name, company, phone, notes }, items });
+      if ("requiresAuth" in result) {
+        router.push("/entrar?callbackURL=/carrinho");
+        return;
+      }
+      window.location.assign(result.url);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Não foi possível finalizar agora.");
+    } finally {
+      setPending(false);
+    }
   }
 
   if (!items.length) {
@@ -103,8 +119,9 @@ export function CartView() {
             <FileWarning aria-hidden="true" size={19} />
             <span>O nome da arte vai na mensagem. Anexe o arquivo na conversa do WhatsApp.</span>
           </div>
-          <button className="button button-whatsapp button-large" type="submit">
-            <MessageCircle aria-hidden="true" size={20} /> Finalizar no WhatsApp
+          {checkoutError ? <p className="auth-error" role="alert">{checkoutError}</p> : null}
+          <button className="button button-whatsapp button-large" disabled={pending} type="submit">
+            <MessageCircle aria-hidden="true" size={20} /> {pending ? "Verificando conta…" : "Finalizar no WhatsApp"}
           </button>
         </form>
         <small>Nenhum pagamento é realizado pelo site nesta versão.</small>

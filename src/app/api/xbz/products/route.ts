@@ -1,4 +1,5 @@
-import { getProducts, groupAvailableProducts, type ProductsResponse } from "@/lib/xbz";
+import { getProducts, groupAvailableProducts } from "@/lib/xbz";
+import { toPublicCatalogProduct, type PublicProductsResponse } from "@/lib/publicCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,8 @@ export async function GET(request: Request) {
     ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     const start = (page - 1) * limit;
-    const response: ProductsResponse & { categories: typeof categories } = {
-      products: filtered.slice(start, start + limit),
+    const response: PublicProductsResponse & { categories: typeof categories } = {
+      products: filtered.slice(start, start + limit).map(toPublicCatalogProduct),
       categories,
       meta: {
         total: filtered.length,

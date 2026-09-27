@@ -3,6 +3,7 @@ import { DM_Sans, Outfit } from "next/font/google";
 import { CartProvider } from "@/context/CartContext";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { getCurrentSession } from "@/lib/auth/server";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -27,12 +28,14 @@ export const metadata: Metadata = {
   icons: { icon: "/images/fare-foto-logo.svg" },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const session = await getCurrentSession();
+
   return (
     <html lang="pt-BR" className={`${dmSans.variable} ${outfit.variable}`}>
       <body>
         <CartProvider>
-          <Header />
+          <Header user={session ? { name: session.user.name } : null} />
           <main>{children}</main>
           <Footer />
         </CartProvider>

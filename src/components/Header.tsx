@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, ShoppingBag, X } from "lucide-react";
+import { Menu, ShoppingBag, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import { useCart } from "@/context/CartContext";
 
@@ -15,7 +15,7 @@ const navItems = [
   { href: "/#contato", label: "Contato" },
 ];
 
-export function Header() {
+export function Header({ user }: { user: { name: string } | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { itemCount } = useCart();
 
@@ -41,6 +41,10 @@ export function Header() {
         </nav>
 
         <div className="header-actions">
+          <Link className="account-link" href={user ? "/minha-conta" : "/entrar"}>
+            <UserRound aria-hidden="true" size={19} />
+            <span>{user ? "Minha conta" : "Entrar"}</span>
+          </Link>
           <Link className="cart-link" href="/carrinho" aria-label={`Carrinho com ${itemCount} itens`}>
             <ShoppingBag aria-hidden="true" size={20} />
             <span className="cart-label">Carrinho</span>

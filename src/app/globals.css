@@ -2571,6 +2571,147 @@ img {
   }
 }
 
+/* Authentication and customer account */
+.account-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.auth-page,
+.account-section {
+  min-height: 65vh;
+  padding-block: 72px 96px;
+}
+
+.auth-card {
+  width: min(100%, 520px);
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 48px);
+  background: white;
+  box-shadow: var(--shadow-md);
+}
+
+.auth-card h1,
+.account-heading h1 {
+  margin: 10px 0 8px;
+  color: var(--navy-dark);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.auth-card > p,
+.account-heading p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--navy-dark);
+  font-weight: 700;
+}
+
+.auth-form input {
+  min-height: 50px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  background: var(--cream);
+}
+
+.auth-error {
+  margin: 0;
+  color: #a62920;
+  font-weight: 700;
+}
+
+.auth-alternate {
+  margin: 24px 0 0;
+  text-align: center;
+}
+
+.auth-alternate a {
+  color: var(--orange-dark);
+  font-weight: 800;
+}
+
+.account-heading {
+  max-width: 720px;
+  margin-bottom: 36px;
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.account-card {
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 28px;
+  background: var(--cream);
+}
+
+.account-card > svg {
+  color: var(--orange);
+}
+
+.account-card h2 {
+  color: var(--navy-dark);
+  font-family: var(--font-outfit), sans-serif;
+}
+
+.account-card p,
+.account-card dt {
+  color: var(--muted);
+}
+
+.account-card dl,
+.account-card dl div {
+  display: grid;
+  gap: 5px;
+}
+
+.account-card dl {
+  gap: 16px;
+}
+
+.account-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.account-sign-out {
+  margin-top: 28px;
+}
+
+@media (max-width: 900px) {
+  .account-link span {
+    display: none;
+  }
+
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

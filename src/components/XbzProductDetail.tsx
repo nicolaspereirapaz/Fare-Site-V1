@@ -4,32 +4,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, FileUp, Info, MessageCircle, PackageCheck, ShoppingBag } from "lucide-react";
-import { sentenceCaseProductName, type CatalogProduct } from "@/lib/xbz";
+import { sentenceCaseProductName } from "@/lib/xbz";
+import type { PublicCatalogProduct } from "@/lib/publicCatalog";
 import { useCart } from "@/context/CartContext";
 
 type DetailResponse = {
-  product: CatalogProduct;
+  product: PublicCatalogProduct;
   meta: { fetchedAt: string; cached: boolean };
   error?: string;
 };
-
-function variantLabel(variant: CatalogProduct["variants"][number]) {
-  const color = [variant.primaryColor, variant.secondaryColor].filter(Boolean).join(" / ");
-  return color || variant.sku || variant.compoundCode || "Padrão";
-}
-
-function priceText(price: number | null, formatted: string) {
-  if (formatted) return formatted.startsWith("R$") ? formatted : `R$ ${formatted}`;
-  if (price !== null) return price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  return "Sob consulta";
-}
 
 export function XbzProductDetail({ code }: { code: string }) {
   const { addItem } = useCart();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [variantSku, setVariantSku] = useState("");
+  const [variantId, setVariantId] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [artworkName, setArtworkName] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
@@ -47,7 +37,7 @@ export function XbzProductDetail({ code }: { code: string }) {
         if (!active) return;
         if (!response.ok) throw new Error(payload.error || "Produto indisponível.");
         setData(payload);
-        setVariantSku(payload.product.variants[0]?.sku ?? "");
+        setVariantId(payload.product.variants[0]?.publicId ?? "");
         setError(null);
       } catch {
         if (active) setError("Não foi possível carregar este produto agora.");
@@ -63,8 +53,8 @@ export function XbzProductDetail({ code }: { code: string }) {
 
   const product = data?.product;
   const variant = useMemo(
-    () => product?.variants.find((item) => item.sku === variantSku) ?? product?.variants[0],
-    [product, variantSku],
+    () => product?.variants.find((item) => item.publicId === variantId) ?? product?.variants[0],
+    [product, variantId],
   );
   const clampedQuantity = Math.max(1, quantity);
 
@@ -91,23 +81,20 @@ export function XbzProductDetail({ code }: { code: string }) {
     );
   }
 
-  const unitPrice = variant.price ?? product.price;
   const selectedProduct = product;
   const selectedVariant = variant;
 
   const handleAddToCart = () => {
     addItem({
       productName: sentenceCaseProductName(selectedProduct.name),
-      slug: `brindes/${selectedProduct.internalCode}`,
+      slug: `brindes/${selectedProduct.publicId}`,
       quantity: clampedQuantity,
       selections: {
-        "Código interno": selectedProduct.internalCode,
-        "SKU": selectedVariant.sku || "—",
-        "Variação": variantLabel(selectedVariant),
+        "Variação": selectedVariant.label,
         "Categoria": selectedProduct.category,
       },
       artworkName,
-      unitPrice,
+      unitPrice: null,
       image: selectedProduct.imageUrl,
     });
     setAdded(true);
@@ -182,16 +169,16 @@ export function XbzProductDetail({ code }: { code: string }) {
               <div className="option-grid">
                 {product.variants.map((item) => (
                   <button
-                    aria-pressed={item.sku === variant.sku}
-                    className={`option-button${item.sku === variant.sku ? " selected" : ""}`}
-                    key={item.sku || item.id}
+                    aria-pressed={item.publicId === variant.publicId}
+                    className={`option-button${item.publicId === variant.publicId ? " selected" : ""}`}
+                    key={item.publicId}
                     onClick={() => {
-                      setVariantSku(item.sku);
+                      setVariantId(item.publicId);
                       setAdded(false);
                     }}
                     type="button"
                   >
-                    {variantLabel(item)}
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -234,9 +221,9 @@ export function XbzProductDetail({ code }: { code: string }) {
 
           <div className="quote-summary">
             <div>
-              <span>Valor unitário</span>
-              <strong>{priceText(variant.price, variant.formattedPrice)}</strong>
-              <small>Personalização, prazo e frete são confirmados no atendimento.</small>
+              <span>Valor</span>
+              <strong>Sob consulta</strong>
+              <small>A Fare Foto confirma personalização, prazo, valor e frete no atendimento.</small>
             </div>
             <button className="button button-primary button-large" onClick={handleAddToCart} type="button">
               <ShoppingBag aria-hidden="true" size={19} />

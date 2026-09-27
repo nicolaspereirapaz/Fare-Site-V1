@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fare Foto
 
-## Getting Started
+E-commerce em Next.js para fotos, materiais gráficos e brindes personalizados.
 
-First, run the development server:
+## Desenvolvimento local
+
+Requisitos: Node.js 22.13 ou mais recente (o projeto usa `node:sqlite`) e npm.
 
 ```bash
+npm install
+copy .env.example .env.local
+npx auth@latest migrate --config src/lib/auth.ts --yes
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Preencha os placeholders de `.env.local` antes de iniciar. O banco local é criado em `data/farefoto.sqlite`; tanto o banco quanto os arquivos de ambiente reais são ignorados pelo Git.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Abra [http://localhost:3000](http://localhost:3000).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verificação
 
-## Learn More
+```bash
+npm test -- --run
+npx tsc --noEmit
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Autenticação
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O cadastro e o login usam Better Auth com e-mail e senha. Novos cadastros recebem o papel `cliente`; os papéis reconhecidos são `cliente`, `vendedor` e `admin`. A página `/minha-conta` e a finalização do carrinho validam a sessão no servidor.
