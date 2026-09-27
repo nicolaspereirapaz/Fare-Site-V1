@@ -2,13 +2,17 @@ export type OrcamentoBrindeInput = {
   custoProduto: number;
   gravacaoUnitaria: number;
   quantidade: number;
-  frete: number;
+  freteFornecedor: number;
+  freteCliente: number;
 };
 
 export type OrcamentoBrindeResultado = {
   precoUnitario: number;
+  subtotalProdutos: number;
   precoFinal: number;
   precoUnitarioFinal: number;
+  freteCliente: number;
+  totalGeral: number;
 };
 
 function reaisParaCentavos(valorEmReais: number): number {
@@ -36,20 +40,27 @@ export function calcularPrecoBrinde(
 ): OrcamentoBrindeResultado {
   validarValorMonetario(input.custoProduto, "custoProduto");
   validarValorMonetario(input.gravacaoUnitaria, "gravacaoUnitaria");
-  validarValorMonetario(input.frete, "frete");
+  validarValorMonetario(input.freteFornecedor, "freteFornecedor");
+  validarValorMonetario(input.freteCliente, "freteCliente");
   validarQuantidade(input.quantidade);
 
   const custoProdutoCentavos = reaisParaCentavos(input.custoProduto);
   const gravacaoUnitariaCentavos = reaisParaCentavos(input.gravacaoUnitaria);
-  const freteCentavos = reaisParaCentavos(input.frete);
+  const freteFornecedorCentavos = reaisParaCentavos(input.freteFornecedor);
+  const freteClienteCentavos = reaisParaCentavos(input.freteCliente);
 
   const precoUnitarioCentavos = (custoProdutoCentavos + gravacaoUnitariaCentavos) * 2;
-  const precoFinalCentavos = precoUnitarioCentavos * input.quantidade + freteCentavos;
+  const subtotalProdutosCentavos = precoUnitarioCentavos * input.quantidade;
+  const precoFinalCentavos = subtotalProdutosCentavos + freteFornecedorCentavos;
   const precoUnitarioFinalCentavos = Math.round(precoFinalCentavos / input.quantidade);
+  const totalGeralCentavos = precoFinalCentavos + freteClienteCentavos;
 
   return {
     precoUnitario: centavosParaReais(precoUnitarioCentavos),
+    subtotalProdutos: centavosParaReais(subtotalProdutosCentavos),
     precoFinal: centavosParaReais(precoFinalCentavos),
     precoUnitarioFinal: centavosParaReais(precoUnitarioFinalCentavos),
+    freteCliente: centavosParaReais(freteClienteCentavos),
+    totalGeral: centavosParaReais(totalGeralCentavos),
   };
 }

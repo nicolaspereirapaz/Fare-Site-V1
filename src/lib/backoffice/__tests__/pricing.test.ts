@@ -2,17 +2,21 @@ import { describe, expect, it } from "vitest";
 import { calcularPrecoBrinde } from "../pricing";
 
 describe("calcularPrecoBrinde", () => {
-  it("aplica a regra precoUnitario=(custoProduto+gravacaoUnitaria)*2", () => {
+  it("dilui o frete do fornecedor no preço unitário final e discrimina a entrega ao cliente", () => {
     const resultado = calcularPrecoBrinde({
       custoProduto: 10,
       gravacaoUnitaria: 2,
       quantidade: 100,
-      frete: 50,
+      freteFornecedor: 50,
+      freteCliente: 35,
     });
 
     expect(resultado.precoUnitario).toBe(24);
+    expect(resultado.subtotalProdutos).toBe(2400);
     expect(resultado.precoFinal).toBe(2450);
     expect(resultado.precoUnitarioFinal).toBe(24.5);
+    expect(resultado.freteCliente).toBe(35);
+    expect(resultado.totalGeral).toBe(2485);
   });
 
   it("arredonda financeiramente em centavos para baixo quando o resto é menor que meio centavo", () => {
@@ -20,7 +24,8 @@ describe("calcularPrecoBrinde", () => {
       custoProduto: 10,
       gravacaoUnitaria: 0,
       quantidade: 3,
-      frete: 0.01,
+      freteFornecedor: 0.01,
+      freteCliente: 0,
     });
 
     // precoUnitario = 20; precoFinal = 60.01; precoUnitarioFinal = 60.01/3 = 20.003333... -> 20.00
@@ -34,7 +39,8 @@ describe("calcularPrecoBrinde", () => {
       custoProduto: 10,
       gravacaoUnitaria: 0,
       quantidade: 3,
-      frete: 0.02,
+      freteFornecedor: 0.02,
+      freteCliente: 0,
     });
 
     // precoFinal = 60.02; precoUnitarioFinal = 60.02/3 = 20.006666... -> 20.01
@@ -47,7 +53,8 @@ describe("calcularPrecoBrinde", () => {
       custoProduto: 0.1,
       gravacaoUnitaria: 0.2,
       quantidade: 1,
-      frete: 0,
+      freteFornecedor: 0,
+      freteCliente: 0,
     });
 
     expect(resultado.precoUnitario).toBe(0.6);
@@ -63,16 +70,30 @@ describe("calcularPrecoBrinde", () => {
           custoProduto: 10,
           gravacaoUnitaria: 2,
           quantidade,
-          frete: 0,
+          freteFornecedor: 0,
+          freteCliente: 0,
         }),
       ).toThrow();
     },
   );
 
   it.each([
-    ["custoProduto", { custoProduto: -1, gravacaoUnitaria: 2, quantidade: 1, frete: 0 }],
-    ["gravacaoUnitaria", { custoProduto: 10, gravacaoUnitaria: -2, quantidade: 1, frete: 0 }],
-    ["frete", { custoProduto: 10, gravacaoUnitaria: 2, quantidade: 1, frete: -5 }],
+    [
+      "custoProduto",
+      { custoProduto: -1, gravacaoUnitaria: 2, quantidade: 1, freteFornecedor: 0, freteCliente: 0 },
+    ],
+    [
+      "gravacaoUnitaria",
+      { custoProduto: 10, gravacaoUnitaria: -2, quantidade: 1, freteFornecedor: 0, freteCliente: 0 },
+    ],
+    [
+      "freteFornecedor",
+      { custoProduto: 10, gravacaoUnitaria: 2, quantidade: 1, freteFornecedor: -5, freteCliente: 0 },
+    ],
+    [
+      "freteCliente",
+      { custoProduto: 10, gravacaoUnitaria: 2, quantidade: 1, freteFornecedor: 0, freteCliente: -5 },
+    ],
   ] as const)("rejeita %s negativo", (_campo, input) => {
     expect(() => calcularPrecoBrinde(input)).toThrow();
   });
