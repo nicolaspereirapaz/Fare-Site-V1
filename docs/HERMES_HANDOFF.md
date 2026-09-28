@@ -31,9 +31,29 @@ Já concluído e commitado:
 - regra de preço dos brindes e separação entre frete do fornecedor e frete ao cliente;
 - ocultação pública de preço bruto, estoque e códigos internos do fornecedor.
 
-## Alterações locais ainda não commitadas
+## Fluxo de pedidos — concluído e commitado
 
-O agente anterior implementou parcialmente a próxima fatia antes de atingir limite do provedor:
+Commit: `689948c feat: persist orders with payment method and idempotent checkout`.
+
+Validação executada em 28/09 antes do commit:
+
+- `npm run build`: exit 0, 14 rotas geradas;
+- `npm test -- --run`: 19 arquivos, 91 testes aprovados;
+- `npx tsc --noEmit` e `npm run lint`: exit 0;
+- teste HTTP real em SQLite temporário na porta 3107:
+  - checkout sem login → `401`;
+  - cadastro → `200`;
+  - checkout autenticado → `200`, status `aguardando_pagamento`;
+  - POST repetido com a mesma `idempotencyKey` → mesmo `orderId`, **1 linha** em `fare_orders`;
+  - URL retornada aponta para `5511977843872` e contém código do pedido e método de pagamento;
+  - pedido aparece em `/minha-conta` (`200`);
+  - `paymentMethod` inválido → `400`.
+
+Atenção: um banco novo exige `npx auth@latest migrate --config src/lib/auth.ts --yes`
+(cria `user`/`session`/`account`/`verification`); a tabela `fare_orders` é criada
+automaticamente pelo repositório.
+
+Conteúdo desta fatia:
 
 - persistência SQLite de pedidos em `src/lib/orders/`;
 - chave de idempotência para impedir pedidos duplicados;
@@ -44,20 +64,10 @@ O agente anterior implementou parcialmente a próxima fatia antes de atingir lim
 - testes novos do repositório, checkout, carrinho e área do cliente;
 - alterações correspondentes no README e CSS.
 
-Estas alterações foram verificadas após a interrupção:
+## Próxima fatia
 
-- `npm test -- --run`: **19 arquivos, 91 testes aprovados**;
-- `npx tsc --noEmit`: **exit 0**;
-- `npm run lint`: **exit 0**.
-
-Ainda falta executar e corrigir, se necessário:
-
-1. `npm run build` com nenhum `next dev`/`next start` ativo;
-2. teste HTTP autenticado completo em banco SQLite temporário;
-3. conferir que o pedido aparece em `/minha-conta` e que o POST repetido com a mesma chave não duplica;
-4. validar que a URL retornada aponta para `5511977843872` e contém código do pedido e método de pagamento;
-5. revisar o diff por segurança e ausência de credenciais;
-6. apenas depois, criar um commit para esta fatia.
+Backoffice (aplicação separada, mesmo banco e API), Kanban comercial/produção,
+gerador de orçamento HTML/PDF e QA final.
 
 ## Regras de negócio confirmadas
 
