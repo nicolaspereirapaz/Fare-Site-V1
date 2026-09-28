@@ -29,3 +29,9 @@ npm run build
 ## Autenticação
 
 O cadastro e o login usam Better Auth com e-mail e senha. Novos cadastros recebem o papel `cliente`; os papéis reconhecidos são `cliente`, `vendedor` e `admin`. A página `/minha-conta` e a finalização do carrinho validam a sessão no servidor.
+
+## Pedidos
+
+A finalização exige login, registra a preferência de pagamento e cria um pedido com status inicial `aguardando_pagamento` antes de devolver a URL do WhatsApp. O site não processa pagamentos nesta fase. Cada pedido guarda os snapshots do cliente, itens e configurações, a forma de pagamento e o total em centavos; quando houver preço sob consulta, o total permanece nulo.
+
+A tabela `fare_orders` e seu índice são criados por uma migração idempotente (`runOrderMigrations`) executada automaticamente no primeiro acesso de leitura ou escrita. A restrição única `(user_id, idempotency_key)` impede duplicação em novas tentativas do mesmo checkout sem misturar usuários. A área `/minha-conta` consulta essa tabela usando exclusivamente o ID da sessão validada no servidor.

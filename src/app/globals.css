@@ -956,6 +956,7 @@ img {
 .contact-form textarea,
 .checkout-card input,
 .checkout-card textarea,
+.checkout-card select,
 .select-field select {
   width: 100%;
   border: 1px solid #dcd9d4;
@@ -970,6 +971,7 @@ img {
 .contact-form textarea:focus,
 .checkout-card input:focus,
 .checkout-card textarea:focus,
+.checkout-card select:focus,
 .select-field select:focus {
   border-color: var(--orange);
   box-shadow: 0 0 0 3px rgba(212, 83, 42, 0.12);
@@ -2061,10 +2063,22 @@ img {
 }
 
 .checkout-card input,
-.checkout-card textarea {
+.checkout-card textarea,
+.checkout-card select {
   border-color: rgba(255, 255, 255, 0.17);
   background: rgba(255, 255, 255, 0.09);
   color: white;
+}
+
+.checkout-card select option {
+  color: var(--ink);
+}
+
+.checkout-card .payment-notice {
+  margin-top: -6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .file-reminder {
@@ -2698,6 +2712,61 @@ img {
   font-weight: 700;
 }
 
+.account-orders {
+  grid-column: span 2;
+}
+
+.account-order-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.account-order {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  background: white;
+}
+
+.account-order-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.account-order-heading h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--navy-dark);
+  font-size: 1rem;
+}
+
+.account-order-heading span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.account-order p {
+  margin-bottom: 8px;
+}
+
+.account-order p span,
+.account-order strong {
+  color: var(--navy-dark);
+}
+
+.account-order ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  color: var(--ink);
+}
+
 .account-sign-out {
   margin-top: 28px;
 }
@@ -2709,6 +2778,10 @@ img {
 
   .account-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-orders {
+    grid-column: auto;
   }
 }
 

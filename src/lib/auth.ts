@@ -11,7 +11,7 @@ const globalAuth = globalThis as typeof globalThis & {
   fareFotoDatabase?: DatabaseSync;
 };
 
-const database = globalAuth.fareFotoDatabase ?? new DatabaseSync(databasePath);
+export const database = globalAuth.fareFotoDatabase ?? new DatabaseSync(databasePath);
 if (process.env.NODE_ENV !== "production") globalAuth.fareFotoDatabase = database;
 
 export const auth = betterAuth(buildAuthOptions(database));

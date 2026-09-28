@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ArrowLeft, FileWarning, MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { requestCheckout } from "@/lib/requestCheckout";
+import type { PaymentMethod } from "@/lib/orders/repository";
 
 export function CartView() {
   const router = useRouter();
@@ -15,8 +16,10 @@ export function CartView() {
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [pending, setPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const idempotencyKey = useRef<string | null>(null);
 
   async function finishOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,7 +27,15 @@ export function CartView() {
     setCheckoutError(null);
 
     try {
-      const result = await requestCheckout({ customer: { name, company, phone, notes }, items });
+      idempotencyKey.current ??= typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const result = await requestCheckout({
+        customer: { name, company, phone, notes },
+        items,
+        paymentMethod,
+        idempotencyKey: idempotencyKey.current,
+      });
       if ("requiresAuth" in result) {
         router.push("/entrar?callbackURL=/carrinho");
         return;
@@ -114,6 +125,22 @@ export function CartView() {
           <label><span>Nome</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label><span>Empresa (opcional)</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label>
           <label><span>WhatsApp para retorno</span><input inputMode="tel" required value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+          <label>
+            <span>Forma de pagamento</span>
+            <select
+              required
+              value={paymentMethod}
+              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod | "")}
+            >
+              <option value="">Selecione</option>
+              <option value="pix">Pix</option>
+              <option value="cartao_credito">Cartão de crédito</option>
+              <option value="cartao_debito">Cartão de débito</option>
+              <option value="boleto">Boleto</option>
+              <option value="faturamento_empresa">Faturamento para empresa</option>
+            </select>
+          </label>
+          <small className="payment-notice">Faturamento para empresa está sujeito à aprovação da Fare Foto.</small>
           <label><span>Observações (opcional)</span><textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
           <div className="file-reminder">
             <FileWarning aria-hidden="true" size={19} />
@@ -121,7 +148,7 @@ export function CartView() {
           </div>
           {checkoutError ? <p className="auth-error" role="alert">{checkoutError}</p> : null}
           <button className="button button-whatsapp button-large" disabled={pending} type="submit">
-            <MessageCircle aria-hidden="true" size={20} /> {pending ? "Verificando conta…" : "Finalizar no WhatsApp"}
+            <MessageCircle aria-hidden="true" size={20} /> {pending ? "Criando pedido…" : "Criar pedido e abrir WhatsApp"}
           </button>
         </form>
         <small>Nenhum pagamento é realizado pelo site nesta versão.</small>
