@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
-import { sentenceCaseProductName } from "@/lib/xbz";
+import { formatProductName } from "@/lib/xbz";
 import type { PublicCatalogProduct, PublicProductsResponse } from "@/lib/publicCatalog";
 
 const PAGE_SIZE = 24;
@@ -20,7 +20,7 @@ function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
       <Link className="product-card-image" href={href}>
         {product.imageUrl && !imageFailed ? (
           <Image
-            alt={product.name}
+            alt={formatProductName(product.name)}
             fill
             onError={() => setImageFailed(true)}
             sizes="(max-width: 640px) 82vw, (max-width: 1024px) 42vw, 280px"
@@ -34,7 +34,7 @@ function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
       <div className="product-card-content">
         <span className="product-category">{product.category}</span>
         <h3>
-          <Link href={href}>{sentenceCaseProductName(product.name)}</Link>
+          <Link href={href}>{formatProductName(product.name)}</Link>
         </h3>
         <p>
           {product.colors.length
@@ -46,7 +46,7 @@ function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
             <small>Atendimento Fare Foto</small>
             <strong>Solicite um orçamento</strong>
           </div>
-          <Link aria-label={`Ver ${product.name}`} href={href}>
+          <Link aria-label={`Ver ${formatProductName(product.name)}`} href={href}>
             <ArrowUpRight aria-hidden="true" size={20} />
           </Link>
         </div>

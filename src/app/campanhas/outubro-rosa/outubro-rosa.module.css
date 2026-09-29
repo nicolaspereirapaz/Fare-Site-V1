@@ -104,8 +104,8 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
 }
 
 .card {
@@ -284,7 +284,7 @@
 }
 
 @media (max-width: 1050px) {
-  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
@@ -324,8 +324,73 @@
   cursor: pointer;
 }
 
-.cardImage { width: calc(100% - 20px); }
+.cardImage { width: calc(100% - 20px); background: #f2f2f3; }
+.cartThumb,
+.modalImage { background: #f2f2f3; }
+/* fotos do fornecedor têm fundo branco: multiply funde o branco ao cinza */
+.cardImage img,
+.cartThumb img,
+.modalImage img { mix-blend-mode: multiply; }
 .titleButton { font-weight: inherit; }
+a.titleButton, a.addButton { text-decoration: none; }
+a.titleButton:hover { color: #a90f52; }
+
+/* Página do produto: mesma estrutura da Revelação de Fotos, com as fotos do fornecedor sobre cinza */
+.detailImage { background: #f2f2f3 !important; }
+.detailImage img { mix-blend-mode: multiply; }
+.detailBadge { background: #a90f52 !important; color: #fff !important; }
+.perUnit { margin-left: 3px; font-size: .9rem; font-weight: 600; opacity: .7; }
+.detailNotice { margin-top: 14px; }
+.quantityField { display: grid; gap: 6px; margin-top: 14px; max-width: 220px; }
+.quantityField span { font-size: .82rem; font-weight: 700; }
+.quantityField input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #d9d4dc;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+.quantityField input:focus { outline: 2px solid #a90f52; outline-offset: 1px; }
+.relatedGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+@media (max-width: 900px) { .relatedGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .relatedGrid { grid-template-columns: 1fr; } }
+
+.cardPrice {
+  display: grid;
+  gap: 1px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #f0e4e9;
+}
+.cardPrice small { color: #8b727c; font-size: .72rem; font-weight: 600; letter-spacing: .02em; }
+.cardPrice strong { color: #a90f52; font-size: 1.35rem; font-weight: 800; line-height: 1.15; }
+.cardPrice span { color: #8b727c; font-size: .72rem; }
+
+.modalPrice { display: grid; gap: 1px; margin: 4px 0 12px; }
+.modalPrice small { color: #8b727c; font-size: .75rem; font-weight: 600; }
+.modalPrice strong { color: #a90f52; font-size: 1.7rem; font-weight: 800; line-height: 1.1; }
+.modalPrice strong span { margin-left: 3px; color: #8b727c; font-size: .85rem; font-weight: 600; }
+.estimateNotice {
+  display: flex;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 11px 13px;
+  border: 1px solid #f1d3df;
+  border-radius: 10px;
+  color: #6d4a57;
+  background: #fff5f9;
+  font-size: .76rem;
+  line-height: 1.5;
+}
+.estimateNotice svg { flex: none; margin-top: 2px; color: #a90f52; }
+.estimateNotice strong { color: #4a1f31; }
 
 .addButton {
   display: inline-flex;
@@ -399,7 +464,7 @@
 .modalBackdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(37,12,23,.66); backdrop-filter: blur(4px); }
 .modal { position: relative; display: grid; width: min(780px, 100%); max-height: calc(100vh - 40px); grid-template-columns: 1fr 1fr; overflow: auto; border-radius: 18px; background: #fff; box-shadow: 0 30px 80px rgba(31,8,18,.32); }
 .modalClose { position: absolute; z-index: 2; top: 14px; right: 14px; display: grid; width: 38px; height: 38px; place-items: center; border: 0; border-radius: 50%; color: #6d3c50; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.12); cursor: pointer; }
-.modalImage { position: relative; min-height: 420px; background: #faf6f8; }
+.modalImage { position: relative; min-height: 420px; background: #f2f2f3; }
 .modalImage img { object-fit: contain; padding: 28px; }
 .modalContent { display: flex; flex-direction: column; justify-content: center; padding: 46px 34px 34px; }
 .modalContent h2 { margin: 9px 0 24px; color: #30111f; font-size: 1.7rem; line-height: 1.15; }

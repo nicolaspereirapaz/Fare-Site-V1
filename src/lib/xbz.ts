@@ -1,3 +1,5 @@
+import { classifyProduct, isInternalSupplierItem, PRODUCT_CATEGORIES } from "./productCategories";
+
 export type Product = {
   id: string;
   sku: string;
@@ -77,28 +79,68 @@ function boolean(value: unknown): boolean {
   return value === true || value === 1 || text(value).toLowerCase() === "true";
 }
 
-export function sentenceCaseProductName(value: string): string {
-  const normalized = value.trim().toLocaleLowerCase("pt-BR");
-  return normalized ? normalized[0].toLocaleUpperCase("pt-BR") + normalized.slice(1) : "";
+// Conectores ficam minúsculos (exceto na primeira palavra): "Copo Térmico com Tampa 500ml".
+const NAME_CONNECTORS = new Set([
+  "a", "o", "as", "os", "e", "ou", "de", "da", "do", "das", "dos", "em", "na", "no", "nas", "nos",
+  "com", "sem", "para", "pra", "por", "pelo", "pela", "ao", "à", "x", "c/", "p/", "s/",
+]);
+// Siglas conhecidas no catálogo de brindes.
+const NAME_ACRONYMS = new Map([
+  "usb", "led", "pu", "pvc", "tnt", "rpet", "mdf", "eva", "abs", "tws", "pp", "a4", "a5", "a6",
+  "3d", "tv", "gps", "rfid", "nfc", "uv", "ps", "pla", "cob",
+].map((item) => [item, item.toLocaleUpperCase("pt-BR")]));
+NAME_ACRONYMS.set("leds", "LEDs");
+
+function capitalizeWord(word: string): string {
+  const index = word.search(/\p{L}/u);
+  if (index < 0) return word;
+  return word.slice(0, index) + word[index].toLocaleUpperCase("pt-BR") + word.slice(index + 1);
 }
 
-const CATEGORY_RULES: Array<[RegExp, string]> = [
-  [/\b(caneca|copo|taca|xicara)\b/, "Canecas e copos"],
-  [/\b(mochila|bolsa|sacola|necessaire|pochete|pasta executiva)\b/, "Bolsas e mochilas"],
-  [/\b(squeeze|garrafa|cantil|termica)\b/, "Garrafas e squeezes"],
-  [/\b(caderno|bloco|agenda|caneta|lapiseira|marca-texto|estojo)\b/, "Papelaria e escritório"],
-  [/\b(chaveiro)\b/, "Chaveiros"],
-  [/\b(camiseta|camisa|bone|avental|colete)\b/, "Vestuário"],
-  [/\b(fone|carregador|cabo|mouse|teclado|caixa de som|power bank|pen drive|usb)\b/, "Tecnologia"],
-  [/\b(guarda-chuva|mala|almofada de viagem|travesseiro de viagem)\b/, "Viagem"],
-  [/\b(ferramenta|trena|lanterna|canivete)\b/, "Ferramentas"],
-  [/\b(kit vinho|saca-rolha|abridor|tabua|talher|porta-copo)\b/, "Casa e cozinha"],
-];
+function formatNameWord(word: string, isFirst: boolean): string {
+  const core = word.replace(/^[("'“*]+|[)"'”.,:;]+$/g, "");
+  const lead = word.slice(0, word.indexOf(core));
+  const trail = word.slice(word.indexOf(core) + core.length);
 
-export function inferCategory(name: string, suppliedCategory: string): string {
-  if (suppliedCategory.trim()) return suppliedCategory.trim();
-  const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
-  return CATEGORY_RULES.find(([pattern]) => pattern.test(normalizedName))?.[1] ?? "Outros";
+  if (!core) return word;
+  if (/^\d/.test(core)) {
+    // Medidas: ml minúsculo (500ml), litro com L (14L, 1,2L), GB/mAh no padrão técnico.
+    const measured = core.replace(/(\d)(gb|tb|mb)$/, (_, digit: string, unit: string) => digit + unit.toUpperCase())
+      .replace(/mah$/, "mAh").replace(/^(\d+)d$/, "$1D").replace(/^([\d.,]+)l$/, "$1L");
+    return lead + measured + trail;
+  }
+  if (NAME_ACRONYMS.has(core)) return lead + NAME_ACRONYMS.get(core) + trail;
+  if (/^[cps]\/\S/.test(core)) return lead + core + trail;
+  // Palavra aberta por aspas conta como início de frase: "Sem Caneta".
+  const startsPhrase = isFirst || /["“]/.test(lead);
+  if (!startsPhrase && NAME_CONNECTORS.has(core)) return lead + core + trail;
+  return lead + core.split("-").map(capitalizeWord).join("-") + trail;
+}
+
+/** Nome de produto em título: "COPO TÉRMICO 500ML" → "Copo Térmico 500ml". */
+export function formatProductName(value: string): string {
+  const words = value.trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR").split(" ").filter(Boolean);
+  return words.map((word, index) => formatNameWord(word, index === 0)).join(" ");
+}
+
+/** Categorias antigas, gravadas no banco local antes da reorganização; são recalculadas ao ler. */
+const LEGACY_CATEGORIES = new Set([
+  "Canecas e copos", "Bolsas e mochilas", "Garrafas e squeezes", "Papelaria e escritório", "Chaveiros",
+  "Vestuário", "Tecnologia", "Viagem", "Ferramentas", "Casa e cozinha", "Outros", "PONTA DE ESTOQUE",
+]);
+
+export function inferCategory(name: string, suppliedCategory: string, description = ""): string {
+  return classifyProduct(name, description, suppliedCategory);
+}
+
+function resolveCategory(product: Pick<Product, "name" | "description" | "category">): string {
+  if (product.category && !LEGACY_CATEGORIES.has(product.category)) {
+    // Categoria válida do fornecedor ou já reclassificada.
+    return (PRODUCT_CATEGORIES as readonly string[]).includes(product.category)
+      ? classifyProduct(product.name, product.description)
+      : product.category;
+  }
+  return classifyProduct(product.name, product.description);
 }
 
 export function normalizeProduct(raw: RawProduct): Product {
@@ -106,6 +148,7 @@ export function normalizeProduct(raw: RawProduct): Product {
   const sku = text(raw.CodigoXbz ?? raw.codigoXbz);
   const name = text(raw.Nome ?? raw.nome ?? raw.Descricao ?? raw.descricao) || "Produto sem nome";
   const suppliedCategory = text(raw.WebTipo ?? raw.webTipo);
+  const description = text(raw.Descricao ?? raw.descricao);
 
   return {
     id: id || sku || text(raw.CodigoComposto ?? raw.codigoComposto),
@@ -113,10 +156,10 @@ export function normalizeProduct(raw: RawProduct): Product {
     compoundCode: text(raw.CodigoComposto ?? raw.codigoComposto),
     familyCode: text(raw.CodigoAmigavel ?? raw.codigoAmigavel),
     name,
-    description: text(raw.Descricao ?? raw.descricao),
+    description,
     productUrl: text(raw.SiteLink ?? raw.siteLink),
     imageUrl: text(raw.ImageLink ?? raw.imageLink),
-    category: inferCategory(name, suppliedCategory),
+    category: inferCategory(name, suppliedCategory, description),
     subcategory: text(raw.WebSubTipo ?? raw.webSubTipo),
     primaryColor: text(raw.CorWebPrincipal ?? raw.corWebPrincipal),
     secondaryColor: text(raw.CorWebSecundaria ?? raw.corWebSecundaria),
@@ -153,6 +196,7 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
 
   for (const product of products) {
     if (product.stockAvailable <= 0) continue;
+    if (isInternalSupplierItem(product.name)) continue;
     const internalCode = product.familyCode || product.compoundCode || product.sku || product.id;
     const variants = groups.get(internalCode) ?? [];
     variants.push(product);
@@ -175,7 +219,7 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
       description: representative.description,
       productUrl: representative.productUrl,
       imageUrl: representative.imageUrl,
-      category: representative.category,
+      category: resolveCategory(representative),
       subcategory: representative.subcategory,
       price: lowestPriced.price,
       formattedPrice: lowestPriced.formattedPrice,

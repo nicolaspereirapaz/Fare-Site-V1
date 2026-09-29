@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, FileUp, Info, MessageCircle, PackageCheck, ShoppingBag } from "lucide-react";
-import { sentenceCaseProductName } from "@/lib/xbz";
+import { formatProductName } from "@/lib/xbz";
 import type { PublicCatalogProduct } from "@/lib/publicCatalog";
 import { useCart } from "@/context/CartContext";
 
@@ -86,7 +86,7 @@ export function XbzProductDetail({ code }: { code: string }) {
 
   const handleAddToCart = () => {
     addItem({
-      productName: sentenceCaseProductName(selectedProduct.name),
+      productName: formatProductName(selectedProduct.name),
       slug: `brindes/${selectedProduct.publicId}`,
       quantity: clampedQuantity,
       selections: {
@@ -109,7 +109,7 @@ export function XbzProductDetail({ code }: { code: string }) {
         <span>/</span>
         <span>{product.category}</span>
         <span>/</span>
-        <strong>{sentenceCaseProductName(product.name)}</strong>
+        <strong>{formatProductName(product.name)}</strong>
       </nav>
 
       <div className="product-detail-grid">
@@ -118,7 +118,7 @@ export function XbzProductDetail({ code }: { code: string }) {
             <div className="product-main-image">
               {product.imageUrl && !imageFailed ? (
                 <Image
-                  alt={sentenceCaseProductName(product.name)}
+                  alt={formatProductName(product.name)}
                   fill
                   onError={() => setImageFailed(true)}
                   priority
@@ -148,7 +148,7 @@ export function XbzProductDetail({ code }: { code: string }) {
         <div className="product-configurator">
           <div className="config-heading">
             <span className="eyebrow">Configure seu brinde</span>
-            <h1>{sentenceCaseProductName(product.name)}</h1>
+            <h1>{formatProductName(product.name)}</h1>
             {product.description ? <p>{product.description}</p> : null}
           </div>
 
