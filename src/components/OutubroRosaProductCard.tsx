@@ -62,7 +62,7 @@ export function OutubroRosaProductCard({ product }: { product: PublicCatalogProd
           )}
         </div>
         <Link className={styles.addButton} href={href}>
-          <ShoppingBag aria-hidden="true" size={17} /> Configurar produto
+          <ShoppingBag aria-hidden="true" size={17} /> Configurar<span className={styles.addButtonExtra}> produto</span>
         </Link>
       </div>
     </article>

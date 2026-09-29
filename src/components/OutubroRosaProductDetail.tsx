@@ -3,31 +3,38 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, FileText, FileUp, Info, MessageCircle, PackageCheck, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Check, FileText, Info, MessageCircle, PackageCheck, ShoppingBag } from "lucide-react";
 import type { PublicCatalogProduct } from "@/lib/publicCatalog";
 import { formatProductName } from "@/lib/xbz";
-import { CAMPAIGN_REFERENCE_QUANTITY } from "@/lib/campaignPricing";
-import { appendCampaignCartItem, OUTUBRO_ROSA_CART_ANCHOR } from "@/lib/outubroRosaCart";
+import { CAMPAIGN_REFERENCE_QUANTITY, unitPriceForQuantity, type CampaignQuantityPricing } from "@/lib/campaignPricing";
+import { appendCampaignCartItem, OUTUBRO_ROSA_CART_PATH } from "@/lib/outubroRosaCart";
 import { formatCampaignPrice, OutubroRosaProductCard } from "@/components/OutubroRosaProductCard";
 import styles from "@/app/campanhas/outubro-rosa/outubro-rosa.module.css";
 
+type PriceTier = { quantity: number; unitPrice: number };
 type DetailResponse = {
   product: PublicCatalogProduct;
+  priceTiers: PriceTier[];
+  quantityPricing: CampaignQuantityPricing | null;
   related: PublicCatalogProduct[];
   error?: string;
 };
 
-const QUICK_QUANTITIES = [50, 100, 250, 500];
-
+/**
+ * Página de produto da campanha no mesmo layout da Revelação de Fotos:
+ * miniaturas + foto grande, opções em botões, tabela de quantidade com valor
+ * e o resumo escuro com "Adicionar ao carrinho".
+ */
 export function OutubroRosaProductDetail({ code }: { code: string }) {
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [variantId, setVariantId] = useState("");
   const [quantity, setQuantity] = useState(CAMPAIGN_REFERENCE_QUANTITY);
-  const [artworkName, setArtworkName] = useState<string | null>(null);
+  const [customQuantity, setCustomQuantity] = useState("");
+  const [customMode, setCustomMode] = useState(false);
   const [added, setAdded] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let active = true;
@@ -77,29 +84,60 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
   }
 
   const name = formatProductName(product.name);
-  const hasPrice = typeof product.startingPrice === "number";
+  const tiers = data?.priceTiers ?? [];
+  const isCustom = customMode;
+  // Em "Outra quantidade" vale o número digitado (0 enquanto o campo estiver vazio).
+  const orderQuantity = isCustom ? Number(customQuantity) || 0 : quantity;
+  const selectedTier = isCustom ? undefined : tiers.find((tier) => tier.quantity === quantity);
+  const referencePrice = typeof product.startingPrice === "number" ? product.startingPrice : null;
+  // Outra quantidade: mesmo cálculo da tabela (frete rateado pela quantidade digitada).
+  const customPrice = isCustom && data?.quantityPricing ? unitPriceForQuantity(data.quantityPricing, orderQuantity) : null;
+  const hasExactPrice = Boolean(selectedTier) || customPrice !== null;
+  const displayPrice = selectedTier?.unitPrice ?? customPrice ?? referencePrice;
+  const mainImage = variant.imageUrl || product.imageUrl;
+  const imageOk = (url: string) => Boolean(url) && !failedImages[url];
+  const markFailed = (url: string) => setFailedImages((current) => ({ ...current, [url]: true }));
   const selectedVariant = variant;
 
+  function chooseVariant(id: string) {
+    setVariantId(id);
+    setAdded(false);
+  }
+
+  function chooseTier(value: number) {
+    setQuantity(value);
+    setCustomMode(false);
+    setAdded(false);
+  }
+
+  function chooseCustom() {
+    setCustomMode(true);
+    if (!customQuantity) setCustomQuantity(String(quantity));
+    setAdded(false);
+  }
+
   function handleAddToCart() {
+    if (orderQuantity < 1) return;
     appendCampaignCartItem({
       productName: name,
       slug: `campanhas/outubro-rosa/${product!.publicId}`,
-      quantity,
+      quantity: orderQuantity,
+      color: selectedVariant.label,
+      pricing: data?.quantityPricing ?? null,
       selections: {
         Cor: selectedVariant.label,
         Categoria: product!.category,
-        ...(hasPrice
-          ? { "Valor estimado": `a partir de ${formatCampaignPrice(product!.startingPrice as number)}/un. (ref. ${CAMPAIGN_REFERENCE_QUANTITY} un.)` }
+        ...(displayPrice !== null
+          ? { "Valor estimado": `${hasExactPrice ? "" : "a partir de "}${formatCampaignPrice(displayPrice)}/un. (ref. ${hasExactPrice ? orderQuantity : CAMPAIGN_REFERENCE_QUANTITY} un.)` }
           : {}),
       },
-      artworkName,
+      artworkName: null,
       unitPrice: null,
-      image: product!.imageUrl,
+      image: mainImage,
     });
     setAdded(true);
   }
 
-  const reset = () => setAdded(false);
 
   return (
     <>
@@ -112,13 +150,30 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
 
           <div className="product-detail-grid">
             <div className="product-media-column">
-              <div className="product-gallery">
-                <div className={`product-thumbnail ${styles.detailImage}`} aria-hidden="true">
-                  {product.imageUrl && !imageFailed ? <Image alt="" fill sizes="72px" src={product.imageUrl} unoptimized /> : null}
+              <div className={`product-gallery ${styles.gallery}`}>
+                {/* Miniaturas: uma por cor; clicar troca a foto e a cor escolhida. */}
+                <div aria-label="Cores do produto" className={styles.thumbRail}>
+                  {product.variants.map((item) => {
+                    const url = item.imageUrl || product.imageUrl;
+                    const active = item.publicId === variant.publicId;
+                    return (
+                      <button
+                        aria-label={`Ver cor ${item.label}`}
+                        aria-pressed={active}
+                        className={`product-thumbnail ${styles.detailImage} ${styles.thumbButton}${active ? ` ${styles.thumbActive}` : ""}`}
+                        key={item.publicId}
+                        onClick={() => chooseVariant(item.publicId)}
+                        title={item.label}
+                        type="button"
+                      >
+                        {imageOk(url) ? <Image alt="" fill onError={() => markFailed(url)} sizes="72px" src={url} unoptimized /> : null}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className={`product-main-image ${styles.detailImage}`}>
-                  {product.imageUrl && !imageFailed ? (
-                    <Image alt={name} fill onError={() => setImageFailed(true)} priority sizes="(max-width: 900px) 100vw, 48vw" src={product.imageUrl} unoptimized />
+                  {imageOk(mainImage) ? (
+                    <Image alt={`${name} — ${variant.label}`} fill key={mainImage} onError={() => markFailed(mainImage)} priority sizes="(max-width: 900px) 100vw, 48vw" src={mainImage} unoptimized />
                   ) : (
                     <span className="product-image-fallback">Sem imagem</span>
                   )}
@@ -134,26 +189,26 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
 
             <div className="product-configurator">
               <div className="config-heading">
-                <span className="eyebrow">Configure seu brinde</span>
+                <span className="eyebrow">Configure seu produto</span>
                 <h1>{name}</h1>
                 <p>Brinde da seleção Outubro Rosa, personalizado pela Fare Foto para a sua campanha.</p>
               </div>
 
               <div className="draft-notice" role="note">
                 <Info aria-hidden="true" size={18} />
-                <span>Escolha a cor e a quantidade. Personalização, valor final e prazo são confirmados pela equipe no WhatsApp.</span>
+                <span>Opções iniciais para montar o pedido. Disponibilidade, valor e prazo são confirmados pela equipe no WhatsApp.</span>
               </div>
 
               <div className="config-stack">
                 <fieldset className="option-group">
-                  <legend><span>01</span>Cor</legend>
-                  <div className="option-grid">
+                  <legend>Cor <small className={styles.legendValue}>{variant.label}</small></legend>
+                  <div className={`option-grid ${styles.colorGrid}`}>
                     {product.variants.map((item) => (
                       <button
                         aria-pressed={item.publicId === variant.publicId}
-                        className={`option-button${item.publicId === variant.publicId ? " selected" : ""}`}
+                        className={`option-button ${styles.colorButton}${item.publicId === variant.publicId ? " selected" : ""}`}
                         key={item.publicId}
-                        onClick={() => { setVariantId(item.publicId); reset(); }}
+                        onClick={() => chooseVariant(item.publicId)}
                         type="button"
                       >
                         {item.label}
@@ -162,75 +217,75 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
                   </div>
                 </fieldset>
 
-                <fieldset className="option-group">
-                  <legend><span>02</span>Quantidade</legend>
-                  <div className="option-grid">
-                    {QUICK_QUANTITIES.map((value) => (
-                      <button
-                        aria-pressed={quantity === value}
-                        className={`option-button${quantity === value ? " selected" : ""}`}
-                        key={value}
-                        onClick={() => { setQuantity(value); reset(); }}
-                        type="button"
-                      >
-                        {value} un.
-                      </button>
-                    ))}
+                <fieldset className="quantity-range-group">
+                  <legend>Escolha a quantidade</legend>
+                  <div className="quantity-range-table">
+                    <div aria-hidden="true" className="quantity-range-head"><span>Quantidade</span><span>Valor por unidade</span></div>
+                    {tiers.map((tier) => {
+                      const active = !isCustom && quantity === tier.quantity;
+                      return (
+                        <label className={active ? "quantity-range-row selected" : "quantity-range-row"} key={tier.quantity}>
+                          <span>
+                            <input checked={active} name="quantity-range" onChange={() => chooseTier(tier.quantity)} type="radio" />
+                            {tier.quantity} unidades
+                          </span>
+                          <strong>{formatCampaignPrice(tier.unitPrice)}</strong>
+                        </label>
+                      );
+                    })}
+                    <label className={isCustom ? "quantity-range-row selected" : "quantity-range-row"}>
+                      <span>
+                        <input checked={isCustom} name="quantity-range" onChange={chooseCustom} type="radio" />
+                        Outra quantidade
+                        <input
+                          aria-label="Outra quantidade"
+                          className={styles.customQuantity}
+                          inputMode="numeric"
+                          maxLength={6}
+                          onChange={(event) => {
+                            setCustomMode(true);
+                            setCustomQuantity(event.target.value.replace(/\D/g, "").replace(/^0+/, ""));
+                            setAdded(false);
+                          }}
+                          onFocus={chooseCustom}
+                          placeholder="ex.: 300"
+                          type="text"
+                          value={isCustom ? customQuantity : ""}
+                        />
+                      </span>
+                      <strong>{customPrice !== null ? formatCampaignPrice(customPrice) : data?.quantityPricing ? "Digite a quantidade" : "Sob consulta"}</strong>
+                    </label>
                   </div>
-                  <label className={`select-field ${styles.quantityField}`}>
-                    <span>Outra quantidade</span>
-                    <input
-                      aria-label="Quantidade"
-                      min={1}
-                      onChange={(event) => { setQuantity(Math.max(1, Number(event.target.value) || 1)); reset(); }}
-                      type="number"
-                      value={quantity}
-                    />
-                  </label>
                 </fieldset>
-
-                <label className="upload-field">
-                  <input
-                    accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.ai,.cdr,.svg"
-                    aria-label="Enviar logo ou arte agora (opcional)"
-                    onChange={(event) => { setArtworkName(event.target.files?.[0]?.name ?? null); reset(); }}
-                    type="file"
-                  />
-                  <FileUp aria-hidden="true" size={24} />
-                  <span>
-                    <strong>{artworkName ?? "Enviar logo ou arte agora (opcional)"}</strong>
-                    <small>PDF, JPG, PNG, TIFF, AI, CDR ou SVG. O arquivo não sai do seu dispositivo; envie-o depois pelo WhatsApp.</small>
-                  </span>
-                </label>
               </div>
 
               <div className="quote-summary">
                 <div>
-                  <span>{hasPrice ? "A partir de" : "Valor"}</span>
-                  <strong>{hasPrice ? <>{formatCampaignPrice(product.startingPrice as number)}<small className={styles.perUnit}>/un.</small></> : "Sob consulta"}</strong>
-                  <small>{hasPrice ? `Referência para pedido de ${CAMPAIGN_REFERENCE_QUANTITY} unidades.` : "A Fare Foto confirma valor, prazo e frete no atendimento."}</small>
+                  <span>{displayPrice === null ? "Valor do pedido" : hasExactPrice ? `Valor estimado · ${orderQuantity} ${orderQuantity === 1 ? "unidade" : "unidades"}` : "A partir de"}</span>
+                  <strong>{displayPrice === null ? "Sob consulta" : <>{formatCampaignPrice(displayPrice)}<small className={styles.perUnit}>/un.</small></>}</strong>
+                  <small>
+                    {displayPrice !== null && hasExactPrice
+                      ? `Total estimado ${formatCampaignPrice(displayPrice * orderQuantity)}. Confirmaremos valor, prazo e entrega.`
+                      : "Confirmaremos valor, prazo e retirada ou entrega."}
+                  </small>
                 </div>
-                <button className="button button-primary button-large" onClick={handleAddToCart} type="button">
+                <button className="button button-primary button-large" disabled={orderQuantity < 1} onClick={handleAddToCart} type="button">
                   <ShoppingBag aria-hidden="true" size={19} /> Adicionar ao carrinho
                 </button>
               </div>
 
               <p className={`${styles.estimateNotice} ${styles.detailNotice}`} role="note">
                 <Info aria-hidden="true" size={16} />
-                <span><strong>Valor estimado.</strong> O preço exibido é uma referência para pedidos de {CAMPAIGN_REFERENCE_QUANTITY} unidades e pode mudar no orçamento final, conforme quantidade, personalização, variação escolhida e frete.</span>
+                <span><strong>Valor estimado.</strong> Os preços exibidos são uma referência e podem mudar no orçamento final, conforme quantidade, personalização, cor escolhida e frete.</span>
               </p>
 
               {added ? (
                 <div className="added-message" role="status">
                   <Check aria-hidden="true" size={19} />
                   <span>Adicionado ao carrinho Outubro Rosa.</span>
-                  <Link href={OUTUBRO_ROSA_CART_ANCHOR}>Ver carrinho</Link>
+                  <Link href={OUTUBRO_ROSA_CART_PATH}>Ver carrinho</Link>
                 </div>
               ) : null}
-
-              <p className="product-detail-note">
-                <MessageCircle aria-hidden="true" size={16} /> Precisa de outra cor ou quantidade? Fale com nossa equipe para montar seu pedido.
-              </p>
             </div>
           </div>
         </div>
@@ -256,7 +311,7 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
         <section className="section-space related-section">
           <div className="container-shell">
             <div className="section-heading"><span className="eyebrow">Você também pode gostar</span><h2>Mais em {product.category}</h2></div>
-            <div className={styles.relatedGrid}>
+            <div className={styles.grid}>
               {data.related.map((item) => <OutubroRosaProductCard key={item.publicId} product={item} />)}
             </div>
           </div>

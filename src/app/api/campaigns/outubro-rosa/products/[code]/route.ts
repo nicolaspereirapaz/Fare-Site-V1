@@ -1,14 +1,16 @@
 import { OUTUBRO_ROSA_PRODUCT_CODES } from "@/data/outubroRosaProducts";
 import { selectCampaignProducts } from "@/lib/campaignProducts";
-import { campaignStartingPrice } from "@/lib/campaignPricing";
+import { campaignPriceTiers, campaignQuantityPricing, campaignStartingPrice } from "@/lib/campaignPricing";
 import { publicProductId, toPublicCatalogProduct, type PublicCatalogProduct } from "@/lib/publicCatalog";
+import { withCampaignFeaturedColor } from "@/lib/campaignColors";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
 import { groupAvailableProducts, type CatalogProduct } from "@/lib/xbz";
 
 export const dynamic = "force-dynamic";
 
 function toCampaignProduct(product: CatalogProduct): PublicCatalogProduct {
-  return { ...toPublicCatalogProduct(product), startingPrice: campaignStartingPrice(product) };
+  // A página abre na mesma cor do card: rosa, ou branco quando não houver rosa.
+  return { ...withCampaignFeaturedColor(toPublicCatalogProduct(product)), startingPrice: campaignStartingPrice(product) };
 }
 
 export async function GET(_request: Request, context: { params: Promise<{ code: string }> }) {
@@ -31,6 +33,8 @@ export async function GET(_request: Request, context: { params: Promise<{ code: 
     return Response.json(
       {
         product: toCampaignProduct(product),
+        priceTiers: campaignPriceTiers(product),
+        quantityPricing: campaignQuantityPricing(product),
         related,
         meta: { fetchedAt: source.fetchedAt, cached: source.cached },
       },

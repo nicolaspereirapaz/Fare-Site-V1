@@ -1,11 +1,15 @@
 import { OUTUBRO_ROSA_PRODUCT_CODES } from "@/data/outubroRosaProducts";
 import { selectCampaignProducts } from "@/lib/campaignProducts";
 import { campaignStartingPrice } from "@/lib/campaignPricing";
+import { withCampaignFeaturedColor } from "@/lib/campaignColors";
 import { toPublicCatalogProduct, type PublicProductsResponse } from "@/lib/publicCatalog";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
 import { groupAvailableProducts, type CatalogProduct } from "@/lib/xbz";
 
 export const dynamic = "force-dynamic";
+
+/** Mínimo de produtos para uma categoria aparecer no filtro da campanha. */
+const MIN_CATEGORY_SIZE = 3;
 
 function normalizeSearch(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
@@ -33,21 +37,26 @@ export async function GET(request: Request) {
     const selected = selectCampaignProducts(available, OUTUBRO_ROSA_PRODUCT_CODES);
 
     // Contagem por categoria sobre a seleção inteira, como na aba Brindes.
+    // Categorias com poucos itens ficam fora do filtro (os produtos continuam em "Todos").
     const categories = Array.from(
       selected.reduce((counts, product) => counts.set(product.category, (counts.get(product.category) ?? 0) + 1), new Map<string, number>()),
       ([name, count]) => ({ name, count }),
-    ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    )
+      .filter((item) => item.count >= MIN_CATEGORY_SIZE)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     const filtered = selected.filter((product) =>
       (!category || product.category === category) && matchesSearch(product, query));
     const start = (page - 1) * limit;
 
     const response: PublicProductsResponse = {
+      // Vitrine na cor da campanha: rosa, ou branco quando não houver rosa.
       products: filtered.slice(start, start + limit).map((product) => ({
-        ...toPublicCatalogProduct(product),
+        ...withCampaignFeaturedColor(toPublicCatalogProduct(product)),
         startingPrice: campaignStartingPrice(product),
       })),
       categories,
+      catalogTotal: selected.length,
       meta: {
         total: filtered.length,
         page,

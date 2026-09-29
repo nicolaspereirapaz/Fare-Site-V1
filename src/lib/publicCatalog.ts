@@ -4,11 +4,15 @@ import type { CatalogProduct, Product } from "@/lib/xbz";
 export type PublicCatalogVariant = {
   publicId: string;
   label: string;
+  /** Foto da cor; permite trocar a imagem ao escolher a variação. */
+  imageUrl?: string;
 };
 
 export type PublicProductsResponse = {
   products: PublicCatalogProduct[];
   categories?: Array<{ name: string; count: number }>;
+  /** Total da seleção sem filtros (para "Todos"), quando a lista de categorias é parcial. */
+  catalogTotal?: number;
   meta: {
     total: number;
     page: number;
@@ -74,6 +78,7 @@ export function toPublicCatalogProduct(product: CatalogProduct): PublicCatalogPr
     variants: product.variants.map((variant, index) => ({
       publicId: publicVariantId(product.internalCode, variant),
       label: labels[index],
+      imageUrl: variant.imageUrl || product.imageUrl,
     })),
   };
 }
