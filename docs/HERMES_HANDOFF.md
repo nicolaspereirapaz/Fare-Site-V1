@@ -45,7 +45,7 @@ Validação executada em 28/09 antes do commit:
   - cadastro → `200`;
   - checkout autenticado → `200`, status `aguardando_pagamento`;
   - POST repetido com a mesma `idempotencyKey` → mesmo `orderId`, **1 linha** em `fare_orders`;
-  - URL retornada aponta para `5511977843872` e contém código do pedido e método de pagamento;
+  - URL retornada aponta para `5511953147703` e contém código do pedido e método de pagamento;
   - pedido aparece em `/minha-conta` (`200`);
   - `paymentMethod` inválido → `400`.
 
@@ -77,7 +77,7 @@ gerador de orçamento HTML/PDF e QA final.
 - Pagamentos apenas registram preferência nesta fase; o site não processa transações.
 - Métodos: Pix, cartão de crédito, cartão de débito, boleto e faturamento para empresas sujeito à aprovação.
 - Ao finalizar, o pedido é criado internamente e o próprio cliente envia a mensagem pronta pelo WhatsApp.
-- Número Fare Foto: `5511977843872`.
+- Número Fare Foto: `5511953147703`.
 - Perfis internos iniciais: `vendedor` e `admin`.
 - Backoffice será uma aplicação separada, compartilhando banco e API com o e-commerce.
 - Próximos blocos depois do fluxo de pedidos: backoffice, Kanban comercial/produção, gerador de orçamento HTML/PDF e QA final.

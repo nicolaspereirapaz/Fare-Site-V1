@@ -4,12 +4,13 @@ import { FARE_FOTO_WHATSAPP } from "../constants";
 
 describe("FARE_FOTO_WHATSAPP", () => {
   it("é o telefone oficial da Fare Foto usado como constante central", () => {
-    expect(FARE_FOTO_WHATSAPP).toBe("5511977843872");
+    // Número que recebe os pedidos do site: (11) 95314-7703 (mesmo da campanha).
+    expect(FARE_FOTO_WHATSAPP).toBe("5511953147703");
   });
 
   it("gera uma URL de WhatsApp válida a partir da constante central", () => {
     const url = buildWhatsAppUrl(FARE_FOTO_WHATSAPP, "Olá!");
 
-    expect(url).toBe("https://wa.me/5511977843872?text=Ol%C3%A1!");
+    expect(url).toBe("https://wa.me/5511953147703?text=Ol%C3%A1!");
   });
 });

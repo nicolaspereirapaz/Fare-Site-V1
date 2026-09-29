@@ -49,8 +49,8 @@ describe("buildQuoteMessage", () => {
 
 describe("buildWhatsAppUrl", () => {
   it("targets the given number and safely encodes the message", () => {
-    const url = buildWhatsAppUrl("5511977843872", "Olá! Quero orçamento.");
+    const url = buildWhatsAppUrl("5511953147703", "Olá! Quero orçamento.");
 
-    expect(url).toBe("https://wa.me/5511977843872?text=Ol%C3%A1!%20Quero%20or%C3%A7amento.");
+    expect(url).toBe("https://wa.me/5511953147703?text=Ol%C3%A1!%20Quero%20or%C3%A7amento.");
   });
 });

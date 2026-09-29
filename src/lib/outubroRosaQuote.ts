@@ -1,7 +1,9 @@
 import { buildWhatsAppUrl, type QuoteCustomer } from "@/lib/commerce";
+import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 import { cartItemColor, cartItemSubtotal, cartItemUnitPrice, summarizeCart, type CampaignCartItem } from "@/lib/outubroRosaCart";
 
-export const OUTUBRO_ROSA_WHATSAPP = "5511953147703";
+/** A campanha usa o mesmo WhatsApp do site (fonte única em constants.ts). */
+export const OUTUBRO_ROSA_WHATSAPP = FARE_FOTO_WHATSAPP;
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const brl = (value: number) => currency.format(value).replace(/\u00a0/g, " ");

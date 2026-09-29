@@ -44,7 +44,7 @@ totalGeral = precoFinal + freteCliente
 1. Cliente autenticado escolhe produto, quantidade, preço apresentado e preferência de pagamento.
 2. O e-commerce cria o pedido na API e o envia ao backoffice.
 3. O pedido entra no Kanban interno.
-4. O site abre uma mensagem pronta no WhatsApp para o próprio cliente enviar a `(11) 97784-3872`.
+4. O site abre uma mensagem pronta no WhatsApp para o próprio cliente enviar a `(11) 95314-7703`.
 5. A equipe confirma o pagamento.
 6. Vendedor e cliente definem e aprovam a personalização.
 7. O pedido segue para produção.
