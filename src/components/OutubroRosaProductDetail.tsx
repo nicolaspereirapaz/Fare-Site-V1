@@ -111,8 +111,8 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
   }
 
   function chooseCustom() {
+    // Campo começa vazio (placeholder "ex.: 300"): o cliente digita direto, sem apagar nada.
     setCustomMode(true);
-    if (!customQuantity) setCustomQuantity(String(quantity));
     setAdded(false);
   }
 
