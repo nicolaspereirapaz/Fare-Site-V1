@@ -1,5 +1,7 @@
 import { buildQuoteMessage, buildWhatsAppUrl, type QuoteCartItem, type QuoteCustomer } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
+import { PAYMENT_METHOD_LABELS } from "@/lib/orders/labels";
+import { orderCode } from "@/lib/orders/orderCode";
 import type { SessionReader } from "@/lib/auth/session";
 import type { CreateOrderInput, Order, PaymentMethod } from "@/lib/orders/repository";
 import { PAYMENT_METHODS } from "@/lib/orders/repository";
@@ -109,8 +111,8 @@ export function createCheckoutHandler(
       return Response.json({ error: "ORDER_CREATION_FAILED" }, { status: 500 });
     }
     const message = [
-      `Pedido ${order.id}`,
-      `Pagamento informado: ${order.paymentMethod}`,
+      `Pedido #${orderCode(order.id)}`,
+      `Pagamento informado: ${PAYMENT_METHOD_LABELS[order.paymentMethod]}`,
       "",
       buildQuoteMessage(order.customer, order.items),
     ].join("\n");

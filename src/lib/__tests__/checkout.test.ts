@@ -83,7 +83,7 @@ describe("checkout protegido", () => {
 
     expect(message).toContain("Cliente original");
     expect(message).toContain("Produto original");
-    expect(message).toContain("boleto");
+    expect(message).toContain("Pagamento informado: Boleto");
     expect(message).not.toContain("Ana");
   });
 

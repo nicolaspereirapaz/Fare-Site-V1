@@ -2663,112 +2663,290 @@ img {
   font-weight: 800;
 }
 
-.account-heading {
-  max-width: 720px;
-  margin-bottom: 36px;
-}
-
-.account-grid {
+.account-shell {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 36px;
+  align-items: start;
 }
 
-.account-card {
-  min-height: 240px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 28px;
-  background: var(--cream);
+.account-sidebar {
+  position: sticky;
+  top: 110px;
+  display: grid;
+  gap: 18px;
 }
 
-.account-card > svg {
-  color: var(--orange);
-}
-
-.account-card h2 {
+.account-hello strong {
+  display: block;
+  margin-top: 6px;
   color: var(--navy-dark);
   font-family: var(--font-outfit), sans-serif;
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
 }
 
-.account-card p,
-.account-card dt {
+.account-nav {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: white;
+}
+
+.account-nav ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-nav a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.account-nav a svg {
   color: var(--muted);
 }
 
-.account-card dl,
-.account-card dl div {
-  display: grid;
-  gap: 5px;
+.account-nav a:hover {
+  background: var(--cream);
 }
 
-.account-card dl {
-  gap: 16px;
+/* Seção aberta: fundo cinza claro (mesmo tom das fotos dos brindes), sem barra lateral */
+.account-nav a.active,
+.account-nav a.active:hover {
+  background: #f2f2f3;
+  color: var(--navy-dark);
 }
 
-.account-card dd {
+.account-nav a.active svg {
+  color: var(--navy-dark);
+}
+
+.account-nav-footer {
+  border-top: 1px solid var(--line);
+  padding: 12px 4px 4px;
+}
+
+.account-nav-footer .button {
+  width: 100%;
+}
+
+.account-content {
+  min-width: 0;
+}
+
+.account-content-heading {
+  margin-bottom: 24px;
+}
+
+.account-content-heading h1 {
+  margin: 0 0 6px;
+  color: var(--navy-dark);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: clamp(1.7rem, 3.5vw, 2.3rem);
+}
+
+.account-content-heading p {
   margin: 0;
-  overflow-wrap: anywhere;
-  font-weight: 700;
+  color: var(--muted);
 }
 
-.account-orders {
-  grid-column: span 2;
+.account-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  background: var(--cream);
+  text-align: center;
+}
+
+.account-empty > svg {
+  color: var(--orange);
+}
+
+.account-empty p {
+  margin: 6px 0 0;
+  color: var(--navy-dark);
+  font-weight: 800;
+}
+
+.account-empty small {
+  max-width: 420px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .account-order-list {
   display: grid;
-  gap: 14px;
-  margin-top: 20px;
+  gap: 16px;
 }
 
 .account-order {
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 18px;
+  border-radius: var(--radius-md);
   background: white;
+  overflow: hidden;
 }
 
 .account-order-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--cream);
 }
 
-.account-order-heading h3 {
-  margin: 0;
-  overflow-wrap: anywhere;
+.account-order-heading h2 {
+  margin: 0 0 6px;
   color: var(--navy-dark);
-  font-size: 1rem;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: 1.1rem;
 }
 
-.account-order-heading span {
+.account-order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  list-style: none;
+}
+
+.account-order-meta li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.account-order-status {
+  flex: none;
   border-radius: 999px;
-  padding: 5px 9px;
+  padding: 5px 11px;
   background: var(--orange-soft);
   color: var(--orange-dark);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.account-order p {
-  margin-bottom: 8px;
+.account-order-status.status-concluido {
+  background: #e3f4ea;
+  color: #1c6b45;
 }
 
-.account-order p span,
-.account-order strong {
+.account-order-status.status-cancelado {
+  background: #f1f1f2;
+  color: #6f6a72;
+}
+
+.account-order-items {
+  margin: 0;
+  padding: 6px 20px;
+  list-style: none;
+}
+
+.account-order-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 130px;
+  gap: 16px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.account-order-items li:last-child {
+  border-bottom: 0;
+}
+
+.account-order-items strong {
   color: var(--navy-dark);
 }
 
-.account-order ul {
-  margin: 0 0 14px;
-  padding-left: 20px;
-  color: var(--ink);
+.account-order-items small {
+  color: var(--muted);
 }
 
-.account-sign-out {
-  margin-top: 28px;
+.account-order-items li > span:nth-child(2),
+.account-order-items li > span:nth-child(3) {
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.account-order-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.account-order-footer p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.account-order-footer p strong {
+  color: var(--navy-dark);
+  font-size: 1.15rem;
+}
+
+.account-order-footer .button {
+  min-height: 42px;
+}
+
+.account-profile {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: white;
+}
+
+.account-profile div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-profile div:last-child {
+  border-bottom: 0;
+}
+
+.account-profile dt {
+  color: var(--muted);
+}
+
+.account-profile dd {
+  margin: 0;
+  color: var(--navy-dark);
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {
@@ -2776,12 +2954,110 @@ img {
     display: none;
   }
 
-  .account-grid {
+  .account-shell {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .account-sidebar {
+    position: static;
+    gap: 12px;
+  }
+
+  /* No celular o menu vira uma faixa de abas que rola para o lado */
+  .account-nav {
+    grid-auto-flow: column;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 6px;
+  }
+
+  .account-nav ul {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .account-nav a {
+    min-height: 40px;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  .account-nav-footer {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    padding: 0 0 0 6px;
+  }
+
+  .account-nav-footer .button {
+    width: auto;
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .account-nav {
+    grid-auto-flow: row;
     grid-template-columns: 1fr;
   }
 
-  .account-orders {
-    grid-column: auto;
+  /* 3 abas iguais, ícone em cima do nome: tudo cabe sem rolar */
+  .account-nav ul {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .account-nav a {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    padding: 8px 4px;
+    font-size: 0.8rem;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .account-nav-footer {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 8px 4px 2px;
+  }
+
+  .account-nav-footer .button {
+    width: 100%;
+  }
+
+  .account-order-heading {
+    flex-direction: column;
+  }
+
+  .account-order-items li {
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+  }
+
+  .account-order-items li > span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .account-order-items li > span:nth-child(2) {
+    text-align: left;
+  }
+
+  .account-order-footer .button {
+    width: 100%;
+  }
+
+  .account-profile div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 
