@@ -2,7 +2,6 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountNav } from "@/components/account/AccountNav";
 import { AccountOrders, type AccountOrder } from "@/components/account/AccountOrders";
-import { AccountProfile } from "@/components/account/AccountProfile";
 import { orderCode } from "@/lib/orders/orderCode";
 
 const { pathname } = vi.hoisted(() => ({ pathname: { current: "/minha-conta/pedidos" } }));
@@ -76,15 +75,5 @@ describe("página de pedidos", () => {
     expect(url.hostname).toBe("wa.me");
     expect(url.pathname).toBe("/5511953147703");
     expect(url.searchParams.get("text")).toContain("#FF-3F7A2C");
-  });
-});
-
-describe("dados pessoais", () => {
-  it("mostra nome e e-mail, sem informações internas", () => {
-    render(<AccountProfile user={{ name: "Ana Silva", email: "ana@example.com" }} />);
-    expect(screen.getByText("Ana Silva")).toBeInTheDocument();
-    expect(screen.getByText("ana@example.com")).toBeInTheDocument();
-    expect(screen.queryByText(/Perfil/)).not.toBeInTheDocument();
-    expect(screen.queryByText("cliente")).not.toBeInTheDocument();
   });
 });

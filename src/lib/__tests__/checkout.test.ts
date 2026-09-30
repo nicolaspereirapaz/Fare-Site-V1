@@ -33,6 +33,27 @@ function requestWithBody(value: unknown) {
 }
 
 describe("checkout protegido", () => {
+  it("guarda WhatsApp e empresa do pedido na conta quando ela ainda não tem telefone", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn().mockReturnValue({
+      id: "order-1", status: "aguardando_pagamento", paymentMethod: "pix", customer: body.customer, items: body.items,
+    });
+    const rememberContact = vi.fn();
+    const response = await createCheckoutHandler(getSession, persistOrder, rememberContact)(request());
+
+    expect(response.status).toBe(200);
+    expect(rememberContact).toHaveBeenCalledWith("user-1", body.customer);
+  });
+
+  it("o pedido não falha se não conseguir guardar o contato", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn().mockReturnValue({
+      id: "order-1", status: "aguardando_pagamento", paymentMethod: "pix", customer: body.customer, items: body.items,
+    });
+    const response = await createCheckoutHandler(getSession, persistOrder, () => { throw new Error("db"); })(request());
+    expect(response.status).toBe(200);
+  });
+
   it("nega a finalização quando a sessão não é confirmada pelo servidor", async () => {
     const getSession = vi.fn().mockResolvedValue(null);
     const response = await createCheckoutHandler(getSession, vi.fn())(request());

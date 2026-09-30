@@ -2,11 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { push, requestCheckout, cart, updateQuantity } = vi.hoisted(() => ({
+const { push, requestCheckout, cart, updateQuantity, fetchMyProfile } = vi.hoisted(() => ({
   push: vi.fn(),
   requestCheckout: vi.fn(),
   cart: { items: [] as unknown[] },
   updateQuantity: vi.fn(),
+  fetchMyProfile: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -14,7 +15,12 @@ vi.mock("@/context/CartContext", () => ({
   useCart: () => ({ items: cart.items, removeItem: vi.fn(), updateQuantity }),
 }));
 vi.mock("@/lib/requestCheckout", () => ({ requestCheckout }));
+vi.mock("@/lib/account/profileClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/account/profileClient")>()),
+  fetchMyProfile,
+}));
 
+import { EMPTY_PROFILE } from "@/lib/account/profile";
 import { CartView } from "@/components/CartView";
 
 const PHOTO_ITEM = {
@@ -28,7 +34,29 @@ describe("CartView", () => {
     requestCheckout.mockReset();
     requestCheckout.mockResolvedValue({ requiresAuth: true });
     updateQuantity.mockReset();
+    fetchMyProfile.mockReset();
+    fetchMyProfile.mockResolvedValue(null);
     cart.items = [PHOTO_ITEM];
+  });
+
+  it("já vem preenchido com os dados da conta do cliente", async () => {
+    fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, personType: "pj", name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", companyName: "Loja A Ltda", tradeName: "Loja A", complete: true });
+    render(<CartView />);
+    expect(await screen.findByDisplayValue("Ana Silva")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("(11) 98888-7777")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Loja A")).toBeInTheDocument();
+  });
+
+  it("não apaga o que o cliente já começou a digitar", async () => {
+    let resolve!: (value: unknown) => void;
+    fetchMyProfile.mockReturnValue(new Promise((r) => { resolve = r; }));
+    const user = userEvent.setup();
+    render(<CartView />);
+    await user.type(screen.getByRole("textbox", { name: "Nome" }), "Outro Nome");
+    resolve({ ...EMPTY_PROFILE, name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", complete: false });
+
+    expect(await screen.findByDisplayValue("(11) 98888-7777")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Outro Nome");
   });
 
   it("deixa digitar a quantidade e confirma com Enter", async () => {

@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, FileWarning, MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { fetchMyProfile, formatPhoneBR } from "@/lib/account/profileClient";
 import { requestCheckout } from "@/lib/requestCheckout";
 import type { PaymentMethod } from "@/lib/orders/repository";
 
@@ -67,6 +68,20 @@ export function CartView() {
   const [pending, setPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const idempotencyKey = useRef<string | null>(null);
+
+  // Preenche com os dados da conta; só campos ainda vazios (não apaga o que o cliente digitou).
+  useEffect(() => {
+    let active = true;
+    fetchMyProfile().then((profile) => {
+      if (!active || !profile) return;
+      setName((current) => current || profile.name);
+      setPhone((current) => current || profile.phone);
+      setCompany((current) => current || profile.tradeName || profile.companyName);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function finishOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -193,7 +208,7 @@ export function CartView() {
         <form onSubmit={finishOnWhatsApp}>
           <label><span>Nome</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label><span>Empresa (opcional)</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label>
-          <label><span>WhatsApp para retorno</span><input inputMode="tel" required value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+          <label><span>WhatsApp para retorno</span><input inputMode="tel" required value={phone} onChange={(event) => setPhone(formatPhoneBR(event.target.value))} /></label>
           <label>
             <span>Forma de pagamento</span>
             <select

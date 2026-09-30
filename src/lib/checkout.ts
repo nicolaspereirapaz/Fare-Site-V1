@@ -77,9 +77,13 @@ function isCheckoutBody(value: unknown): value is CheckoutBody {
     && /^[A-Za-z0-9_-]{8,128}$/.test(value.idempotencyKey);
 }
 
+/** Guarda WhatsApp/empresa do pedido na conta (só completa o que ainda está vazio). */
+export type RememberContact = (userId: string, customer: QuoteCustomer) => void;
+
 export function createCheckoutHandler(
   getSession: SessionReader<CheckoutSession>,
   persistOrder: PersistOrder,
+  rememberContact?: RememberContact,
 ) {
   return async function checkout(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -109,6 +113,12 @@ export function createCheckoutHandler(
       });
     } catch {
       return Response.json({ error: "ORDER_CREATION_FAILED" }, { status: 500 });
+    }
+    try {
+      rememberContact?.(session.user.id, body.customer);
+    } catch (error) {
+      // O pedido já foi salvo; não guardar o contato não pode impedir o cliente de seguir.
+      console.error("[checkout] não foi possível guardar o contato do cliente", error);
     }
     const message = [
       `Pedido #${orderCode(order.id)}`,
