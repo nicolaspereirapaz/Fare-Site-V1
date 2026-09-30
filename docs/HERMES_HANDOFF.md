@@ -104,3 +104,11 @@ Arquivo de referência fornecido pelo usuário:
 `C:\Users\Nicolas\AppData\Local\hermes\attachments\#ORC-2026-376.html`
 
 Também foi fornecida uma cópia `#ORC-2026-376-2.html`.
+
+## 2026-09-29 — Brindes no site completo (commit 88c100e)
+
+- Preço dos brindes só com login: decidido no servidor (`src/lib/giftPricing.ts`, `pricesVisible` nas rotas `/api/xbz/products*`). Regra = campanha (custo×2 + R$ 100 de frete rateado; faixas 50/100/250/500/1000).
+- /brindes lê a cópia local `data/xbz-catalog.sqlite` (a XBZ ao vivo passa de 30s).
+- Página do brinde: miniaturas por cor, fundo cinza #f2f2f3 (`.supplier-photo`), botões "Finalizar pedido" (vai para `/carrinho#finalizar`, sem duplicar) e "Adicionar ao carrinho" (aviso `.cart-toast`). Envio de arte removido: combinado no WhatsApp.
+- Carrinho: item guarda `pricing {unitSaleCents, freightCents}` e recalcula o valor ao mudar a quantidade; mesmo brinde + cor soma na mesma linha; quantidade digitável (Enter/sair do campo; vazio/0 volta).
+- Testes: 188 (vitest), tsc e eslint limpos. Pendente: hospedagem (PC ou VPS) e próximas etapas do site aprovadas pelo usuário.
