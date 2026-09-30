@@ -1,5 +1,8 @@
-import { getProducts, groupAvailableProducts } from "@/lib/xbz";
-import { toPublicCatalogProduct, type PublicProductsResponse } from "@/lib/publicCatalog";
+import { groupAvailableProducts } from "@/lib/xbz";
+import { getLocalCatalog } from "@/lib/xbzCatalogService";
+import { type PublicProductsResponse } from "@/lib/publicCatalog";
+import { getCurrentSession } from "@/lib/auth/server";
+import { MEMBER_PRICING_HEADERS, toGiftProduct } from "@/lib/giftPricing";
 
 export const dynamic = "force-dynamic";
 
@@ -7,12 +10,15 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const query = (params.get("q") ?? "").trim().toLocaleLowerCase("pt-BR");
   const category = (params.get("categoria") ?? "").trim();
-  const forceRefresh = params.get("refresh") === "1";
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(params.get("limit") ?? "24", 10) || 24));
 
   try {
-    const source = await getProducts(forceRefresh);
+    // Cópia local do catálogo (atualizada algumas vezes por dia pelo agendador): rápida e
+    // independente da disponibilidade do fornecedor. O ?refresh=1 antigo foi removido para que
+    // nenhum visitante consiga forçar consultas à cota diária da XBZ.
+    const [source, session] = await Promise.all([getLocalCatalog(), getCurrentSession()]);
+    const pricesVisible = Boolean(session);
     const grouped = groupAvailableProducts(source.products);
 
     const filtered = grouped.filter((product) => {
@@ -39,9 +45,10 @@ export async function GET(request: Request) {
     ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     const start = (page - 1) * limit;
-    const response: PublicProductsResponse & { categories: typeof categories } = {
-      products: filtered.slice(start, start + limit).map(toPublicCatalogProduct),
+    const response: PublicProductsResponse & { categories: typeof categories; pricesVisible: boolean } = {
+      products: filtered.slice(start, start + limit).map((product) => toGiftProduct(product, pricesVisible)),
       categories,
+      pricesVisible,
       meta: {
         total: filtered.length,
         page,
@@ -51,11 +58,9 @@ export async function GET(request: Request) {
       },
     };
 
-    return Response.json(response, {
-      headers: { "Cache-Control": "private, no-store" },
-    });
+    return Response.json(response, { headers: MEMBER_PRICING_HEADERS });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro inesperado ao consultar a XBZ.";
-    return Response.json({ error: message }, { status: 502 });
+    console.error("[brindes] falha ao ler o catálogo local", error);
+    return Response.json({ error: "Catálogo temporariamente indisponível." }, { status: 503 });
   }
 }

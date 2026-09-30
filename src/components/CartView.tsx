@@ -9,6 +9,53 @@ import { useCart } from "@/context/CartContext";
 import { requestCheckout } from "@/lib/requestCheckout";
 import type { PaymentMethod } from "@/lib/orders/repository";
 
+const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl = (value: number) => currency.format(value);
+const lineTotal = (unitPrice: number, quantity: number) => Math.round(unitPrice * quantity * 100) / 100;
+
+const MAX_QUANTITY = 999_999;
+
+/**
+ * Quantidade digitável no carrinho. Aceita só números; confirma com Enter ou ao sair do campo.
+ * Vazio/zero volta para a quantidade atual.
+ */
+function QuantityInput({ quantity, label, onCommit }: { quantity: number; label: string; onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? String(quantity);
+
+  function commit() {
+    const next = Math.min(MAX_QUANTITY, Number(draft));
+    if (draft !== null && Number.isInteger(next) && next >= 1 && next !== quantity) onCommit(next);
+    setDraft(null);
+  }
+
+  return (
+    <input
+      aria-label={label}
+      className="quantity-stepper-input"
+      inputMode="numeric"
+      maxLength={6}
+      onBlur={commit}
+      onChange={(event) => setDraft(event.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))}
+      onFocus={(event) => event.target.select()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          // Enter confirma e solta o campo (o blur confirma); o próximo clique seleciona tudo de novo.
+          event.currentTarget.blur();
+        }
+        if (event.key === "Escape") {
+          setDraft(null);
+          event.currentTarget.blur();
+        }
+      }}
+      onMouseUp={(event) => event.preventDefault()}
+      type="text"
+      value={value}
+    />
+  );
+}
+
 export function CartView() {
   const router = useRouter();
   const { items, removeItem, updateQuantity } = useCart();
@@ -62,6 +109,10 @@ export function CartView() {
     );
   }
 
+  const priced = items.filter((item) => typeof item.unitPrice === "number");
+  const estimatedTotal = Math.round(priced.reduce((sum, item) => sum + lineTotal(item.unitPrice as number, item.quantity), 0) * 100) / 100;
+  const hasUnpriced = priced.length < items.length;
+
   return (
     <div className="cart-layout">
       <section className="cart-items" aria-labelledby="cart-title">
@@ -75,14 +126,20 @@ export function CartView() {
 
         {items.map((item) => (
           <article className="cart-item" key={item.id}>
-            <div className="cart-item-image">
+            <div className={item.slug.startsWith("brindes/") ? "cart-item-image supplier-photo" : "cart-item-image"}>
               <Image alt="" fill sizes="112px" src={item.image} />
             </div>
             <div className="cart-item-info">
               <div className="cart-item-heading">
                 <div>
                   <h2>{item.productName}</h2>
-                  <span>Valor sob consulta</span>
+                  {typeof item.unitPrice === "number" ? (
+                    <span className="cart-item-price">
+                      {brl(item.unitPrice)}/un. estimado · <strong>Subtotal {brl(lineTotal(item.unitPrice, item.quantity))}</strong>
+                    </span>
+                  ) : (
+                    <span>Valor sob consulta</span>
+                  )}
                 </div>
                 <button aria-label={`Remover ${item.productName}`} onClick={() => removeItem(item.id)} type="button">
                   <Trash2 aria-hidden="true" size={18} />
@@ -98,11 +155,15 @@ export function CartView() {
                 <div className="quantity-range-summary">Quantidade: {item.quantityRange}</div>
               ) : (
                 <div className="quantity-stepper" aria-label={`Quantidade de ${item.productName}`}>
-                  <button aria-label="Diminuir quantidade" onClick={() => updateQuantity(item.id, item.quantity - 1)} type="button">
+                  <button aria-label="Diminuir quantidade" onClick={() => updateQuantity(item.id, item.quantity - (item.pricing ? 10 : 1))} type="button">
                     <Minus aria-hidden="true" size={16} />
                   </button>
-                  <span>{item.quantity}</span>
-                  <button aria-label="Aumentar quantidade" onClick={() => updateQuantity(item.id, item.quantity + 1)} type="button">
+                  <QuantityInput
+                    label={`Quantidade de ${item.productName}`}
+                    onCommit={(value) => updateQuantity(item.id, value)}
+                    quantity={item.quantity}
+                  />
+                  <button aria-label="Aumentar quantidade" onClick={() => updateQuantity(item.id, item.quantity + (item.pricing ? 10 : 1))} type="button">
                     <Plus aria-hidden="true" size={16} />
                   </button>
                 </div>
@@ -111,12 +172,20 @@ export function CartView() {
           </article>
         ))}
 
+        {priced.length ? (
+          <div className="cart-estimate">
+            <span>Total estimado{hasUnpriced ? " (sem os itens sob consulta)" : ""}</span>
+            <strong>{brl(estimatedTotal)}</strong>
+            <small>Valores de referência. Personalização e frete de entrega são confirmados no orçamento.</small>
+          </div>
+        ) : null}
+
         <Link className="back-link" href="/produtos">
           <ArrowLeft aria-hidden="true" size={17} /> Adicionar mais produtos
         </Link>
       </section>
 
-      <aside className="checkout-card">
+      <aside className="checkout-card" id="finalizar">
         <span className="eyebrow">Finalizar orçamento</span>
         <h2>Envie o pedido para o WhatsApp</h2>
         <p>Os itens e as configurações serão organizados automaticamente na mensagem.</p>

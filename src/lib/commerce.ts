@@ -7,6 +7,11 @@ export type QuoteCartItem = {
   selections: Record<string, string>;
   artworkName?: string | null;
   unitPrice: number | null;
+  /**
+   * Brindes: parâmetros públicos para recalcular o valor por unidade quando a quantidade muda
+   * (venda por unidade já com margem + frete do fornecedor a ratear, em centavos). Nunca o custo.
+   */
+  pricing?: { unitSaleCents: number; freightCents: number } | null;
 };
 
 export type QuoteCustomer = {

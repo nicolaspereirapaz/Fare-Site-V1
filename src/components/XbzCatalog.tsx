@@ -11,13 +11,16 @@ const PAGE_SIZE = 24;
 
 type CategoryCount = { name: string; count: number };
 
-function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
+const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+function XbzProductCard({ product, pricesVisible }: { product: PublicCatalogProduct; pricesVisible: boolean }) {
   const [imageFailed, setImageFailed] = useState(false);
   const href = `/brindes/${encodeURIComponent(product.publicId)}`;
+  const hasPrice = pricesVisible && typeof product.startingPrice === "number";
 
   return (
     <article className="product-card">
-      <Link className="product-card-image" href={href}>
+      <Link className="product-card-image supplier-photo" href={href}>
         {product.imageUrl && !imageFailed ? (
           <Image
             alt={formatProductName(product.name)}
@@ -42,10 +45,23 @@ function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
             : "Personalização sob consulta"}
         </p>
         <div className="product-card-footer">
-          <div>
-            <small>Atendimento Fare Foto</small>
-            <strong>Solicite um orçamento</strong>
-          </div>
+          {hasPrice ? (
+            <div>
+              <small>A partir de</small>
+              <strong>{currency.format(product.startingPrice as number)}</strong>
+              <small>/un. · pedido de 100 un.</small>
+            </div>
+          ) : pricesVisible ? (
+            <div>
+              <small>Valor</small>
+              <strong>Sob consulta</strong>
+            </div>
+          ) : (
+            <div>
+              <small>Preços para clientes</small>
+              <strong>Entre para ver o valor</strong>
+            </div>
+          )}
           <Link aria-label={`Ver ${formatProductName(product.name)}`} href={href}>
             <ArrowUpRight aria-hidden="true" size={20} />
           </Link>
@@ -56,7 +72,7 @@ function XbzProductCard({ product }: { product: PublicCatalogProduct }) {
 }
 
 export function XbzCatalog() {
-  const [data, setData] = useState<PublicProductsResponse | null>(null);
+  const [data, setData] = useState<(PublicProductsResponse & { pricesVisible?: boolean }) | null>(null);
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
@@ -66,15 +82,14 @@ export function XbzCatalog() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
-    async (refresh = false) => {
+    async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (search) params.set("q", search);
       if (category !== "Todos") params.set("categoria", category);
-      if (refresh) params.set("refresh", "1");
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
-        const payload = (await response.json()) as PublicProductsResponse & { error?: string };
+        const payload = (await response.json()) as PublicProductsResponse & { pricesVisible?: boolean; error?: string };
         if (!response.ok) throw new Error(payload.error || "Não foi possível consultar o catálogo.");
         setData(payload);
         if (payload.categories?.length) setCategories(payload.categories);
@@ -98,7 +113,7 @@ export function XbzCatalog() {
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
-        const payload = (await response.json()) as PublicProductsResponse & { error?: string };
+        const payload = (await response.json()) as PublicProductsResponse & { pricesVisible?: boolean; error?: string };
         if (!active) return;
         if (!response.ok) throw new Error(payload.error || "Não foi possível consultar o catálogo.");
         setData(payload);
@@ -199,6 +214,11 @@ export function XbzCatalog() {
         <p className="catalog-sidebar-note">
           Escolha o modelo ideal e consulte as opções de personalização para sua empresa.
         </p>
+        {data && !data.pricesVisible ? (
+          <p className="catalog-sidebar-note">
+            <Link href="/entrar">Entre ou crie sua conta</Link> para ver os preços dos brindes.
+          </p>
+        ) : null}
       </aside>
 
       <div className="catalog-results">
@@ -236,7 +256,7 @@ export function XbzCatalog() {
         {!error && data?.products.length ? (
           <div className="product-grid catalog-product-grid">
             {data.products.map((product) => (
-              <XbzProductCard key={product.publicId} product={product} />
+              <XbzProductCard key={product.publicId} pricesVisible={Boolean(data.pricesVisible)} product={product} />
             ))}
           </div>
         ) : null}
