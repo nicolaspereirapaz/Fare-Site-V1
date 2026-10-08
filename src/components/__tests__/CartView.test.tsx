@@ -47,6 +47,36 @@ describe("CartView", () => {
     expect(screen.getByDisplayValue("Loja A")).toBeInTheDocument();
   });
 
+  it("mostra para quem o pedido será faturado, com atalho para alterar", async () => {
+    fetchMyProfile.mockResolvedValue({
+      ...EMPTY_PROFILE, personType: "pj", name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777",
+      document: "11.222.333/0001-81", companyName: "Padaria Boa Vista Ltda", stateRegistration: "ISENTO",
+      address: { cep: "13201-000", street: "Rua Barão de Jundiaí", number: "100", complement: "", district: "Centro", city: "Jundiaí", state: "SP" },
+      complete: true,
+    });
+    render(<CartView />);
+    const box = await screen.findByRole("region", { name: "Faturar para" });
+    expect(box).toHaveTextContent("Padaria Boa Vista Ltda");
+    expect(box).toHaveTextContent("CNPJ 11.222.333/0001-81");
+    expect(box).toHaveTextContent("Jundiaí/SP");
+    expect(screen.getByRole("link", { name: "Alterar" })).toHaveAttribute("href", "/minha-conta/dados");
+  });
+
+  it("convida a completar o cadastro quando faltam CPF/CNPJ ou endereço, sem bloquear o pedido", async () => {
+    fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", complete: false });
+    render(<CartView />);
+    const box = await screen.findByRole("region", { name: "Faturar para" });
+    expect(box).toHaveTextContent("Complete seu cadastro");
+    expect(screen.getByRole("link", { name: /Completar cadastro/ })).toHaveAttribute("href", "/minha-conta/dados");
+    expect(screen.getByRole("button", { name: /Criar pedido/ })).toBeEnabled();
+  });
+
+  it("não mostra o quadro de faturamento para quem não está logado", async () => {
+    render(<CartView />);
+    await Promise.resolve();
+    expect(screen.queryByRole("region", { name: "Faturar para" })).not.toBeInTheDocument();
+  });
+
   it("não apaga o que o cliente já começou a digitar", async () => {
     let resolve!: (value: unknown) => void;
     fetchMyProfile.mockReturnValue(new Promise((r) => { resolve = r; }));

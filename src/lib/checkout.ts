@@ -1,4 +1,4 @@
-import { buildQuoteMessage, buildWhatsAppUrl, type QuoteCartItem, type QuoteCustomer } from "@/lib/commerce";
+import { buildQuoteMessage, buildWhatsAppUrl, type QuoteBilling, type QuoteCartItem, type QuoteCustomer } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 import { PAYMENT_METHOD_LABELS } from "@/lib/orders/labels";
 import { orderCode } from "@/lib/orders/orderCode";
@@ -79,11 +79,27 @@ function isCheckoutBody(value: unknown): value is CheckoutBody {
 
 /** Guarda WhatsApp/empresa do pedido na conta (só completa o que ainda está vazio). */
 export type RememberContact = (userId: string, customer: QuoteCustomer) => void;
+/** Dados de faturamento do cadastro da conta; null quando o cadastro está incompleto. */
+export type ReadBilling = (userId: string) => QuoteBilling | null;
+
+export type CheckoutOptions = {
+  rememberContact?: RememberContact;
+  readBilling?: ReadBilling;
+};
+
+/** Só os campos do formulário; qualquer outro campo enviado pelo navegador (ex.: billing) é descartado. */
+function pickCustomer(customer: QuoteCustomer): QuoteCustomer {
+  const picked: QuoteCustomer = { name: customer.name };
+  if (customer.company) picked.company = customer.company;
+  if (customer.phone) picked.phone = customer.phone;
+  if (customer.notes) picked.notes = customer.notes;
+  return picked;
+}
 
 export function createCheckoutHandler(
   getSession: SessionReader<CheckoutSession>,
   persistOrder: PersistOrder,
-  rememberContact?: RememberContact,
+  { rememberContact, readBilling }: CheckoutOptions = {},
 ) {
   return async function checkout(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -102,12 +118,21 @@ export function createCheckoutHandler(
       return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
+    const customer = pickCustomer(body.customer);
+    try {
+      const billing = readBilling?.(session.user.id);
+      if (billing) customer.billing = billing;
+    } catch (error) {
+      // Sem os dados da nota o pedido segue; a equipe confirma no WhatsApp.
+      console.error("[checkout] não foi possível ler o cadastro do cliente", error);
+    }
+
     let order: ReturnType<PersistOrder>;
     try {
       order = persistOrder({
         userId: session.user.id,
         idempotencyKey: body.idempotencyKey,
-        customer: body.customer,
+        customer,
         items: body.items,
         paymentMethod: body.paymentMethod,
       });

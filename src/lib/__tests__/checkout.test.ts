@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createCheckoutHandler } from "@/lib/checkout";
+import type { CreateOrderInput } from "@/lib/orders/repository";
 
 const body = {
   customer: { name: "Ana", phone: "11999999999" },
@@ -33,13 +34,54 @@ function requestWithBody(value: unknown) {
 }
 
 describe("checkout protegido", () => {
+  const BILLING = {
+    personType: "pj" as const,
+    document: "11.222.333/0001-81",
+    companyName: "Padaria Boa Vista Ltda",
+    tradeName: "Padaria Boa Vista",
+    stateRegistration: "407.123.456.789",
+    address: {
+      cep: "13201-000", street: "Rua Barão de Jundiaí", number: "100", complement: "Sala 2",
+      district: "Centro", city: "Jundiaí", state: "SP",
+    },
+  };
+
+  it("anexa ao pedido os dados de faturamento da conta (lidos no servidor) e os coloca na mensagem", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn((input: CreateOrderInput) => ({ id: "order-1", status: "aguardando_pagamento" as const, paymentMethod: input.paymentMethod, customer: input.customer, items: input.items }));
+    const readBilling = vi.fn().mockReturnValue(BILLING);
+    const forged = { ...body, customer: { ...body.customer, billing: { ...BILLING, document: "99.999.999/9999-99" }, extra: "x" } };
+
+    const response = await createCheckoutHandler(getSession, persistOrder, { readBilling })(requestWithBody(forged));
+    expect(response.status).toBe(200);
+    expect(readBilling).toHaveBeenCalledWith("user-1");
+    // o que vem do navegador é ignorado: vale o cadastro salvo na conta
+    expect(persistOrder.mock.calls[0][0].customer).toEqual({ name: "Ana", phone: "11999999999", billing: BILLING });
+
+    const message = decodeURIComponent((await response.json()).url.split("text=")[1]);
+    expect(message).toContain("Faturar para:");
+    expect(message).toContain("CNPJ: 11.222.333/0001-81");
+    expect(message).toContain("Razão social: Padaria Boa Vista Ltda");
+    expect(message).toContain("IE: 407.123.456.789");
+    expect(message).toContain("Rua Barão de Jundiaí, 100, Sala 2 — Centro, Jundiaí/SP — CEP 13201-000");
+  });
+
+  it("sem cadastro completo, o pedido segue sem faturamento", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn((input: CreateOrderInput) => ({ id: "order-1", status: "aguardando_pagamento" as const, paymentMethod: input.paymentMethod, customer: input.customer, items: input.items }));
+    const response = await createCheckoutHandler(getSession, persistOrder, { readBilling: () => null })(request());
+    expect(response.status).toBe(200);
+    expect(persistOrder.mock.calls[0][0].customer).toEqual({ name: "Ana", phone: "11999999999" });
+    expect(decodeURIComponent((await response.json()).url)).not.toContain("Faturar para");
+  });
+
   it("guarda WhatsApp e empresa do pedido na conta quando ela ainda não tem telefone", async () => {
     const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
     const persistOrder = vi.fn().mockReturnValue({
       id: "order-1", status: "aguardando_pagamento", paymentMethod: "pix", customer: body.customer, items: body.items,
     });
     const rememberContact = vi.fn();
-    const response = await createCheckoutHandler(getSession, persistOrder, rememberContact)(request());
+    const response = await createCheckoutHandler(getSession, persistOrder, { rememberContact })(request());
 
     expect(response.status).toBe(200);
     expect(rememberContact).toHaveBeenCalledWith("user-1", body.customer);
@@ -50,7 +92,7 @@ describe("checkout protegido", () => {
     const persistOrder = vi.fn().mockReturnValue({
       id: "order-1", status: "aguardando_pagamento", paymentMethod: "pix", customer: body.customer, items: body.items,
     });
-    const response = await createCheckoutHandler(getSession, persistOrder, () => { throw new Error("db"); })(request());
+    const response = await createCheckoutHandler(getSession, persistOrder, { rememberContact: () => { throw new Error("db"); } })(request());
     expect(response.status).toBe(200);
   });
 

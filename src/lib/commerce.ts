@@ -19,7 +19,49 @@ export type QuoteCustomer = {
   company?: string;
   phone?: string;
   notes?: string;
+  /** Dados da nota: copiados do cadastro da conta pelo servidor no momento do pedido. */
+  billing?: QuoteBilling;
 };
+
+export type QuoteBilling = {
+  personType: "pf" | "pj";
+  document: string;
+  companyName: string;
+  tradeName: string;
+  stateRegistration: string;
+  address: {
+    cep: string;
+    street: string;
+    number: string;
+    complement: string;
+    district: string;
+    city: string;
+    state: string;
+  };
+};
+
+/** "Rua X, 100, Sala 2 — Centro, Jundiaí/SP — CEP 13201-000" */
+export function formatBillingAddress(address: QuoteBilling["address"]) {
+  const street = [address.street, address.number, address.complement].filter(Boolean).join(", ");
+  return `${street} — ${address.district}, ${address.city}/${address.state} — CEP ${address.cep}`;
+}
+
+function billingLines(billing: QuoteBilling | undefined) {
+  if (!billing) return [];
+  const pj = billing.personType === "pj";
+  return [
+    "Faturar para:",
+    ...(pj
+      ? [
+          `Razão social: ${billing.companyName}`,
+          `CNPJ: ${billing.document}`,
+          `IE: ${billing.stateRegistration}`,
+        ]
+      : [`CPF: ${billing.document}`]),
+    `Endereço: ${formatBillingAddress(billing.address)}`,
+    "",
+  ];
+}
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
@@ -46,7 +88,8 @@ export function buildQuoteMessage(customer: QuoteCustomer, items: QuoteCartItem[
     customer.company ? `Empresa: ${customer.company}` : null,
     customer.phone ? `Telefone: ${customer.phone}` : null,
     "",
-  ].filter((line): line is string => Boolean(line));
+    ...billingLines(customer.billing),
+  ].filter((line): line is string => line !== null);
 
   const itemLines = items.flatMap((item, index) => {
     const selectionLines = Object.entries(item.selections).map(

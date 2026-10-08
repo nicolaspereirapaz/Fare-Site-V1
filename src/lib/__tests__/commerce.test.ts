@@ -45,6 +45,22 @@ describe("buildQuoteMessage", () => {
     expect(message).toContain("Valor: sob consulta");
     expect(message).toContain("Preciso para sexta.");
   });
+
+  it("separa cliente, faturamento e itens por linhas em branco", () => {
+    const message = buildQuoteMessage(
+      {
+        name: "Ana", phone: "(11) 98888-7777",
+        billing: {
+          personType: "pf", document: "529.982.247-25", companyName: "", tradeName: "", stateRegistration: "",
+          address: { cep: "13201-000", street: "Rua A", number: "1", complement: "", district: "Centro", city: "Jundiaí", state: "SP" },
+        },
+      },
+      [cartItem],
+    );
+
+    expect(message).toContain("Pedido de orçamento — Fare Foto\n\nCliente: Ana\nTelefone: (11) 98888-7777\n\nFaturar para:\nCPF: 529.982.247-25\nEndereço: Rua A, 1 — Centro, Jundiaí/SP — CEP 13201-000\n\n1. Caneca personalizada");
+    expect(message).not.toContain("Razão social");
+  });
 });
 
 describe("buildWhatsAppUrl", () => {
