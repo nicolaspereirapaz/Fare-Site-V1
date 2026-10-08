@@ -136,10 +136,37 @@ describe("listagem de pedidos do backoffice", () => {
       itemCount: 1,
       total: 0,
     });
+    expect(payload.orders[0].code).toBe("FF-ORDER1");
+    expect(payload.orders[0].billing).toBeNull();
+    expect(payload.orders[0].items).toEqual([
+      { productName: "Foto 10x15", quantity: 1, selections: {}, unitPrice: 125 },
+      { productName: "Foto 15x21", quantity: 1, selections: {}, unitPrice: 125 },
+    ]);
     expect(Object.keys(payload.counts).sort()).toEqual([...ORDEM_STATUS_PEDIDO].sort());
     expect(payload.counts.aguardando_pagamento).toBe(1);
     expect(payload.counts.pagamento_confirmado).toBe(1);
     expect(payload.counts.cancelado).toBe(0);
+  });
+});
+
+describe("faturamento no quadro de pedidos", () => {
+  it("leva os dados de faturamento gravados no pedido e as notas do cliente", async () => {
+    const billing = {
+      personType: "pj" as const,
+      document: "11.222.333/0001-81",
+      companyName: "Padaria Boa Vista Ltda",
+      tradeName: "Padaria Boa Vista",
+      stateRegistration: "ISENTO",
+      address: { cep: "13201-000", street: "Rua A", number: "100", complement: "", district: "Centro", city: "Jundiaí", state: "SP" },
+    };
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "admin-1", role: "admin" } });
+    const listOrders = vi.fn().mockReturnValue([
+      buildOrder({ customer: { name: "Carlos", phone: "(11) 3333-4444", notes: "Entregar até dia 20", billing } }),
+    ]);
+
+    const payload = await (await createListBackofficeOrdersHandler(getSession, listOrders)(listRequest())).json();
+    expect(payload.orders[0].billing).toEqual(billing);
+    expect(payload.orders[0].notes).toBe("Entregar até dia 20");
   });
 });
 

@@ -13,6 +13,22 @@ const ORDER = {
   itemCount: 2,
   total: 250,
   createdAt: "2026-09-28T12:00:00.000Z",
+  code: "FF-ORDER1",
+  notes: null,
+  billing: null,
+  items: [
+    { productName: "Caneta Plástica", quantity: 100, selections: { "Variação": "Azul" }, unitPrice: 2.64 },
+    { productName: "Foto 10x15", quantity: 1, selections: {}, unitPrice: null },
+  ],
+};
+
+const BILLING = {
+  personType: "pj" as const,
+  document: "11.222.333/0001-81",
+  companyName: "Padaria Boa Vista Ltda",
+  tradeName: "Padaria Boa Vista",
+  stateRegistration: "407.123.456.789",
+  address: { cep: "13201-000", street: "Rua Barão de Jundiaí", number: "100", complement: "Sala 2", district: "Centro", city: "Jundiaí", state: "SP" },
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -141,5 +157,32 @@ describe("BackofficeBoard", () => {
     render(<BackofficeBoard canCancel={false} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/permissão/i);
+  });
+
+  it("mostra o número do pedido e, nos detalhes, faturamento, itens e observações", async () => {
+    const order = { ...ORDER, notes: "Entregar até dia 20", billing: BILLING };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ orders: [order], counts: { aguardando_pagamento: 1 } })));
+    const user = userEvent.setup();
+    render(<BackofficeBoard canCancel={false} />);
+    const card = (await screen.findByText("Cliente Teste")).closest("article") as HTMLElement;
+
+    expect(within(card).getByText("#FF-ORDER1")).toBeInTheDocument();
+    expect(within(card).getByText("CNPJ 11.222.333/0001-81")).toBeInTheDocument();
+
+    await user.click(within(card).getByText("Ver detalhes"));
+    expect(within(card).getByText("Padaria Boa Vista Ltda")).toBeVisible();
+    expect(within(card).getByText(/IE 407\.123\.456\.789/)).toBeVisible();
+    expect(within(card).getByText(/Rua Barão de Jundiaí, 100, Sala 2 — Centro, Jundiaí\/SP — CEP 13201-000/)).toBeVisible();
+    expect(within(card).getByText(/100 × Caneta Plástica/)).toBeVisible();
+    expect(within(card).getByText(/Variação: Azul/)).toBeVisible();
+    expect(within(card).getByText(/sob consulta/)).toBeVisible();
+    expect(within(card).getByText("Entregar até dia 20")).toBeVisible();
+  });
+
+  it("avisa quando o pedido não tem dados de faturamento", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ orders: [ORDER], counts: { aguardando_pagamento: 1 } })));
+    render(<BackofficeBoard canCancel={false} />);
+    const card = (await screen.findByText("Cliente Teste")).closest("article") as HTMLElement;
+    expect(within(card).getByText("Sem dados de faturamento")).toBeInTheDocument();
   });
 });

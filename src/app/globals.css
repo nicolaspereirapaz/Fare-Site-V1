@@ -3946,3 +3946,83 @@ img {
   color: var(--orange);
   font-weight: 700;
 }
+
+/* Backoffice: número do pedido e detalhes de faturamento/itens no cartão */
+.backoffice-card-code {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.backoffice-card-meta li.backoffice-card-warning {
+  color: #9a5b00;
+  font-weight: 600;
+}
+
+.backoffice-card-meta li.backoffice-card-warning svg {
+  color: #c27a00;
+}
+
+.backoffice-card-details {
+  border-radius: var(--radius-sm);
+  background: #f2f2f3;
+  font-size: 0.78rem;
+}
+
+.backoffice-card-details summary {
+  padding: 8px 11px;
+  color: var(--navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.backoffice-card-details[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.backoffice-detail-block {
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.backoffice-detail-block + .backoffice-detail-block {
+  border-top: 1px solid var(--line);
+}
+
+.backoffice-detail-block h3 {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.backoffice-detail-block strong {
+  color: var(--navy-dark);
+}
+
+.backoffice-detail-block p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.backoffice-detail-block ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backoffice-detail-block li {
+  display: grid;
+  gap: 1px;
+}
+
+.backoffice-detail-block li span {
+  color: var(--muted);
+}

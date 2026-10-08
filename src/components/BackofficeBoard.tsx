@@ -7,20 +7,26 @@ import {
   CalendarDays,
   LayoutGrid,
   Phone,
+  ReceiptText,
   RefreshCw,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
 import { ORDEM_STATUS_PEDIDO, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
+import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import type { PaymentMethod } from "@/lib/orders/repository";
 
 export type BackofficeOrder = {
   id: string;
+  code: string;
   status: StatusPedido;
   paymentMethod: PaymentMethod;
   customerName: string;
   customerPhone: string;
   customerCompany: string | null;
+  notes: string | null;
+  billing: QuoteBilling | null;
+  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null }>;
   itemCount: number;
   total: number;
   createdAt: string;
@@ -71,6 +77,59 @@ const formatCurrency = (value: number) =>
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+
+function billingDocument(billing: QuoteBilling) {
+  return billing.personType === "pj" ? `CNPJ ${billing.document}` : `CPF ${billing.document}`;
+}
+
+/** Detalhes que a equipe precisa para emitir a nota e produzir, sem abrir o WhatsApp. */
+function OrderDetails({ order }: { order: BackofficeOrder }) {
+  const { billing } = order;
+  return (
+    <details className="backoffice-card-details">
+      <summary>Ver detalhes</summary>
+
+      <div className="backoffice-detail-block">
+        <h3>Faturamento</h3>
+        {billing ? (
+          <>
+            <strong>{billing.personType === "pj" ? billing.companyName : order.customerName}</strong>
+            {billing.personType === "pj" && billing.tradeName ? <span>{billing.tradeName}</span> : null}
+            <span>
+              {billingDocument(billing)}
+              {billing.personType === "pj" ? ` · IE ${billing.stateRegistration}` : ""}
+            </span>
+            <span>{formatBillingAddress(billing.address)}</span>
+          </>
+        ) : (
+          <span>Cliente sem cadastro completo: confirmar CPF/CNPJ e endereço no WhatsApp.</span>
+        )}
+      </div>
+
+      <div className="backoffice-detail-block">
+        <h3>Itens</h3>
+        <ul>
+          {order.items.map((item, index) => (
+            <li key={`${item.productName}-${index}`}>
+              <strong>{item.quantity} × {item.productName}</strong>
+              {Object.entries(item.selections).length ? (
+                <span>{Object.entries(item.selections).map(([label, value]) => `${label}: ${value}`).join(" · ")}</span>
+              ) : null}
+              <span>{item.unitPrice === null ? "Valor sob consulta" : `${formatCurrency(item.unitPrice)}/un.`}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {order.notes ? (
+        <div className="backoffice-detail-block">
+          <h3>Observações</h3>
+          <p>{order.notes}</p>
+        </div>
+      ) : null}
+    </details>
+  );
+}
 
 export type BackofficeBoardProps = {
   canCancel: boolean;
@@ -190,6 +249,7 @@ export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
 
                       return (
                         <article className="backoffice-card" key={order.id}>
+                          <span className="backoffice-card-code">#{order.code}</span>
                           <strong className="backoffice-card-customer">{order.customerName}</strong>
                           <ul className="backoffice-card-meta">
                             <li>
@@ -210,6 +270,10 @@ export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
                               <CalendarDays aria-hidden="true" size={14} />
                               {formatDate(order.createdAt)}
                             </li>
+                            <li className={order.billing ? undefined : "backoffice-card-warning"}>
+                              <ReceiptText aria-hidden="true" size={14} />
+                              {order.billing ? billingDocument(order.billing) : "Sem dados de faturamento"}
+                            </li>
                           </ul>
                           <div className="backoffice-card-footer">
                             <span>
@@ -217,6 +281,7 @@ export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
                             </span>
                             <strong>{formatCurrency(order.total)}</strong>
                           </div>
+                          <OrderDetails order={order} />
                           {nextStatuses.length ? (
                             <div className="backoffice-card-actions">
                               {nextStatuses.map((nextStatus) => (
