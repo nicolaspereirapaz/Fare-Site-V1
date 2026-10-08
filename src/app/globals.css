@@ -4026,3 +4026,38 @@ img {
 .backoffice-detail-block li span {
   color: var(--muted);
 }
+
+/* Minha conta: trocar senha (abaixo do cadastro) */
+.password-form {
+  max-width: 760px;
+  margin-top: 22px;
+}
+
+.password-form-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 9px;
+}
+
+.password-form-head h2 {
+  margin: 0;
+  color: var(--navy-dark);
+  font-size: 1.05rem;
+}
+
+.password-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}

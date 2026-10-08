@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountProfileForm } from "@/components/account/AccountProfileForm";
+import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { isProfileComplete } from "@/lib/account/profile";
 import { getCustomerProfile } from "@/lib/account/profileRepository";
 import { database } from "@/lib/auth";
@@ -24,6 +25,7 @@ export default async function AccountProfilePage() {
         <p className="profile-incomplete">Complete seu cadastro para agilizar seus pedidos.</p>
       ) : null}
       <AccountProfileForm initial={{ ...profile, email: session.user.email, complete }} />
+      <ChangePasswordForm />
     </>
   );
 }
