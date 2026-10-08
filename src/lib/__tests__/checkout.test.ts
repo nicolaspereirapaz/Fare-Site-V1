@@ -66,6 +66,32 @@ describe("checkout protegido", () => {
     expect(message).toContain("Rua Barão de Jundiaí, 100, Sala 2 — Centro, Jundiaí/SP — CEP 13201-000");
   });
 
+  it("grava e envia o preço calculado no servidor, não o do navegador", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn((input: CreateOrderInput) => ({ id: "order-1", status: "aguardando_pagamento" as const, paymentMethod: input.paymentMethod, customer: input.customer, items: input.items }));
+    const priceItems = vi.fn(async (items: CreateOrderInput["items"]) => items.map((item) => ({ ...item, unitPrice: 2.64 })));
+    const cheap = { ...body, items: [{ ...body.items[0], slug: "brindes/cf93", quantity: 100, unitPrice: 0.01 }] };
+
+    const response = await createCheckoutHandler(getSession, persistOrder, { priceItems })(requestWithBody(cheap));
+    expect(response.status).toBe(200);
+    expect(persistOrder.mock.calls[0][0].items[0].unitPrice).toBe(2.64);
+    // Intl usa espaço não separável entre "R$" e o número; normaliza para comparar.
+    const message = decodeURIComponent((await response.json()).url).replace(/ /g, " ");
+    expect(message).toContain("Valor: R$ 264,00");
+    expect(message).not.toContain("R$ 1,00");
+  });
+
+  it("se o catálogo falhar ao conferir os preços, não cria o pedido", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
+    const persistOrder = vi.fn();
+    const response = await createCheckoutHandler(getSession, persistOrder, {
+      priceItems: async () => { throw new Error("catálogo fora"); },
+    })(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "PRICING_UNAVAILABLE" });
+    expect(persistOrder).not.toHaveBeenCalled();
+  });
+
   it("sem cadastro completo, o pedido segue sem faturamento", async () => {
     const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1" } });
     const persistOrder = vi.fn((input: CreateOrderInput) => ({ id: "order-1", status: "aguardando_pagamento" as const, paymentMethod: input.paymentMethod, customer: input.customer, items: input.items }));

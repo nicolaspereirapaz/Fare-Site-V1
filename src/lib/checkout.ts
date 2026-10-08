@@ -85,6 +85,8 @@ export type ReadBilling = (userId: string) => QuoteBilling | null;
 export type CheckoutOptions = {
   rememberContact?: RememberContact;
   readBilling?: ReadBilling;
+  /** Recalcula os preços no servidor (o navegador não define o valor do pedido). */
+  priceItems?: (items: QuoteCartItem[]) => Promise<QuoteCartItem[]> | QuoteCartItem[];
 };
 
 /** Só os campos do formulário; qualquer outro campo enviado pelo navegador (ex.: billing) é descartado. */
@@ -99,7 +101,7 @@ function pickCustomer(customer: QuoteCustomer): QuoteCustomer {
 export function createCheckoutHandler(
   getSession: SessionReader<CheckoutSession>,
   persistOrder: PersistOrder,
-  { rememberContact, readBilling }: CheckoutOptions = {},
+  { rememberContact, readBilling, priceItems }: CheckoutOptions = {},
 ) {
   return async function checkout(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -119,6 +121,15 @@ export function createCheckoutHandler(
     }
 
     const customer = pickCustomer(body.customer);
+
+    let items: QuoteCartItem[];
+    try {
+      items = priceItems ? await priceItems(body.items) : body.items;
+    } catch (error) {
+      console.error("[checkout] não foi possível conferir os preços no catálogo", error);
+      return Response.json({ error: "PRICING_UNAVAILABLE" }, { status: 503 });
+    }
+
     try {
       const billing = readBilling?.(session.user.id);
       if (billing) customer.billing = billing;
@@ -133,7 +144,7 @@ export function createCheckoutHandler(
         userId: session.user.id,
         idempotencyKey: body.idempotencyKey,
         customer,
-        items: body.items,
+        items,
         paymentMethod: body.paymentMethod,
       });
     } catch {
