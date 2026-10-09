@@ -67,6 +67,7 @@ export function CartView() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [quoteOnly, setQuoteOnly] = useState(false);
   const [pending, setPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const idempotencyKey = useRef<string | null>(null);
@@ -87,6 +88,13 @@ export function CartView() {
     };
   }, []);
 
+  /** Pedido x orçamento: nova chave anti-duplicação ao trocar, para um não "reaproveitar" o outro. */
+  function changeMode(nextQuoteOnly: boolean) {
+    setQuoteOnly(nextQuoteOnly);
+    setCheckoutError(null);
+    idempotencyKey.current = null;
+  }
+
   async function finishOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -96,12 +104,10 @@ export function CartView() {
       idempotencyKey.current ??= typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const result = await requestCheckout({
-        customer: { name, company, phone, notes },
-        items,
-        paymentMethod,
-        idempotencyKey: idempotencyKey.current,
-      });
+      const base = { customer: { name, company, phone, notes }, items, idempotencyKey: idempotencyKey.current };
+      const result = quoteOnly
+        ? await requestCheckout(base, fetch, "/api/quotes")
+        : await requestCheckout({ ...base, paymentMethod });
       if ("requiresAuth" in result) {
         router.push("/entrar?callbackURL=/carrinho");
         return;
@@ -205,9 +211,21 @@ export function CartView() {
       </section>
 
       <aside className="checkout-card" id="finalizar">
-        <span className="eyebrow">Finalizar orçamento</span>
-        <h2>Envie o pedido para o WhatsApp</h2>
+        <span className="eyebrow">Finalizar</span>
+        <h2>{quoteOnly ? "Peça seu orçamento pelo WhatsApp" : "Envie o pedido para o WhatsApp"}</h2>
         <p>Os itens e as configurações serão organizados automaticamente na mensagem.</p>
+
+        <fieldset className="checkout-mode">
+          <legend>O que você quer fazer?</legend>
+          <label className={quoteOnly ? undefined : "active"}>
+            <input checked={!quoteOnly} name="checkoutMode" onChange={() => changeMode(false)} type="radio" />
+            <span><strong>Fazer pedido</strong><small>Já sei o que quero e como vou pagar.</small></span>
+          </label>
+          <label className={quoteOnly ? "active" : undefined}>
+            <input checked={quoteOnly} name="checkoutMode" onChange={() => changeMode(true)} type="radio" />
+            <span><strong>Só quero um orçamento</strong><small>Sem compromisso: a equipe confirma valores e prazo.</small></span>
+          </label>
+        </fieldset>
 
         {profile ? <BillingSummary profile={profile} /> : null}
 
@@ -215,22 +233,26 @@ export function CartView() {
           <label><span>Nome</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label><span>Empresa (opcional)</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label>
           <label><span>WhatsApp para retorno</span><input inputMode="tel" required value={phone} onChange={(event) => setPhone(formatPhoneBR(event.target.value))} /></label>
-          <label>
-            <span>Forma de pagamento</span>
-            <select
-              required
-              value={paymentMethod}
-              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod | "")}
-            >
-              <option value="">Selecione</option>
-              <option value="pix">Pix</option>
-              <option value="cartao_credito">Cartão de crédito</option>
-              <option value="cartao_debito">Cartão de débito</option>
-              <option value="boleto">Boleto</option>
-              <option value="faturamento_empresa">Faturamento para empresa</option>
-            </select>
-          </label>
-          <small className="payment-notice">Faturamento para empresa está sujeito à aprovação da Fare Foto.</small>
+          {quoteOnly ? null : (
+            <>
+              <label>
+                <span>Forma de pagamento</span>
+                <select
+                  required
+                  value={paymentMethod}
+                  onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod | "")}
+                >
+                  <option value="">Selecione</option>
+                  <option value="pix">Pix</option>
+                  <option value="cartao_credito">Cartão de crédito</option>
+                  <option value="cartao_debito">Cartão de débito</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="faturamento_empresa">Faturamento para empresa</option>
+                </select>
+              </label>
+              <small className="payment-notice">Faturamento para empresa está sujeito à aprovação da Fare Foto.</small>
+            </>
+          )}
           <label><span>Observações (opcional)</span><textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
           <div className="file-reminder">
             <FileWarning aria-hidden="true" size={19} />
@@ -238,10 +260,17 @@ export function CartView() {
           </div>
           {checkoutError ? <p className="auth-error" role="alert">{checkoutError}</p> : null}
           <button className="button button-whatsapp button-large" disabled={pending} type="submit">
-            <MessageCircle aria-hidden="true" size={20} /> {pending ? "Criando pedido…" : "Criar pedido e abrir WhatsApp"}
+            <MessageCircle aria-hidden="true" size={20} />{" "}
+            {pending
+              ? (quoteOnly ? "Enviando orçamento…" : "Criando pedido…")
+              : (quoteOnly ? "Pedir orçamento no WhatsApp" : "Criar pedido e abrir WhatsApp")}
           </button>
         </form>
-        <small>Nenhum pagamento é realizado pelo site nesta versão.</small>
+        <small>
+          {quoteOnly
+            ? "O orçamento fica salvo em Minha conta → Orçamentos."
+            : "Nenhum pagamento é realizado pelo site nesta versão."}
+        </small>
       </aside>
     </div>
   );

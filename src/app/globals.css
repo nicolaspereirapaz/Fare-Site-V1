@@ -4061,3 +4061,78 @@ img {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Carrinho: escolher entre fazer pedido e só pedir orçamento */
+.checkout-mode {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 16px;
+  border: 0;
+  padding: 0;
+}
+
+.checkout-mode legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 700;
+}
+
+aside.checkout-card .checkout-mode > label {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+aside.checkout-card .checkout-mode > label.active {
+  border-color: #f2f2f3;
+  background: #f2f2f3;
+  color: var(--navy-dark);
+}
+
+.checkout-card .checkout-mode input {
+  width: 18px;
+  min-height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--orange);
+}
+
+.checkout-mode label span {
+  display: grid;
+  gap: 2px;
+}
+
+.checkout-mode label small {
+  opacity: 0.8;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.account-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.quote-status-aguardando_resposta {
+  background: #fff4e5;
+  color: #7a4a00;
+}
+
+.quote-status-respondido,
+.quote-status-virou_pedido {
+  background: #e8f5ee;
+  color: #1c6b45;
+}
+
+.quote-status-encerrado {
+  background: #f2f2f3;
+  color: var(--muted);
+}

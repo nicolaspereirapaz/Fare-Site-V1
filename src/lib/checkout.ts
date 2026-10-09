@@ -5,6 +5,10 @@ import { orderCode } from "@/lib/orders/orderCode";
 import type { SessionReader } from "@/lib/auth/session";
 import type { CreateOrderInput, Order, PaymentMethod } from "@/lib/orders/repository";
 import { PAYMENT_METHODS } from "@/lib/orders/repository";
+import { quoteCode } from "@/lib/quotes/quoteCode";
+import type { CreateQuoteInput, Quote } from "@/lib/quotes/repository";
+
+const NEWLINE = String.fromCharCode(10);
 
 export type CheckoutSession = { user: { id: string } };
 export type CheckoutBody = {
@@ -64,17 +68,24 @@ function isCartItem(value: unknown): value is QuoteCartItem {
     && priceValid;
 }
 
-function isCheckoutBody(value: unknown): value is CheckoutBody {
+export type QuoteRequestBody = Omit<CheckoutBody, "paymentMethod">;
+
+/** Cliente + itens + chave anti-duplicação (comum a pedido e orçamento). */
+function isQuoteRequestBody(value: unknown): value is QuoteRequestBody {
   if (!isRecord(value)) return false;
   return isCustomer(value.customer)
     && Array.isArray(value.items)
     && value.items.length > 0
     && value.items.length <= 100
     && value.items.every(isCartItem)
-    && typeof value.paymentMethod === "string"
-    && PAYMENT_METHODS.includes(value.paymentMethod as PaymentMethod)
     && typeof value.idempotencyKey === "string"
     && /^[A-Za-z0-9_-]{8,128}$/.test(value.idempotencyKey);
+}
+
+function isCheckoutBody(value: unknown): value is CheckoutBody {
+  return isQuoteRequestBody(value)
+    && typeof (value as Record<string, unknown>).paymentMethod === "string"
+    && PAYMENT_METHODS.includes((value as Record<string, unknown>).paymentMethod as PaymentMethod);
 }
 
 /** Guarda WhatsApp/empresa do pedido na conta (só completa o que ainda está vazio). */
@@ -168,5 +179,55 @@ export function createCheckoutHandler(
       status: order.status,
       url: buildWhatsAppUrl(FARE_FOTO_WHATSAPP, message),
     });
+  };
+}
+
+export type PersistQuote = (input: CreateQuoteInput) => Pick<Quote, "id" | "status" | "customer" | "items">;
+
+/**
+ * "Só quero um orçamento": mesmas regras do pedido (login, preço do servidor, faturamento do
+ * cadastro), sem forma de pagamento. Fica na aba Orçamentos e a equipe responde no WhatsApp.
+ */
+export function createQuoteHandler(
+  getSession: SessionReader<CheckoutSession>,
+  persistQuote: PersistQuote,
+  { readBilling, priceItems }: Pick<CheckoutOptions, "readBilling" | "priceItems"> = {},
+) {
+  return async function requestQuote(request: Request): Promise<Response> {
+    const session = await getSession({ headers: request.headers });
+    if (!session) return Response.json({ error: "AUTH_REQUIRED" }, { status: 401 });
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    }
+    if (!isQuoteRequestBody(body)) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+
+    const customer = pickCustomer(body.customer);
+    let items: QuoteCartItem[];
+    try {
+      items = priceItems ? await priceItems(body.items) : body.items;
+    } catch (error) {
+      console.error("[orçamento] não foi possível conferir os preços no catálogo", error);
+      return Response.json({ error: "PRICING_UNAVAILABLE" }, { status: 503 });
+    }
+    try {
+      const billing = readBilling?.(session.user.id);
+      if (billing) customer.billing = billing;
+    } catch (error) {
+      console.error("[orçamento] não foi possível ler o cadastro do cliente", error);
+    }
+
+    let quote: ReturnType<PersistQuote>;
+    try {
+      quote = persistQuote({ userId: session.user.id, idempotencyKey: body.idempotencyKey, customer, items });
+    } catch {
+      return Response.json({ error: "QUOTE_CREATION_FAILED" }, { status: 500 });
+    }
+
+    const message = [`Orçamento #${quoteCode(quote.id)}`, "", buildQuoteMessage(quote.customer, quote.items)].join(NEWLINE);
+    return Response.json({ quoteId: quote.id, status: quote.status, url: buildWhatsAppUrl(FARE_FOTO_WHATSAPP, message) });
   };
 }

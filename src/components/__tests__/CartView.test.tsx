@@ -186,4 +186,33 @@ describe("CartView", () => {
     }));
     expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
   });
+
+  it("'Só quero um orçamento' esconde a forma de pagamento e envia como orçamento", async () => {
+    requestCheckout.mockResolvedValue({ requiresAuth: true });
+    const user = userEvent.setup();
+    render(<CartView />);
+
+    expect(screen.getByRole("radio", { name: /Fazer pedido/ })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: /Só quero um orçamento/ }));
+    expect(screen.queryByLabelText("Forma de pagamento")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Nome"), "Ana");
+    await user.type(screen.getByLabelText("WhatsApp para retorno"), "11999999999");
+    await user.click(screen.getByRole("button", { name: "Pedir orçamento no WhatsApp" }));
+
+    expect(requestCheckout).toHaveBeenCalledTimes(1);
+    const [payload, , endpoint] = requestCheckout.mock.calls[0];
+    expect(endpoint).toBe("/api/quotes");
+    expect(payload).not.toHaveProperty("paymentMethod");
+    expect(payload).toMatchObject({ customer: { name: "Ana", phone: "(11) 99999-9999" } });
+  });
+
+  it("voltar para 'Fazer pedido' volta a exigir a forma de pagamento", async () => {
+    const user = userEvent.setup();
+    render(<CartView />);
+    await user.click(screen.getByRole("radio", { name: /Só quero um orçamento/ }));
+    await user.click(screen.getByRole("radio", { name: /Fazer pedido/ }));
+    expect(screen.getByLabelText("Forma de pagamento")).toBeRequired();
+    expect(screen.getByRole("button", { name: "Criar pedido e abrir WhatsApp" })).toBeInTheDocument();
+  });
 });

@@ -16,4 +16,10 @@ describe("requestCheckout", () => {
     await expect(requestCheckout(payload, fetcher)).resolves.toEqual({ url: "https://wa.me/5511" });
     expect(fetcher).toHaveBeenCalledWith("/api/checkout", expect.objectContaining({ method: "POST" }));
   });
+
+  it("envia para outro endereço (orçamento) quando informado", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ url: "https://wa.me/5511" }));
+    await requestCheckout(payload, fetcher, "/api/quotes");
+    expect(fetcher).toHaveBeenCalledWith("/api/quotes", expect.objectContaining({ method: "POST" }));
+  });
 });
