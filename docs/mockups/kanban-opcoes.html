@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel da equipe — 3 opções de Kanban</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --orange: #d4532a; --orange-dark: #af3c1a; --orange-soft: #f8e7df;
+    --navy: #2c3561; --navy-dark: #1d2447; --navy-soft: #e9ebf3;
+    --ink: #191a1d; --muted: #65666b; --line: #e6e3de; --gray: #f2f2f3;
+    --green: #167b55; --green-soft: #e3f3ea; --red: #a12a2a; --wa: #1e9b5a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; color: var(--ink); background: var(--gray); }
+  button { font: inherit; cursor: pointer; }
+  .switcher { position: sticky; top: 0; z-index: 50; display: flex; gap: 8px; align-items: center; padding: 10px 24px; background: #fff; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .switcher strong { margin-right: 8px; }
+  .switcher button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 14px; font-weight: 600; }
+  .switcher button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 28px; background: var(--navy-dark); color: #fff; }
+  .topbar .brand { font-family: Outfit, sans-serif; font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+  .topbar .brand span { opacity: .6; font-weight: 500; margin-left: 10px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.3); }
+  .topbar .who { font-size: 13px; opacity: .9; }
+  .page { padding: 24px 28px 48px; }
+  .page h1 { font-family: Outfit, sans-serif; font-size: 26px; margin: 0 0 4px; color: var(--navy-dark); }
+  .page .sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+  .tabs { display: inline-flex; gap: 4px; margin-bottom: 18px; }
+  .tabs b { padding: 7px 14px; border-radius: 8px; font-size: 14px; }
+  .money { font-variant-numeric: tabular-nums; }
+  .opt { display: none; } .opt.on { display: block; }
+  .hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  /* ---------- OPÇÃO A — Limpo (cartões brancos, colunas sem caixa) ---------- */
+  .a .tabs b.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .a .board { display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 18px; align-items: start; }
+  .a .col-h { display: flex; align-items: center; gap: 8px; padding: 0 2px 10px; font-weight: 700; font-size: 14px; color: var(--navy-dark); }
+  .a .col-h .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .a .col-h .n { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .a .col-body { display: grid; gap: 10px; }
+  .a .card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 1px 2px rgba(25,26,29,.06), 0 0 0 1px rgba(25,26,29,.04); }
+  .a .card .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .a .code { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .3px; }
+  .a .val { font-weight: 700; color: var(--navy-dark); }
+  .a .name { margin: 6px 0 2px; font-weight: 700; font-size: 15px; }
+  .a .what { font-size: 13px; color: var(--muted); }
+  .a .foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--gray); }
+  .a .btn-next { border: 1px solid var(--navy); background: #fff; color: var(--navy); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .a .btn-det { border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; margin-left: auto; padding: 6px 4px; }
+  .a .warn { display: inline-block; margin-top: 6px; font-size: 12px; color: #8a5a00; }
+
+  /* ---------- OPÇÃO B — Etapas com cor (cabeçalho colorido + cartão compacto) ---------- */
+  .b .tabs b.on { background: var(--navy-soft); color: var(--navy-dark); }
+  .b .board { display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 14px; align-items: start; }
+  .b .col { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+  .b .col-h { display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-weight: 700; font-size: 14px; }
+  .b .col-h .n { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,.7); font-size: 12px; }
+  .b .col-body { display: grid; gap: 8px; padding: 10px; background: #fafafa; min-height: 120px; }
+  .b .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .b .card:hover { border-color: #cfccc6; }
+  .b .top { display: flex; align-items: center; gap: 10px; }
+  .b .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+  .b .name { font-weight: 700; font-size: 14px; line-height: 1.2; }
+  .b .code { font-size: 11.5px; color: var(--muted); }
+  .b .mid { display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px; color: var(--muted); }
+  .b .val { font-weight: 700; color: var(--ink); }
+  .b .foot { display: flex; gap: 6px; }
+  .b .btn-next { flex: 1; border: 0; border-radius: 8px; padding: 8px; font-size: 13px; font-weight: 700; color: #fff; background: var(--navy); }
+  .b .btn-det { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .b .warn { font-size: 11.5px; color: #8a5a00; background: #fff4e0; border-radius: 6px; padding: 2px 6px; margin-left: auto; }
+
+  /* ---------- OPÇÃO C — Modo escuro (quadro azul-marinho) ---------- */
+  .c { background: #151a36; min-height: 100vh; }
+  .c .page h1 { color: #fff; } .c .page .sub { color: #a9aecb; }
+  .c .tabs b { color: #a9aecb; } .c .tabs b.on { color: #fff; background: rgba(255,255,255,.1); }
+  .c .board { display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 14px; align-items: start; }
+  .c .col { background: #1d2447; border-radius: 14px; padding: 12px; }
+  .c .col-h { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; color: #fff; font-weight: 700; font-size: 14px; }
+  .c .col-h .n { margin-left: auto; color: #a9aecb; font-size: 13px; }
+  .c .col-h .bar { height: 3px; flex: 0 0 18px; border-radius: 2px; }
+  .c .col-body { display: grid; gap: 10px; }
+  .c .card { background: #262e5a; border-radius: 10px; padding: 14px; color: #fff; position: relative; }
+  .c .code { font-size: 11.5px; color: #a9aecb; letter-spacing: .4px; }
+  .c .name { margin: 4px 0 8px; font-weight: 700; font-size: 15px; }
+  .c .val { font-family: Outfit, sans-serif; font-size: 20px; font-weight: 600; }
+  .c .what { font-size: 12.5px; color: #c4c8de; margin-top: 2px; }
+  .c .foot { display: flex; gap: 6px; margin-top: 12px; }
+  .c .btn-next { flex: 1; border: 0; border-radius: 8px; padding: 8px; font-size: 13px; font-weight: 700; color: #fff; background: var(--orange); }
+  .c .btn-det { border: 1px solid rgba(255,255,255,.2); background: transparent; color: #fff; border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 600; }
+  .c .warn { font-size: 11.5px; color: #ffcf86; }
+  .c .topbar { background: #10142b; }
+
+  /* ---------- Painel flutuante de detalhes (comum, 3 jeitos de abrir) ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(15,18,38,.45); z-index: 80; display: none; }
+  .scrim.on { display: block; }
+  .panel { position: fixed; z-index: 90; background: #fff; color: var(--ink); display: none; flex-direction: column; box-shadow: 0 24px 64px rgba(15,18,38,.28); }
+  .panel.on { display: flex; }
+  .panel.modal { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); border-radius: 16px; }
+  .panel.drawer { right: 0; top: 0; bottom: 0; width: min(440px, 100vw); border-radius: 16px 0 0 16px; }
+  .panel.pop { width: 380px; max-height: 70vh; border-radius: 14px; }
+  .panel .ph { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--gray); }
+  .panel .ph .code { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .panel .ph h2 { margin: 2px 0 4px; font-family: Outfit, sans-serif; font-size: 20px; color: var(--navy-dark); }
+  .panel .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+  .panel .x { margin-left: auto; border: 0; background: var(--gray); width: 32px; height: 32px; border-radius: 8px; font-size: 18px; line-height: 1; }
+  .panel .pb { overflow: auto; padding: 16px 20px; display: grid; gap: 16px; font-size: 14px; }
+  .panel h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .panel .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel.drawer .grid2, .panel.pop .grid2 { grid-template-columns: 1fr; }
+  .panel p { margin: 0; line-height: 1.5; }
+  .panel table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .panel td { padding: 7px 0; border-bottom: 1px solid var(--gray); vertical-align: top; }
+  .panel td:last-child { text-align: right; white-space: nowrap; }
+  .panel tfoot td { font-weight: 700; border: 0; padding-top: 10px; }
+  .panel .note { background: #fffaf0; border-radius: 8px; padding: 10px 12px; }
+  .panel .hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+  .panel .hist b { color: var(--ink); font-weight: 600; }
+  .panel .pf { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--gray); align-items: center; }
+  .panel .pf .go { white-space: nowrap; border: 0; background: var(--navy); color: #fff; border-radius: 8px; padding: 10px 14px; font-weight: 700; font-size: 14px; }
+  .panel .pf .wa { border: 1px solid var(--wa); color: var(--wa); background: #fff; border-radius: 8px; padding: 9px 12px; font-weight: 700; font-size: 14px; }
+  .panel .pf .cancel { white-space: nowrap; margin-left: auto; border: 0; background: transparent; color: var(--red); font-weight: 600; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="switcher">
+    <strong>Escolha:</strong>
+    <button data-opt="a" aria-pressed="true">Opção A — Limpo</button>
+    <button data-opt="b" aria-pressed="false">Opção B — Etapas com cor</button>
+    <button data-opt="c" aria-pressed="false">Opção C — Escuro</button>
+    <span class="hint">Clique em “Ver detalhes” em qualquer cartão</span>
+  </div>
+
+  <section class="opt a on" data-opt="a"></section>
+  <section class="opt b" data-opt="b"></section>
+  <section class="opt c" data-opt="c"></section>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title"></aside>
+
+<script>
+  const STAGES = [
+    { id: "arte", label: "Criando arte", next: "Enviar para produção", a: "#d4532a", soft: "#f8e7df", ink: "#8f3416", dark: "#e06a42" },
+    { id: "prod", label: "Em produção", next: "Pronto para retirada", a: "#2c3561", soft: "#e9ebf3", ink: "#1d2447", dark: "#8f9bdc" },
+    { id: "ret", label: "Aguardando retirada", next: "Entregue → pedir feedback", a: "#b7791f", soft: "#fbf0dc", ink: "#7a4f0d", dark: "#e3a845" },
+    { id: "feed", label: "Aguardando feedback", next: "Concluir pedido", a: "#167b55", soft: "#e3f3ea", ink: "#0f5a3e", dark: "#4cc392" },
+  ];
+  const ORDERS = [
+    { id: 1, code: "FF-3B2BDB", stage: "arte", name: "Padaria Boa Vista", person: "Ana Souza", phone: "(11) 95314-7703", item: "100 × Caneta Plástica · Azul", total: 264, date: "09/10", billing: true, note: "Logo em anexo no WhatsApp. Precisa até dia 20." },
+    { id: 2, code: "FF-61AAE0", stage: "arte", name: "Clínica Sorriso", person: "Marcos Lima", phone: "(11) 98877-1200", item: "50 × Squeeze Alumínio · Prata", total: 945, date: "08/10", billing: false, note: "" },
+    { id: 3, code: "FF-DF2584", stage: "prod", name: "Escola Aquarela", person: "Júlia Prado", phone: "(11) 97766-3311", item: "100 × Ecobag Algodão · Cru", total: 980, date: "07/10", billing: true, note: "" },
+    { id: 4, code: "FF-7567AE", stage: "ret", name: "Academia Força", person: "Rafael Costa", phone: "(11) 96655-0909", item: "250 × Bloco de Anotações · Kraft", total: 1025, date: "05/10", billing: true, note: "Retira na loja sexta à tarde." },
+    { id: 5, code: "FF-A4CA5E", stage: "feed", name: "Imobiliária Lar", person: "Carla Nunes", phone: "(11) 95544-7788", item: "50 × Copo Térmico · Preto", total: 1200, date: "02/10", billing: true, note: "" },
+  ];
+  const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const initials = (s) => s.split(" ").map((w) => w[0]).slice(0, 2).join("");
+  const stageOf = (o) => STAGES.find((s) => s.id === o.stage);
+
+  const shell = (opt, board) => `
+    <header class="topbar"><div class="brand">Fare Foto<span>Equipe</span></div><div class="who">Nicolas · Administrador · Sair</div></header>
+    <main class="page">
+      <h1>Quadro de pedidos</h1>
+      <p class="sub">Pedidos pagos, da arte à entrega. Ao concluir, o pedido sai do quadro.</p>
+      <div class="tabs"><b class="on">Pedidos</b><b>Orçamentos</b></div>
+      <div class="board">${board}</div>
+    </main>`;
+
+  const renderA = () => shell("a", STAGES.map((s) => {
+    const list = ORDERS.filter((o) => o.stage === s.id);
+    return `<div class="col"><div class="col-h"><span class="dot" style="background:${s.a}"></span>${s.label}<span class="n">${list.length}</span></div>
+      <div class="col-body">${list.map((o) => `
+        <article class="card">
+          <div class="row"><span class="code">#${o.code}</span><span class="val money">${brl(o.total)}</span></div>
+          <div class="name">${o.name}</div>
+          <div class="what">${o.item}</div>
+          ${o.billing ? "" : `<span class="warn">⚠ Sem dados de faturamento</span>`}
+          <div class="foot"><button class="btn-next">${s.next} →</button><button class="btn-det" data-id="${o.id}">Ver detalhes</button></div>
+        </article>`).join("")}</div></div>`;
+  }).join(""));
+
+  const renderB = () => shell("b", STAGES.map((s) => {
+    const list = ORDERS.filter((o) => o.stage === s.id);
+    return `<div class="col"><div class="col-h" style="background:${s.soft};color:${s.ink}">${s.label}<span class="n">${list.length}</span></div>
+      <div class="col-body">${list.map((o) => `
+        <article class="card">
+          <div class="top"><span class="av" style="background:${s.soft};color:${s.ink}">${initials(o.name)}</span>
+            <div><div class="name">${o.name}</div><div class="code">#${o.code} · ${o.date}</div></div>
+            ${o.billing ? "" : `<span class="warn">Sem CNPJ</span>`}</div>
+          <div class="mid"><span>${o.item.split(" · ")[0]}</span><span class="val money">${brl(o.total)}</span></div>
+          <div class="foot"><button class="btn-next">${s.next}</button><button class="btn-det" data-id="${o.id}">Detalhes</button></div>
+        </article>`).join("")}</div></div>`;
+  }).join(""));
+
+  const renderC = () => shell("c", STAGES.map((s) => {
+    const list = ORDERS.filter((o) => o.stage === s.id);
+    return `<div class="col"><div class="col-h"><span class="bar" style="background:${s.dark}"></span>${s.label}<span class="n">${list.length}</span></div>
+      <div class="col-body">${list.map((o) => `
+        <article class="card">
+          <div class="code">#${o.code} · ${o.date}</div>
+          <div class="name">${o.name}</div>
+          <div class="val money">${brl(o.total)}</div>
+          <div class="what">${o.item}</div>
+          ${o.billing ? "" : `<div class="warn">⚠ Sem dados de faturamento</div>`}
+          <div class="foot"><button class="btn-next">${s.next}</button><button class="btn-det" data-id="${o.id}">Detalhes</button></div>
+        </article>`).join("")}</div></div>`;
+  }).join(""));
+
+  document.querySelector('[data-opt="a"].opt').innerHTML = renderA();
+  document.querySelector('[data-opt="b"].opt').innerHTML = renderB();
+  document.querySelector('[data-opt="c"].opt').innerHTML = renderC();
+
+  // Cada opção abre os detalhes de um jeito: A = janela no centro, B = gaveta lateral, C = balão ao lado do cartão
+  const MODE = { a: "modal", b: "drawer", c: "pop" };
+  let current = "a";
+  const panel = document.getElementById("panel");
+  const scrim = document.getElementById("scrim");
+
+  function detail(o) {
+    const s = stageOf(o);
+    return `
+      <div class="ph"><div>
+        <div class="code">#${o.code} · pedido de ${o.date}</div>
+        <h2 id="panel-title">${o.name}</h2>
+        <span class="chip" style="background:${s.soft};color:${s.ink}">${s.label}</span>
+      </div><button class="x" aria-label="Fechar">×</button></div>
+      <div class="pb">
+        <div class="grid2">
+          <div><h3>Contato</h3><p><b>${o.person}</b><br>${o.phone}<br>Pix</p></div>
+          <div><h3>Faturamento</h3>${o.billing
+            ? `<p><b>${o.name} Ltda</b><br>CNPJ 11.222.333/0001-81 · IE Isento<br>Rua Barão de Jundiaí, 100 — Centro, Jundiaí/SP</p>`
+            : `<p style="color:#8a5a00">Cliente sem cadastro completo. Confirmar CPF/CNPJ e endereço no WhatsApp.</p>`}</div>
+        </div>
+        <div><h3>Itens</h3><table>
+          <tbody><tr><td>${o.item}</td><td class="money">${brl(o.total)}</td></tr></tbody>
+          <tfoot><tr><td>Total</td><td class="money">${brl(o.total)}</td></tr></tfoot></table></div>
+        ${o.note ? `<div><h3>Observações</h3><p class="note">${o.note}</p></div>` : ""}
+        <div><h3>Histórico</h3><ul class="hist">
+          <li><b>Pagamento recebido</b> — ${o.date} 10:12 · Nicolas</li>
+          <li><b>Pedido criado</b> — ${o.date} 09:40 · pelo site</li></ul></div>
+      </div>
+      <div class="pf"><button class="go">${s.next} →</button><button class="wa">WhatsApp</button><button class="cancel">Cancelar pedido</button></div>`;
+  }
+
+  function open(id, anchor) {
+    const o = ORDERS.find((x) => x.id === Number(id));
+    panel.className = `panel ${MODE[current]} on`;
+    panel.innerHTML = detail(o);
+    scrim.classList.toggle("on", MODE[current] !== "pop");
+    if (MODE[current] === "pop") {
+      const r = anchor.closest(".card").getBoundingClientRect();
+      const left = r.right + 12 + 380 < innerWidth ? r.right + 12 : Math.max(12, r.left - 392);
+      panel.style.left = left + "px";
+      panel.style.top = Math.max(12, Math.min(r.top, innerHeight - panel.offsetHeight - 12)) + "px";
+    } else { panel.style.left = ""; panel.style.top = ""; }
+    panel.querySelector(".x").focus();
+  }
+  function close() { panel.classList.remove("on"); scrim.classList.remove("on"); }
+
+  document.addEventListener("click", (e) => {
+    const det = e.target.closest(".btn-det");
+    if (det) return open(det.dataset.id, det);
+    if (e.target.closest(".x") || e.target === scrim) return close();
+    if (MODE[current] === "pop" && panel.classList.contains("on") && !e.target.closest(".panel")) close();
+    const sw = e.target.closest(".switcher button");
+    if (sw) {
+      current = sw.dataset.opt; close();
+      document.querySelectorAll(".switcher button").forEach((b) => b.setAttribute("aria-pressed", String(b === sw)));
+      document.querySelectorAll(".opt").forEach((s) => s.classList.toggle("on", s.dataset.opt === current));
+    }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  // abrir direto: ?opt=b&det=1
+  const q = new URLSearchParams(location.search);
+  if (q.get("opt")) document.querySelector(`.switcher button[data-opt="${q.get("opt")}"]`).click();
+  if (q.get("det")) setTimeout(() => open(q.get("det"), document.querySelector(`.opt.on .btn-det[data-id="${q.get("det")}"]`)), 50);
+</script>
+</body>
+</html>

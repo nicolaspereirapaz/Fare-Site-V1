@@ -1,15 +1,18 @@
 import type { PaymentMethod } from "@/lib/orders/repository";
 import type { StatusPedido } from "@/lib/backoffice/orderStatus";
 
+/**
+ * Rótulos que o CLIENTE vê. O pagamento não acontece no site: o 1º status é o pedido recebido,
+ * à espera da confirmação da equipe (o painel interno mostra "Aguardando pagamento").
+ */
 export const ORDER_STATUS_LABELS: Record<StatusPedido, string> = {
-  aguardando_pagamento: "Aguardando pagamento",
-  pagamento_confirmado: "Pagamento confirmado",
-  aguardando_personalizacao: "Aguardando personalização",
-  personalizacao_em_aprovacao: "Personalização em aprovação",
-  personalizacao_aprovada: "Personalização aprovada",
+  aguardando_pagamento: "Pedido enviado",
+  aguardando_arte: "Pagamento confirmado",
+  criando_arte: "Criando a arte",
+  aguardando_producao: "Aguardando produção",
   em_producao: "Em produção",
-  pronto_para_envio: "Pronto para envio",
-  em_transporte_ou_retirada: "Em transporte ou retirada",
+  aguardando_retirada: "Pronto para retirada",
+  aguardando_feedback: "Entregue",
   concluido: "Concluído",
   cancelado: "Cancelado",
 };

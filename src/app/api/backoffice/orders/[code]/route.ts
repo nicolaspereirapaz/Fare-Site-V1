@@ -1,11 +1,12 @@
-import { auth, database } from "@/lib/auth";
+import { database } from "@/lib/auth";
+import { staffAuth } from "@/lib/staff/auth";
 import { createUpdateBackofficeOrderStatusHandler } from "@/lib/backoffice/access";
 import { findOrderById, updateOrderStatus } from "@/lib/orders/repository";
 
 export const dynamic = "force-dynamic";
 
 const updateBackofficeOrderStatus = createUpdateBackofficeOrderStatusHandler(
-  auth.api.getSession,
+  staffAuth.api.getSession,
   (orderId) => findOrderById(database, orderId),
   (input) => updateOrderStatus(database, input),
 );

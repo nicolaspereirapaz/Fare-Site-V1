@@ -7,6 +7,21 @@ import { authClient } from "@/lib/auth-client";
 
 type AuthMode = "sign-in" | "sign-up";
 
+/** Mensagens do login/cadastro em português (o Better Auth responde em inglês). */
+const AUTH_ERRORS: Record<string, string> = {
+  INVALID_EMAIL_OR_PASSWORD: "Senha inválida.",
+  INVALID_PASSWORD: "Senha inválida.",
+  INVALID_EMAIL: "E-mail inválido.",
+  USER_ALREADY_EXISTS: "Já existe uma conta com este e-mail. Entre ou use \"Esqueci minha senha\".",
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "Já existe uma conta com este e-mail. Entre ou use \"Esqueci minha senha\".",
+  PASSWORD_TOO_SHORT: "A senha precisa ter pelo menos 8 caracteres.",
+  PASSWORD_TOO_LONG: "A senha está grande demais.",
+};
+
+function authErrorMessage(code: string | undefined) {
+  return (code && AUTH_ERRORS[code]) || "Não foi possível continuar. Tente novamente.";
+}
+
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -26,7 +41,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       : await authClient.signIn.email({ email, password });
 
     if (result.error) {
-      setError(result.error.message || "Não foi possível continuar. Tente novamente.");
+      setError(authErrorMessage(result.error.code));
       setPending(false);
       return;
     }
@@ -47,6 +62,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         ) : null}
         <label><span>E-mail</span><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label><span>Senha</span><input autoComplete={signingUp ? "new-password" : "current-password"} minLength={8} required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        {signingUp ? null : (
+          <Link className="auth-forgot" href="/esqueci-senha">Esqueci minha senha</Link>
+        )}
         {error ? <p className="auth-error" role="alert">{error}</p> : null}
         <button className="button button-primary button-large" disabled={pending} type="submit">
           {pending ? "Aguarde…" : signingUp ? "Criar conta" : "Entrar"}

@@ -54,11 +54,15 @@ export function AccountOrders({ orders }: { orders: AccountOrder[] }) {
                 <h2 id={titleId}>Pedido #{code}</h2>
                 <ul className="account-order-meta">
                   <li><CalendarDays aria-hidden="true" size={14} /> {formatDate(order.createdAt)}</li>
-                  <li><Wallet aria-hidden="true" size={14} /> {PAYMENT_METHOD_LABELS[order.paymentMethod]}</li>
+                  <li><Wallet aria-hidden="true" size={14} /> Pagamento: {PAYMENT_METHOD_LABELS[order.paymentMethod]}</li>
                 </ul>
               </div>
               <span className={`account-order-status status-${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
             </header>
+
+            {order.status === "aguardando_pagamento" ? (
+              <p className="account-order-note">A equipe vai confirmar valores, prazo e pagamento pelo WhatsApp.</p>
+            ) : null}
 
             <ul className="account-order-items">
               {order.items.map((item, index) => (

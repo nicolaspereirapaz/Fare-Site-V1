@@ -139,6 +139,37 @@ describe("repositório de pedidos", () => {
 
   afterEach(() => database.close());
 
+  it("pedidos com as situações antigas migram para as novas sem perder dados", () => {
+    const legacy = new DatabaseSync(":memory:");
+    legacy.exec(`
+      CREATE TABLE fare_orders (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, customer_snapshot TEXT NOT NULL,
+        items_snapshot TEXT NOT NULL, payment_method TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('aguardando_pagamento', 'pagamento_confirmado', 'aguardando_personalizacao',
+          'personalizacao_em_aprovacao', 'personalizacao_aprovada', 'em_producao', 'pronto_para_envio',
+          'em_transporte_ou_retirada', 'concluido', 'cancelado')),
+        total_cents INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (user_id, idempotency_key));
+    `);
+    const insert = legacy.prepare("INSERT INTO fare_orders VALUES (?, 'u1', ?, '{\"name\":\"Ana\"}', '[]', 'pix', ?, 100, '2026-10-01', '2026-10-01')");
+    insert.run("a", "k1", "pagamento_confirmado");
+    insert.run("b", "k2", "personalizacao_aprovada");
+    insert.run("c", "k3", "em_producao");
+    insert.run("d", "k4", "em_transporte_ou_retirada");
+    insert.run("e", "k5", "aguardando_pagamento");
+
+    runOrderMigrations(legacy);
+
+    expect(["a", "b", "c", "d", "e"].map((id) => findOrderById(legacy, id)?.status)).toEqual([
+      "aguardando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_pagamento",
+    ]);
+    expect(findOrderById(legacy, "a")).toMatchObject({ customer: { name: "Ana" }, totalCents: 100 });
+  });
+
+  it("pedido de orçamento pago pode nascer direto em Criando arte", () => {
+    const order = createOrder(database, baseInput, { initialStatus: "criando_arte" });
+    expect(order.status).toBe("criando_arte");
+  });
+
   it("migra de forma idempotente e persiste snapshot, pagamento, status e total", () => {
     expect(() => runOrderMigrations(database)).not.toThrow();
 
@@ -225,15 +256,15 @@ describe("camada de dados do backoffice", () => {
       "z-primeiro",
       created.id,
       "aguardando_pagamento",
-      "pagamento_confirmado",
+      "criando_arte",
       "vendedor-1",
       "2026-09-28T12:00:00.000Z",
     );
     insertLegacyHistory.run(
       "a-segundo",
       created.id,
-      "pagamento_confirmado",
-      "aguardando_personalizacao",
+      "criando_arte",
+      "em_producao",
       "vendedor-1",
       "2026-09-28T12:00:00.000Z",
     );
@@ -290,19 +321,19 @@ describe("camada de dados do backoffice", () => {
 
     const updated = updateOrderStatus(database, {
       orderId: created.id,
-      nextStatus: "pagamento_confirmado",
+      nextStatus: "aguardando_arte",
       actorId: "vendedor-1",
     });
 
-    expect(updated.status).toBe("pagamento_confirmado");
-    expect(findOrderById(database, created.id)).toMatchObject({ status: "pagamento_confirmado" });
+    expect(updated.status).toBe("aguardando_arte");
+    expect(findOrderById(database, created.id)).toMatchObject({ status: "aguardando_arte" });
 
     const history = listOrderStatusHistory(database, created.id);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({
       orderId: created.id,
       previousStatus: "aguardando_pagamento",
-      nextStatus: "pagamento_confirmado",
+      nextStatus: "aguardando_arte",
       actorId: "vendedor-1",
     });
   });
@@ -334,7 +365,7 @@ describe("camada de dados do backoffice", () => {
     expect(() =>
       updateOrderStatus(database, {
         orderId: created.id,
-        nextStatus: "pagamento_confirmado",
+        nextStatus: "aguardando_arte",
         actorId: "vendedor-1",
       }),
     ).toThrow("falha de auditoria");
@@ -356,7 +387,7 @@ describe("camada de dados do backoffice", () => {
     expect(() =>
       updateOrderStatus(database, {
         orderId: created.id,
-        nextStatus: "pagamento_confirmado",
+        nextStatus: "aguardando_arte",
         actorId: "vendedor-1",
       }),
     ).toThrow(TransicaoStatusPedidoInvalidaError);
@@ -369,7 +400,7 @@ describe("camada de dados do backoffice", () => {
     expect(() =>
       updateOrderStatus(database, {
         orderId: "id-inexistente",
-        nextStatus: "pagamento_confirmado",
+        nextStatus: "aguardando_arte",
         actorId: "vendedor-1",
       }),
     ).toThrow(OrderNotFoundError);
@@ -379,15 +410,15 @@ describe("camada de dados do backoffice", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-28T12:00:00.000Z"));
     const created = createOrder(database, baseInput);
-    updateOrderStatus(database, { orderId: created.id, nextStatus: "pagamento_confirmado", actorId: "vendedor-1" });
-    updateOrderStatus(database, { orderId: created.id, nextStatus: "aguardando_personalizacao", actorId: "vendedor-1" });
+    updateOrderStatus(database, { orderId: created.id, nextStatus: "aguardando_arte", actorId: "vendedor-1" });
+    updateOrderStatus(database, { orderId: created.id, nextStatus: "criando_arte", actorId: "vendedor-1" });
 
     const history = listOrderStatusHistory(database, created.id);
 
     expect(new Set(history.map((entry) => entry.createdAt))).toEqual(new Set(["2026-09-28T12:00:00.000Z"]));
     expect(history.map((entry) => entry.nextStatus)).toEqual([
-      "pagamento_confirmado",
-      "aguardando_personalizacao",
+      "aguardando_arte",
+      "criando_arte",
     ]);
   });
 
@@ -432,13 +463,11 @@ describe("camada de dados do backoffice", () => {
       const setupDatabase = new DatabaseSync(databasePath);
       const created = createOrder(setupDatabase, baseInput);
       const statusesAteTransporte: StatusPedido[] = [
-        "pagamento_confirmado",
-        "aguardando_personalizacao",
-        "personalizacao_em_aprovacao",
-        "personalizacao_aprovada",
+        "aguardando_arte",
+        "criando_arte",
+        "aguardando_producao",
         "em_producao",
-        "pronto_para_envio",
-        "em_transporte_ou_retirada",
+        "aguardando_retirada",
       ];
       for (const nextStatus of statusesAteTransporte) {
         updateOrderStatus(setupDatabase, { orderId: created.id, nextStatus, actorId: "setup" });
@@ -446,7 +475,7 @@ describe("camada de dados do backoffice", () => {
       setupDatabase.close();
 
       workers.push(
-        createTransitionWorker(workerPath, databasePath, created.id, "concluido"),
+        createTransitionWorker(workerPath, databasePath, created.id, "aguardando_feedback"),
         createTransitionWorker(workerPath, databasePath, created.id, "cancelado"),
       );
       await Promise.all(workers.map((worker) => worker.ready));
@@ -461,10 +490,10 @@ describe("camada de dados do backoffice", () => {
       const history = listOrderStatusHistory(verificationDatabase, created.id);
       verificationDatabase.close();
 
-      expect(["concluido", "cancelado"]).toContain(persisted?.status);
+      expect(["aguardando_feedback", "cancelado"]).toContain(persisted?.status);
       expect(history).toHaveLength(statusesAteTransporte.length + 1);
       expect(history.at(-1)).toMatchObject({
-        previousStatus: "em_transporte_ou_retirada",
+        previousStatus: "aguardando_retirada",
         nextStatus: persisted?.status,
       });
     } finally {

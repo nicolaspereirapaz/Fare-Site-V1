@@ -60,12 +60,26 @@ describe("página de pedidos", () => {
     render(<AccountOrders orders={[ORDER]} />);
     const order = screen.getByRole("article", { name: "Pedido #FF-3F7A2C" });
     expect(order).toHaveTextContent("27/09/2026");
-    expect(order).toHaveTextContent("Aguardando pagamento");
+    expect(order).toHaveTextContent("Pedido enviado");
+    expect(order).not.toHaveTextContent("Aguardando pagamento");
+    expect(order).toHaveTextContent("A equipe vai confirmar valores, prazo e pagamento pelo WhatsApp.");
     expect(order).toHaveTextContent("Pix");
     expect(order).toHaveTextContent(/Caneca Acrílica.*Azul.*100 un\..*R\$\s27,16\/un\./);
     expect(order).toHaveTextContent(/Álbum personalizado.*2 un\..*sob consulta/);
     expect(order).toHaveTextContent(/Total estimado\s*R\$\s2\.716,00/);
     expect(order).not.toHaveTextContent(ORDER.id);
+  });
+
+  it("depois de confirmado, o status segue o andamento e some o aviso de confirmação", () => {
+    render(<AccountOrders orders={[{ ...ORDER, status: "em_producao" }]} />);
+    const order = screen.getByRole("article", { name: "Pedido #FF-3F7A2C" });
+    expect(order).toHaveTextContent("Em produção");
+    expect(order).not.toHaveTextContent("A equipe vai confirmar");
+  });
+
+  it("forma de pagamento aparece como a escolhida pelo cliente, não como pagamento feito", () => {
+    render(<AccountOrders orders={[ORDER]} />);
+    expect(screen.getByRole("article", { name: "Pedido #FF-3F7A2C" })).toHaveTextContent("Pagamento: Pix");
   });
 
   it("tem um atalho para falar sobre o pedido no WhatsApp da loja", () => {

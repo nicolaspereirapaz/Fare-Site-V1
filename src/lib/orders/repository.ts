@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
 import {
   ORDEM_STATUS_PEDIDO,
+  STATUS_PEDIDO_LEGADO,
   TransicaoStatusPedidoInvalidaError,
   transicionarStatusPedido,
   type StatusPedido,
@@ -24,6 +25,11 @@ export type CreateOrderInput = {
   customer: QuoteCustomer;
   items: QuoteCartItem[];
   paymentMethod: PaymentMethod;
+};
+
+/** Pedido nascido de um orçamento já pago: começa direto em "Aguardando arte". */
+export type CreateOrderOptions = {
+  initialStatus?: StatusPedido;
 };
 
 export type Order = CreateOrderInput & {
@@ -115,6 +121,11 @@ const CREATE_ORDER_STATUS_HISTORY_TABLE_SQL = `
   )
 `;
 
+/** Converte situações antigas ao migrar a tabela (ex.: pagamento_confirmado → aguardando_arte). */
+const LEGACY_STATUS_CASE = `CASE status ${Object.entries(STATUS_PEDIDO_LEGADO)
+  .map(([legacy, current]) => `WHEN '${legacy}' THEN '${current}'`)
+  .join(" ")} ELSE status END`;
+
 function readPersistedOrderStatuses(database: DatabaseSync): string[] | null {
   const row = database.prepare(`
     SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'fare_orders'
@@ -165,7 +176,7 @@ function migrateOrderStatusConstraint(database: DatabaseSync) {
       )
       SELECT
         id, user_id, idempotency_key, customer_snapshot, items_snapshot,
-        payment_method, status, total_cents, created_at, updated_at
+        payment_method, ${LEGACY_STATUS_CASE}, total_cents, created_at, updated_at
       FROM fare_orders;
       DROP TABLE fare_orders;
       ALTER TABLE fare_orders_status_migration RENAME TO fare_orders;
@@ -259,8 +270,9 @@ function deserializeOrder(row: OrderRow): Order {
   };
 }
 
-export function createOrder(database: DatabaseSync, input: CreateOrderInput): Order {
+export function createOrder(database: DatabaseSync, input: CreateOrderInput, options: CreateOrderOptions = {}): Order {
   runOrderMigrations(database);
+  const initialStatus = options.initialStatus ?? "aguardando_pagamento";
   const id = randomUUID();
   const now = new Date().toISOString();
 
@@ -268,7 +280,7 @@ export function createOrder(database: DatabaseSync, input: CreateOrderInput): Or
     INSERT INTO fare_orders (
       id, user_id, idempotency_key, customer_snapshot, items_snapshot,
       payment_method, status, total_cents, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'aguardando_pagamento', ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
   `).run(
     id,
@@ -277,6 +289,7 @@ export function createOrder(database: DatabaseSync, input: CreateOrderInput): Or
     JSON.stringify(input.customer),
     JSON.stringify(input.items),
     input.paymentMethod,
+    initialStatus,
     calculateOrderTotal(input.items),
     now,
     now,

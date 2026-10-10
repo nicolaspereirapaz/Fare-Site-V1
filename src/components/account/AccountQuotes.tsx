@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CalendarDays, FileText, MessageCircle } from "lucide-react";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
-import { quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
+import { QUOTE_STATUS_LABELS, quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
 export type AccountQuote = {
   id: string;
@@ -12,12 +12,6 @@ export type AccountQuote = {
   items: Array<{ productName: string; quantity: number; color: string | null; unitPrice: number | null }>;
 };
 
-export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
-  aguardando_resposta: "Aguardando resposta",
-  respondido: "Respondido",
-  virou_pedido: "Virou pedido",
-  encerrado: "Encerrado",
-};
 
 const brl = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 const formatDate = (iso: string) => new Intl.DateTimeFormat("pt-BR", {

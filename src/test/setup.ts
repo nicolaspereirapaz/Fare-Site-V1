@@ -21,7 +21,10 @@ const storage = (() => {
   };
 })();
 
-Object.defineProperty(window, "localStorage", {
-  configurable: true,
-  value: storage,
-});
+// Testes de servidor (// @vitest-environment node) não têm window.
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+}

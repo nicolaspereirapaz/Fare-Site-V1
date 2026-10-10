@@ -11,7 +11,7 @@ describe("orçamentos no banco", () => {
   it("cria o orçamento com status 'aguardando resposta' e total estimado", () => {
     const db = new DatabaseSync(":memory:");
     const quote = createQuote(db, { userId: "u1", idempotencyKey: "orc-abc-123", customer: { name: "Ana", phone: "(11) 98888-7777" }, items: ITEMS });
-    expect(quote).toMatchObject({ userId: "u1", status: "aguardando_resposta", totalCents: 26400, items: ITEMS });
+    expect(quote).toMatchObject({ userId: "u1", status: "aguardando_orcamento", totalCents: 26400, items: ITEMS });
     expect(quote.customer).toEqual({ name: "Ana", phone: "(11) 98888-7777" });
   });
 

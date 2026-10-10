@@ -8,6 +8,9 @@ import type { Order } from "@/lib/orders/repository";
 export type BackofficeSession = { user: { id: string; role?: unknown } };
 
 export type ListOrders = () => Order[];
+/** Histórico mostrado nos detalhes: para qual situação foi, quando e quem mudou. */
+export type OrderHistoryEntry = { status: StatusPedido; from?: StatusPedido; at: string; by: string };
+export type ListOrderHistory = (order: Order) => OrderHistoryEntry[];
 export type FindOrder = (orderId: string) => Order | null;
 export type ChangeOrderStatus = (input: {
   orderId: string;
@@ -31,6 +34,7 @@ export type BackofficeOrderSummary = {
   itemCount: number;
   total: number;
   createdAt: string;
+  history: OrderHistoryEntry[];
 };
 
 export function resolveUserRole(user: { role?: unknown } | null | undefined): UserRole {
@@ -60,7 +64,7 @@ function calculateOrderSummaryTotal(items: Order["items"]): number {
   return cents / 100;
 }
 
-function toBackofficeOrderSummary(order: Order): BackofficeOrderSummary {
+function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = []): BackofficeOrderSummary {
   return {
     id: order.id,
     code: orderCode(order.id),
@@ -75,6 +79,7 @@ function toBackofficeOrderSummary(order: Order): BackofficeOrderSummary {
     itemCount: order.items.length,
     total: calculateOrderSummaryTotal(order.items),
     createdAt: order.createdAt,
+    history,
   };
 }
 
@@ -91,6 +96,7 @@ function buildStatusCounts(orders: Order[]): Record<StatusPedido, number> {
 export function createListBackofficeOrdersHandler(
   getSession: SessionReader<BackofficeSession>,
   listOrders: ListOrders,
+  listHistory: ListOrderHistory = () => [],
 ) {
   return async function listBackofficeOrders(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -106,7 +112,7 @@ export function createListBackofficeOrdersHandler(
     const orders = listOrders();
 
     return Response.json({
-      orders: orders.map(toBackofficeOrderSummary),
+      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order))),
       counts: buildStatusCounts(orders),
     });
   };

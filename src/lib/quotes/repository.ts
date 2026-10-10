@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
-import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quotes/quoteCode";
+import { createOrder, runOrderMigrations, type Order } from "@/lib/orders/repository";
+import {
+  canTransitionQuote,
+  InvalidQuoteTransitionError,
+  LEGACY_QUOTE_STATUSES,
+  QUOTE_STATUSES,
+  type QuoteStatus,
+} from "@/lib/quotes/quoteCode";
 
 export { QUOTE_STATUSES, quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
@@ -20,6 +27,8 @@ export type CreateQuoteInput = {
 export type Quote = CreateQuoteInput & {
   id: string;
   status: QuoteStatus;
+  /** Pedido gerado quando o orçamento foi pago (situação virou_pedido). */
+  orderId: string | null;
   totalCents: number | null;
   createdAt: string;
   updatedAt: string;
@@ -33,26 +42,55 @@ type QuoteRow = {
   items_snapshot: string;
   status: QuoteStatus;
   total_cents: number | null;
+  order_id?: string | null;
   created_at: string;
   updated_at: string;
 };
 
-function runQuoteMigrations(database: DatabaseSync) {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS fare_quotes (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL,
-      customer_snapshot TEXT NOT NULL,
-      items_snapshot TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN (${QUOTE_STATUSES.map((s) => `'${s}'`).join(", ")})),
-      total_cents INTEGER,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (user_id, idempotency_key)
-    );
-    CREATE INDEX IF NOT EXISTS fare_quotes_user ON fare_quotes (user_id, created_at);
-  `);
+const quotesTableSql = (name: string) => `
+  CREATE TABLE ${name} (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    customer_snapshot TEXT NOT NULL,
+    items_snapshot TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN (${QUOTE_STATUSES.map((s) => `'${s}'`).join(", ")})),
+    total_cents INTEGER,
+    order_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, idempotency_key)
+  )`;
+
+const LEGACY_CASE = `CASE status ${Object.entries(LEGACY_QUOTE_STATUSES)
+  .map(([legacy, current]) => `WHEN '${legacy}' THEN '${current}'`)
+  .join(" ")} ELSE status END`;
+
+export function runQuoteMigrations(database: DatabaseSync) {
+  database.exec("PRAGMA busy_timeout = 5000");
+  database.exec(`${quotesTableSql("IF NOT EXISTS fare_quotes")};`);
+
+  // Tabela antiga (aguardando_resposta/respondido, sem order_id): recria com as situações novas.
+  const current = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'fare_quotes'").get() as { sql: string };
+  if (!current.sql.includes("'aguardando_orcamento'") || !current.sql.includes("order_id")) {
+    const hasOrderId = current.sql.includes("order_id");
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(`
+        ${quotesTableSql("fare_quotes_migration")};
+        INSERT INTO fare_quotes_migration (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, order_id, created_at, updated_at)
+          SELECT id, user_id, idempotency_key, customer_snapshot, items_snapshot, ${LEGACY_CASE}, total_cents, ${hasOrderId ? "order_id" : "NULL"}, created_at, updated_at
+          FROM fare_quotes;
+        DROP TABLE fare_quotes;
+        ALTER TABLE fare_quotes_migration RENAME TO fare_quotes;
+      `);
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  database.exec("CREATE INDEX IF NOT EXISTS fare_quotes_user ON fare_quotes (user_id, created_at);");
 }
 
 function totalCents(items: QuoteCartItem[]): number | null {
@@ -68,6 +106,7 @@ function deserialize(row: QuoteRow): Quote {
     customer: JSON.parse(row.customer_snapshot) as QuoteCustomer,
     items: JSON.parse(row.items_snapshot) as QuoteCartItem[],
     status: row.status,
+    orderId: row.order_id ?? null,
     totalCents: row.total_cents,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -79,7 +118,7 @@ export function createQuote(database: DatabaseSync, input: CreateQuoteInput): Qu
   const now = new Date().toISOString();
   database.prepare(`
     INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'aguardando_resposta', ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
   `).run(randomUUID(), input.userId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), totalCents(input.items), now, now);
 
@@ -94,4 +133,72 @@ export function listQuotesByUser(database: DatabaseSync, userId: string): Quote[
   const rows = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? ORDER BY created_at DESC, rowid DESC")
     .all(userId) as unknown as QuoteRow[];
   return rows.map(deserialize);
+}
+
+export function listAllQuotes(database: DatabaseSync): Quote[] {
+  runQuoteMigrations(database);
+  const rows = database.prepare("SELECT * FROM fare_quotes ORDER BY created_at DESC, rowid DESC").all() as unknown as QuoteRow[];
+  return rows.map(deserialize);
+}
+
+export function findQuoteById(database: DatabaseSync, id: string): Quote | null {
+  runQuoteMigrations(database);
+  const row = database.prepare("SELECT * FROM fare_quotes WHERE id = ?").get(id) as QuoteRow | undefined;
+  return row ? deserialize(row) : null;
+}
+
+/** Muda a situação só se o fluxo permitir e se ninguém mudou antes (evita corrida entre dois atendentes). */
+export function updateQuoteStatus(database: DatabaseSync, input: { quoteId: string; nextStatus: QuoteStatus }): Quote {
+  const current = findQuoteById(database, input.quoteId);
+  if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
+  if (!canTransitionQuote(current.status, input.nextStatus)) throw new InvalidQuoteTransitionError(current.status, input.nextStatus);
+  // Virar pedido cria o pedido junto (convertQuoteToOrder); nunca só troca a situação.
+  if (input.nextStatus === "virou_pedido") throw new InvalidQuoteTransitionError(current.status, input.nextStatus);
+
+  const now = new Date().toISOString();
+  const result = database.prepare("UPDATE fare_quotes SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
+    .run(input.nextStatus, now, input.quoteId, current.status);
+  if (Number(result.changes) !== 1) throw new InvalidQuoteTransitionError(current.status, input.nextStatus);
+  return { ...current, status: input.nextStatus, updatedAt: now };
+}
+
+/**
+ * Pagamento recebido: o orçamento vira PEDIDO (já em "Aguardando arte") e sai do quadro de orçamentos.
+ * Tudo numa transação: ou cria o pedido e marca o orçamento, ou nada muda.
+ */
+export function convertQuoteToOrder(database: DatabaseSync, input: { quoteId: string; actorId: string }): { quote: Quote; order: Order } {
+  runQuoteMigrations(database);
+  runOrderMigrations(database);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const current = findQuoteById(database, input.quoteId);
+    if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
+    if (!canTransitionQuote(current.status, "virou_pedido")) throw new InvalidQuoteTransitionError(current.status, "virou_pedido");
+
+    const order = createOrder(
+      database,
+      {
+        userId: current.userId,
+        idempotencyKey: `orc:${current.id}`,
+        customer: current.customer,
+        items: current.items,
+        paymentMethod: "pix",
+      },
+      { initialStatus: "aguardando_arte" },
+    );
+    const now = new Date().toISOString();
+    database.prepare(`
+      INSERT INTO fare_order_status_history (id, order_id, previous_status, next_status, actor_id, created_at)
+      VALUES (?, ?, 'aguardando_pagamento', 'aguardando_arte', ?, ?)
+    `).run(randomUUID(), order.id, input.actorId, now);
+    const result = database.prepare("UPDATE fare_quotes SET status = 'virou_pedido', order_id = ?, updated_at = ? WHERE id = ? AND status = ?")
+      .run(order.id, now, current.id, current.status);
+    if (Number(result.changes) !== 1) throw new InvalidQuoteTransitionError(current.status, "virou_pedido");
+
+    database.exec("COMMIT");
+    return { quote: { ...current, status: "virou_pedido", orderId: order.id, updatedAt: now }, order };
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
 }

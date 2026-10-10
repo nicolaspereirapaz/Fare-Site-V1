@@ -112,3 +112,56 @@ Também foi fornecida uma cópia `#ORC-2026-376-2.html`.
 - Página do brinde: miniaturas por cor, fundo cinza #f2f2f3 (`.supplier-photo`), botões "Finalizar pedido" (vai para `/carrinho#finalizar`, sem duplicar) e "Adicionar ao carrinho" (aviso `.cart-toast`). Envio de arte removido: combinado no WhatsApp.
 - Carrinho: item guarda `pricing {unitSaleCents, freightCents}` e recalcula o valor ao mudar a quantidade; mesmo brinde + cor soma na mesma linha; quantidade digitável (Enter/sair do campo; vazio/0 volta).
 - Testes: 188 (vitest), tsc e eslint limpos. Pendente: hospedagem (PC ou VPS) e próximas etapas do site aprovadas pelo usuário.
+
+## 2026-10-08 — Conta, pedidos, orçamentos e senha (commits d9a09d3..e856a9b + pendente)
+
+Commitado: Minha conta com menu lateral (40a56a8), cadastro PF/PJ com CEP (dd80dff), faturamento no pedido
+(d058d53), preço do pedido calculado no servidor (bceb343), faturamento no backoffice (1754ec2), troca de
+senha (d154cb5), "Só quero um orçamento" + aba Orçamentos (e856a9b).
+
+Sem commit (aguardando revisão do Nicolas):
+1. Orçamentos no backoffice: abas Pedidos | Orçamentos em /backoffice; quadro por situação
+   (aguardando_resposta → respondido → virou_pedido; encerrado enquanto não virou pedido);
+   APIs GET /api/backoffice/quotes e PATCH /api/backoffice/quotes/[id] (só vendedor/admin);
+   botão "Responder no WhatsApp" abre conversa com o cliente citando #ORC-XXXXXX.
+2. Esqueci minha senha: /esqueci-senha e /redefinir-senha (Better Auth requestPasswordReset/resetPassword;
+   link vale 1 h, uso único, derruba todas as sessões). E-mail via Resend quando RESEND_API_KEY e
+   EMAIL_FROM existirem; em dev sem chave grava em data/outbox/ (fora do git); em produção sem chave
+   só registra erro no log. BETTER_AUTH_URL no .env.local passou a http://192.168.15.234:3000 (antes :3001,
+   que gerava link quebrado); em produção deve ser https://www.farefoto.com.br.
+3. Status para o cliente: "Aguardando pagamento" → "Pedido enviado" + aviso "A equipe vai confirmar
+   valores, prazo e pagamento pelo WhatsApp."; pagamento aparece como "Pagamento: Pix". O backoffice
+   continua mostrando "Aguardando pagamento".
+
+Pendências: Pixel da Meta no site completo (adiado pelo usuário), revisão da home/menu, hospedagem,
+conta Resend + domínio verificado para o envio real de e-mails.
+
+## 2026-10-09 — Área da equipe separada (/equipe), sem commit
+
+- Painel saiu da loja: `/equipe` (painel), `/equipe/entrar`, `/equipe/convite?token=…`. `/backoffice` redireciona.
+- App dividido em dois root layouts: `src/app/(loja)/…` (todas as páginas da loja, URLs iguais) e
+  `src/app/(equipe)/…` (layout próprio, sem menu/carrinho/rodapé, `robots: noindex`).
+- Login da equipe é outra instância do Better Auth: banco `data/equipe.sqlite` (fora do git), basePath
+  `/api/equipe/auth`, cookie `fare-equipe.*`, `disableSignUp`, senha mínima 10, sessão de 12 h.
+  As APIs `/api/backoffice/*` aceitam SÓ a sessão da equipe (cliente da loja, mesmo com role=admin, recebe 401).
+- Contas por convite no terminal: `npm run equipe -- convidar "Nome" email admin|vendedor` (link uso único, 48 h),
+  `npm run equipe -- listar`, `npm run equipe -- remover email`. Reconvidar = trocar papel ou "esqueci a senha".
+- Constantes sem dependência de servidor em `src/lib/staff/constants.ts` (o cliente do navegador importa daqui;
+  importar `options.ts` no navegador quebra o build por causa de node:fs).
+- Login de clientes: mensagens em português ("Senha inválida.", etc.).
+
+## 2026-10-09 — Novas colunas do painel (sem commit)
+
+- Pedido: aguardando_pagamento → criando_arte → em_producao → aguardando_retirada → aguardando_feedback → concluido
+  (cancelado só admin, com confirmação; não cancela em aguardando_feedback). Aba Pedidos mostra só as 4 etapas do meio.
+- Orçamento: aguardando_orcamento → em_negociacao → aguardando_pagamento → virou_pedido (+ encerrado; volta p/ negociação).
+  Aba Orçamentos: 3 colunas; pedidos do site em aguardando_pagamento aparecem na 3ª com a etiqueta "Pedido do site".
+- "Pagamento recebido" num orçamento chama `convertQuoteToOrder` (transação): cria o pedido em criando_arte com os mesmos
+  itens, grava histórico com o funcionário e liga `fare_quotes.order_id`. Não duplica (409 no 2º clique).
+- Migração automática das situações antigas (pedidos e orçamentos), tabelas recriadas com o CHECK novo.
+- Dados de teste: `node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/seed-painel-teste.mts`
+  (recria) / `... --remover` (apaga tudo do cliente pedido.teste@exemplo.com).
+- 2026-10-09 (cont.): kanban redesenhado (opção A + colunas com borda; detalhes em janela central), botões ← | Avançar,
+  voltar 1 etapa permitido (exceto do 1º passo pós-pagamento). Pedidos agora com 6 etapas:
+  aguardando_arte → criando_arte → aguardando_producao → em_producao → aguardando_retirada → aguardando_feedback.
+  Pagamento recebido cria o pedido em aguardando_arte.

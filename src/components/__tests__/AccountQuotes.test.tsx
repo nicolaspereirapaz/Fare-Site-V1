@@ -4,7 +4,7 @@ import { AccountQuotes, type AccountQuote } from "@/components/account/AccountQu
 
 const QUOTE: AccountQuote = {
   id: "3f7a2c1b-0000-4000-8000-000000000000",
-  status: "aguardando_resposta",
+  status: "aguardando_orcamento",
   totalCents: 26400,
   createdAt: "2026-10-08T15:00:00.000Z",
   items: [
@@ -18,7 +18,7 @@ describe("aba Orçamentos", () => {
     render(<AccountQuotes quotes={[QUOTE]} />);
     const card = screen.getByRole("article", { name: "Orçamento #ORC-3F7A2C" });
     expect(card).toHaveTextContent("08/10/2026");
-    expect(card).toHaveTextContent("Aguardando resposta");
+    expect(card).toHaveTextContent("Aguardando orçamento");
     expect(card).toHaveTextContent("Caneta Plástica");
     expect(card).toHaveTextContent("Azul");
     expect(card).toHaveTextContent("100 un.");

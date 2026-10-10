@@ -104,7 +104,7 @@ describe("listagem de pedidos do backoffice", () => {
       }),
       buildOrder({
         id: "order-2",
-        status: "pagamento_confirmado",
+        status: "criando_arte",
         customer: { name: "Beto", phone: "11988887777", company: "Estúdio Beto" },
         items: [
           { id: "item-3", productName: "Foto 20x30", slug: "foto-20x30", quantity: 3, selections: {}, unitPrice: null },
@@ -144,7 +144,7 @@ describe("listagem de pedidos do backoffice", () => {
     ]);
     expect(Object.keys(payload.counts).sort()).toEqual([...ORDEM_STATUS_PEDIDO].sort());
     expect(payload.counts.aguardando_pagamento).toBe(1);
-    expect(payload.counts.pagamento_confirmado).toBe(1);
+    expect(payload.counts.criando_arte).toBe(1);
     expect(payload.counts.cancelado).toBe(0);
   });
 });
@@ -170,12 +170,31 @@ describe("faturamento no quadro de pedidos", () => {
   });
 });
 
+describe("histórico do pedido no painel", () => {
+  it("devolve o histórico de cada pedido (situação, quando e quem)", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
+    const history = vi.fn().mockReturnValue([{ status: "criando_arte", at: "2026-10-09T10:12:00.000Z", by: "Joana" }]);
+    const handler = createListBackofficeOrdersHandler(getSession, () => [buildOrder({ id: "order-1" })], history);
+
+    const payload = await (await handler(listRequest())).json();
+
+    expect(history).toHaveBeenCalledWith(expect.objectContaining({ id: "order-1" }));
+    expect(payload.orders[0].history).toEqual([{ status: "criando_arte", at: "2026-10-09T10:12:00.000Z", by: "Joana" }]);
+  });
+
+  it("sem fonte de histórico, devolve lista vazia", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
+    const payload = await (await createListBackofficeOrdersHandler(getSession, () => [buildOrder({ id: "order-1" })])(listRequest())).json();
+    expect(payload.orders[0].history).toEqual([]);
+  });
+});
+
 describe("atualização de status de pedido no backoffice", () => {
   it("nega sem sessão", async () => {
     const getSession = vi.fn().mockResolvedValue(null);
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, vi.fn(), vi.fn());
 
-    const response = await handler(patchRequest({ status: "pagamento_confirmado" }), "order-1");
+    const response = await handler(patchRequest({ status: "criando_arte" }), "order-1");
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "AUTH_REQUIRED" });
@@ -186,7 +205,7 @@ describe("atualização de status de pedido no backoffice", () => {
     const findOrder = vi.fn();
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, vi.fn());
 
-    const response = await handler(patchRequest({ status: "pagamento_confirmado" }), "order-1");
+    const response = await handler(patchRequest({ status: "criando_arte" }), "order-1");
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: "FORBIDDEN" });
@@ -251,7 +270,7 @@ describe("atualização de status de pedido no backoffice", () => {
     const changeOrderStatus = vi.fn();
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, changeOrderStatus);
 
-    const response = await handler(patchRequest({ status: "pagamento_confirmado" }), "order-1");
+    const response = await handler(patchRequest({ status: "criando_arte" }), "order-1");
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: "ORDER_NOT_FOUND" });
@@ -262,11 +281,11 @@ describe("atualização de status de pedido no backoffice", () => {
     const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
     const findOrder = vi.fn().mockReturnValue(buildOrder({ status: "concluido" }));
     const changeOrderStatus = vi.fn(() => {
-      throw new TransicaoStatusPedidoInvalidaError("concluido", "pagamento_confirmado");
+      throw new TransicaoStatusPedidoInvalidaError("concluido", "criando_arte");
     });
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, changeOrderStatus);
 
-    const response = await handler(patchRequest({ status: "pagamento_confirmado" }), "order-1");
+    const response = await handler(patchRequest({ status: "criando_arte" }), "order-1");
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "INVALID_TRANSITION" });
@@ -275,18 +294,18 @@ describe("atualização de status de pedido no backoffice", () => {
   it("atualiza o status e devolve o pedido no formato do quadro, registrando o ator da sessão", async () => {
     const getSession = vi.fn().mockResolvedValue({ user: { id: "vendedor-1", role: "vendedor" } });
     const findOrder = vi.fn().mockReturnValue(buildOrder({ status: "aguardando_pagamento" }));
-    const changeOrderStatus = vi.fn().mockReturnValue(buildOrder({ status: "pagamento_confirmado" }));
+    const changeOrderStatus = vi.fn().mockReturnValue(buildOrder({ status: "criando_arte" }));
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, changeOrderStatus);
 
-    const response = await handler(patchRequest({ status: "pagamento_confirmado" }), "order-1");
+    const response = await handler(patchRequest({ status: "criando_arte" }), "order-1");
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.order).toMatchObject({ id: "order-1", status: "pagamento_confirmado" });
+    expect(payload.order).toMatchObject({ id: "order-1", status: "criando_arte" });
     expect(findOrder).toHaveBeenCalledWith("order-1");
     expect(changeOrderStatus).toHaveBeenCalledWith({
       orderId: "order-1",
-      nextStatus: "pagamento_confirmado",
+      nextStatus: "criando_arte",
       actorId: "vendedor-1",
     });
   });

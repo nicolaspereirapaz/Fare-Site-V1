@@ -18,7 +18,7 @@ const post = (value: unknown) => new Request("http://localhost/api/quotes", {
 });
 
 const persisted = (input: CreateQuoteInput) => ({
-  id: "3f7a2c1b-0000-4000-8000-000000000000", status: "aguardando_resposta" as const, customer: input.customer, items: input.items,
+  id: "3f7a2c1b-0000-4000-8000-000000000000", status: "aguardando_orcamento" as const, orderId: null, customer: input.customer, items: input.items,
 });
 
 describe("pedido de orçamento pelo carrinho", () => {

@@ -7,7 +7,7 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { getCurrentSession } from "@/lib/auth/server";
 import { CAMPAIGN_SITE_HEADER } from "@/lib/siteMode";
-import "./globals.css";
+import "../globals.css";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",

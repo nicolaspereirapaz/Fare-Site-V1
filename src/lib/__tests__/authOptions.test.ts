@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildAuthOptions, resolveTrustedOrigins } from "@/lib/auth/options";
 
 describe("configuração do Better Auth", () => {
@@ -16,6 +16,23 @@ describe("configuração do Better Auth", () => {
       input: false,
     });
 
+    database.close();
+  });
+});
+
+describe("redefinição de senha", () => {
+  it("envia o link por e-mail, vale 1 hora e desconecta os aparelhos ao redefinir", async () => {
+    const database = new DatabaseSync(":memory:");
+    const send = vi.fn().mockResolvedValue(undefined);
+    const options = buildAuthOptions(database, { NODE_ENV: "development" }, { send, kind: "outbox" });
+
+    expect(options.emailAndPassword).toMatchObject({ resetPasswordTokenExpiresIn: 3600, revokeSessionsOnPasswordReset: true });
+    await options.emailAndPassword?.sendResetPassword?.({
+      user: { id: "u1", name: "Ana", email: "ana@x.com", emailVerified: false, createdAt: new Date(), updatedAt: new Date() },
+      url: "http://localhost:3000/api/auth/reset-password/tok?callbackURL=%2Fredefinir-senha",
+      token: "tok",
+    });
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: "ana@x.com", subject: "Redefinir sua senha — Fare Foto" }));
     database.close();
   });
 });
