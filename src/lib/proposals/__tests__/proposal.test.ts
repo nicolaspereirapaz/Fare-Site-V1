@@ -43,7 +43,7 @@ describe("proposta para o cliente", () => {
     expect(proposal.items[1]).toMatchObject({ name: "Banner lona 90 × 120 cm", url: null, code: null, color: null, engravings: [] });
     expect(proposal.terms.map((term) => term.title)).toEqual(["Prazo de produção", "Pagamento", "Frete", "Validade"]);
     expect(proposal.terms[0].text).toBe("7 dias após a aprovação da arte.");
-    expect(proposal.terms[1].text).toBe("Pix, boleto faturado (sob análise de CNPJ) ou cartão de crédito (via simulação).");
+    expect(proposal.terms[1].text).toBe("Pix ou boleto faturado (sob análise de CNPJ).");
     expect(proposal.terms[3].text).toBe("Até 20/10/2026, sujeita ao estoque do fornecedor.");
     // O sinal fica em destaque separado, não misturado com o pagamento.
     expect(proposal.notice).toBe("Início da produção mediante sinal de 50%.");

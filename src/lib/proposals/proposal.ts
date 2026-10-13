@@ -11,7 +11,7 @@ import type { Quote } from "@/lib/quotes/repository";
 export const PROPOSAL_VALIDITY_DAYS = 7;
 export const PROPOSAL_TERMS = {
   production: "7 dias após a aprovação da arte.",
-  payment: "Pix, boleto faturado (sob análise de CNPJ) ou cartão de crédito (via simulação).",
+  payment: "Pix ou boleto faturado (sob análise de CNPJ).",
   /** Destaque separado no PDF, junto do total. */
   deposit: "Início da produção mediante sinal de 50%.",
   freight: "A combinar.",
