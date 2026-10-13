@@ -24,7 +24,7 @@ describe("CartContext — preço de brinde por quantidade", () => {
     const id = result.current.items[0].id;
 
     act(() => result.current.updateQuantity(id, 300));
-    expect(result.current.items[0]).toMatchObject({ quantity: 300, unitPrice: 1.97 });
+    expect(result.current.items[0]).toMatchObject({ quantity: 300, unitPrice: 1.98 });
 
     act(() => result.current.updateQuantity(id, 50));
     expect(result.current.items[0]).toMatchObject({ quantity: 50, unitPrice: 3.64 });
@@ -50,7 +50,7 @@ describe("CartContext — preço de brinde por quantidade", () => {
     act(() => result.current.addItem({ ...caneta, selections: { "Variação": "Verde" }, quantity: 50, unitPrice: 3.64 }));
 
     expect(result.current.items).toHaveLength(2);
-    expect(result.current.items[0]).toMatchObject({ quantity: 300, unitPrice: 1.97 });
+    expect(result.current.items[0]).toMatchObject({ quantity: 300, unitPrice: 1.98 });
     expect(result.current.items[1]).toMatchObject({ quantity: 50, selections: { "Variação": "Verde" } });
   });
 });

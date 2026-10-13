@@ -38,7 +38,11 @@ describe("preço de referência da campanha", () => {
     for (const quantity of [1, 7, 50, 100, 137, 300, 999, 2500]) {
       expect(unitPriceForQuantity(pricing, quantity)).toBe(campaignUnitPrice(3.37, quantity));
     }
-    expect(unitPriceForQuantity(pricing, 300)).toBe(7.07);
+    expect(unitPriceForQuantity(pricing, 300)).toBe(7.08); // 6,74 + 100/300 = 7,0733 -> para cima
+    // O total nunca fica abaixo da conta exata (custo × 2 × qtd + frete).
+    for (const quantity of [1, 3, 7, 137, 300, 999, 2500, 1_000_000]) {
+      expect(Math.round(unitPriceForQuantity(pricing, quantity)! * 100) * quantity).toBeGreaterThanOrEqual(674 * quantity + 10_000);
+    }
     expect(unitPriceForQuantity(pricing, 0)).toBeNull();
     expect(campaignQuantityPricing(product(null))).toBeNull();
   });

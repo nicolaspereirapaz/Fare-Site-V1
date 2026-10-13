@@ -11,6 +11,8 @@
  * - Manual: nome e custo por peça digitados pelo vendedor.
  */
 
+import { unitarioParaCima } from "@/lib/backoffice/pricing";
+
 export const ESPACO_ENTRE_ARTES_CM = 0.2;
 
 export const DTF_TEXTIL = { fornecedor: "Laraella DTF", larguraRoloCm: 58, precoMetro: 29.9, frete: 16, minimoMetros: 1 };
@@ -214,7 +216,7 @@ export function calcularPersonalizacao(input: {
 
   // Em centavos, sem arredondar a personalização por peça antes da margem.
   const totalCentavos = Math.round((custoProduto + porPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);
-  const precoUnitarioFinal = Math.round(totalCentavos / quantidade) / 100;
+  const precoUnitarioFinal = unitarioParaCima(totalCentavos, quantidade) / 100;
   return {
     descricao,
     detalhe,
@@ -265,7 +267,7 @@ export function calcularItemOrcamento(input: {
   });
   const gravacoesPorPeca = gravacoes.reduce((soma, gravacao) => soma + gravacao.custoTotal / quantidade, 0);
   const totalCentavos = Math.round((custoProduto + gravacoesPorPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);
-  const precoUnitario = Math.round(totalCentavos / quantidade) / 100;
+  const precoUnitario = unitarioParaCima(totalCentavos, quantidade) / 100;
   return {
     gravacoes,
     gravacoesPorPeca: Math.round(gravacoesPorPeca * 10_000) / 10_000,

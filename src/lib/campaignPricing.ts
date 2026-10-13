@@ -1,4 +1,4 @@
-import { calcularPrecoBrinde } from "@/lib/backoffice/pricing";
+import { calcularPrecoBrinde, unitarioParaCima } from "@/lib/backoffice/pricing";
 import type { CatalogProduct } from "@/lib/xbz";
 
 /** Referência pública da campanha: pedido de 100 unidades, frete do fornecedor de R$ 100 por produto. */
@@ -50,8 +50,8 @@ export function campaignQuantityPricing(product: CatalogProduct): CampaignQuanti
   return { unitSaleCents: Math.round(cost * 100) * 2, freightCents: Math.round(CAMPAIGN_SUPPLIER_FREIGHT * 100) };
 }
 
-/** Mesmo arredondamento de calcularPrecoBrinde: (venda × qtd + frete) ÷ qtd, em centavos. */
+/** Mesmo arredondamento de calcularPrecoBrinde: (venda × qtd + frete) ÷ qtd, em centavos, para cima. */
 export function unitPriceForQuantity(pricing: CampaignQuantityPricing, quantity: number): number | null {
   if (!Number.isInteger(quantity) || quantity <= 0) return null;
-  return Math.round((pricing.unitSaleCents * quantity + pricing.freightCents) / quantity) / 100;
+  return unitarioParaCima(pricing.unitSaleCents * quantity + pricing.freightCents, quantity) / 100;
 }

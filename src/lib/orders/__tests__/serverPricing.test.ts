@@ -25,8 +25,8 @@ describe("preço calculado no servidor", () => {
     expect(item.pricing).toEqual(CANETA);
   });
 
-  it("usa a quantidade do pedido (faixa de 300 un. = R$ 1,97)", () => {
-    expect(repriceCartItems([gift({ quantity: 300 })], lookup)[0].unitPrice).toBe(1.97);
+  it("usa a quantidade do pedido (300 un. = 592 ÷ 300 = R$ 1,98, para cima)", () => {
+    expect(repriceCartItems([gift({ quantity: 300 })], lookup)[0].unitPrice).toBe(1.98);
   });
 
   it("brinde fora do catálogo ou sem preço vira 'sob consulta'", () => {

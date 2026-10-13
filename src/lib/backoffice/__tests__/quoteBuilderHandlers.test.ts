@@ -55,7 +55,7 @@ describe("editor de orçamentos do painel", () => {
     expect(response.status).toBe(201);
     const { id } = await response.json() as { id: string };
     expect(findQuoteById(db, id)).toMatchObject({
-      userId: "u1", createdBy: "Bia", internalNotes: "entrega 30/10", totalCents: 113100, // 3,77 × 300
+      userId: "u1", createdBy: "Bia", internalNotes: "entrega 30/10", totalCents: 113400, // 3,78 × 300 (3,7733 para cima)
       customer: { name: "Ana Souza", company: "Padaria Boa Vista", phone: "(11) 98888-7777" },
     });
   });

@@ -25,15 +25,15 @@ describe("itens do orçamento montados no servidor", () => {
       { id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo" }, { tecnica: { tipo: "laser" }, local: "Clipe" }] },
     ], lookup, actor, NOW);
 
-    expect(preview[0]).toMatchObject({ id: "a", ok: true, unitPrice: 5.77, total: 1731, productCost: 0.72 });
+    expect(preview[0]).toMatchObject({ id: "a", ok: true, unitPrice: 5.78, total: 1734, productCost: 0.72 });
     expect(items[0]).toMatchObject({
-      id: "a", productName: CANETA.name, slug: "brindes/cf93", quantity: 300, selections: { "Variação": "Azul" }, unitPrice: 5.77,
+      id: "a", productName: CANETA.name, slug: "brindes/cf93", quantity: 300, selections: { "Variação": "Azul" }, unitPrice: 5.78,
       codes: { fare: "X10304", supplier: "xbz", supplierCode: "00518", sku: "00518-AZU" },
       gravacoes: [{ descricao: "Laser", local: "Corpo" }, { descricao: "Laser", local: "Clipe" }],
     });
     expect(items[0].costing).toMatchObject({ custoProduto: 0.72, personalizacao: "Laser (Corpo) + Laser (Clipe)", personalizacaoUnitaria: 2, por: "Bia", em: NOW });
     expect(items[0].costing?.gravacoes).toHaveLength(2);
-    expect(totals).toEqual({ total: 1731, cost: 916, margin: 815, pending: 0 });
+    expect(totals).toEqual({ total: 1734, cost: 916, margin: 818, pending: 0 });
   });
 
   it("sem gravação o preço é igual ao do site", () => {

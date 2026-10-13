@@ -35,6 +35,15 @@ function validarQuantidade(quantidade: number): void {
   }
 }
 
+/**
+ * Preço por peça em centavos: total ÷ quantidade arredondado SEMPRE para cima,
+ * para o frete rateado nunca sumir no arredondamento (o cliente paga no máximo 1 centavo a mais por peça).
+ * O `Math.round` interno tira o ruído de ponto flutuante antes do teto.
+ */
+export function unitarioParaCima(totalCentavos: number, quantidade: number): number {
+  return Math.ceil(Math.round((totalCentavos / quantidade) * 1e6) / 1e6);
+}
+
 export function calcularPrecoBrinde(
   input: OrcamentoBrindeInput,
 ): OrcamentoBrindeResultado {
@@ -52,7 +61,7 @@ export function calcularPrecoBrinde(
   const precoUnitarioCentavos = (custoProdutoCentavos + gravacaoUnitariaCentavos) * 2;
   const subtotalProdutosCentavos = precoUnitarioCentavos * input.quantidade;
   const precoFinalCentavos = subtotalProdutosCentavos + freteFornecedorCentavos;
-  const precoUnitarioFinalCentavos = Math.round(precoFinalCentavos / input.quantidade);
+  const precoUnitarioFinalCentavos = unitarioParaCima(precoFinalCentavos, input.quantidade);
   const totalGeralCentavos = precoFinalCentavos + freteClienteCentavos;
 
   return {

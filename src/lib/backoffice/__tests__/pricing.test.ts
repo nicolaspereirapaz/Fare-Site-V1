@@ -19,7 +19,7 @@ describe("calcularPrecoBrinde", () => {
     expect(resultado.totalGeral).toBe(2485);
   });
 
-  it("arredonda financeiramente em centavos para baixo quando o resto é menor que meio centavo", () => {
+  it("arredonda o unitário SEMPRE para cima (o frete nunca some no arredondamento)", () => {
     const resultado = calcularPrecoBrinde({
       custoProduto: 10,
       gravacaoUnitaria: 0,
@@ -28,13 +28,16 @@ describe("calcularPrecoBrinde", () => {
       freteCliente: 0,
     });
 
-    // precoUnitario = 20; precoFinal = 60.01; precoUnitarioFinal = 60.01/3 = 20.003333... -> 20.00
+    // precoFinal = 60.01; 60.01/3 = 20.003333... -> 20.01 (para cima)
     expect(resultado.precoUnitario).toBe(20);
     expect(resultado.precoFinal).toBe(60.01);
-    expect(resultado.precoUnitarioFinal).toBe(20);
+    expect(resultado.precoUnitarioFinal).toBe(20.01);
   });
 
-  it("arredonda financeiramente em centavos para cima quando o resto é maior ou igual a meio centavo", () => {
+  it("divisão exata não sobe nada; resto acima de meio centavo também vai para cima", () => {
+    expect(calcularPrecoBrinde({ custoProduto: 1, gravacaoUnitaria: 0, quantidade: 100, freteFornecedor: 100, freteCliente: 0 }).precoUnitarioFinal).toBe(3);
+    // custo 1 × 300 + 100: 700/300 = 2,3333 -> 2,34 (total 702 ≥ 700)
+    expect(calcularPrecoBrinde({ custoProduto: 1, gravacaoUnitaria: 0, quantidade: 300, freteFornecedor: 100, freteCliente: 0 }).precoUnitarioFinal).toBe(2.34);
     const resultado = calcularPrecoBrinde({
       custoProduto: 10,
       gravacaoUnitaria: 0,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calcularDtfTextil,
   calcularDtfUv,
+  calcularItemOrcamento,
   calcularLaser,
   calcularPersonalizacao,
   precoSpotParaQuantidade,
@@ -137,8 +138,8 @@ describe("item com várias gravações", () => {
     });
     expect(r.gravacoes.map((g) => [g.descricao, g.local, g.custoUnitario])).toEqual([["Laser", "Corpo", 1], ["Laser", "Clipe", 1]]);
     expect(r.gravacoesPorPeca).toBe(2);
-    expect(r.precoUnitario).toBe(5.77); // (0,72 + 2) × 2 + 100/300 = 5,7733
-    expect(r.total).toBe(1731);
+    expect(r.precoUnitario).toBe(5.78); // (0,72 + 2) × 2 + 100/300 = 5,7733 -> para cima
+    expect(r.total).toBe(1734);
     expect(r.custoTotal).toBe(Math.round((0.72 * 300 + 600 + 100) * 100) / 100);
   });
 
@@ -157,7 +158,13 @@ describe("item com várias gravações", () => {
     });
     expect(r.gravacoes[0].custoUnitario).toBe(2.5);
     expect(r.gravacoes[1]).toMatchObject({ descricao: "DTF UV 6×6 cm", local: "Verso", custoTotal: 103.97 });
-    expect(r.precoUnitario).toBe(Math.round(((9.48 + 2.5 + 103.97 / 50) * 2 * 50 * 100 + 10000) / 50) / 100);
+    expect(r.precoUnitario).toBe(Math.ceil(((9.48 + 2.5) * 2 * 50 * 100 + 103.97 * 2 * 100 + 10000) / 50) / 100);
+  });
+
+  it("orçamento: o total nunca fica abaixo da conta exata (frete não some no arredondamento)", () => {
+    const r = calcularItemOrcamento({ custoProduto: 1, categoria: "Brindes", quantidade: 300, gravacoes: [] });
+    expect(r.precoUnitario).toBe(2.34); // 700 / 300 = 2,3333 -> 2,34
+    expect(r.total).toBe(702);
   });
 
   it("gravação sem técnica válida é recusada", async () => {
