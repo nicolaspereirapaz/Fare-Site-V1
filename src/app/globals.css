@@ -6339,3 +6339,16 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-origin { font-size: 12px; color: #7a7f91; }
 .kb-edit-quote { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid #d5d8e1; background: #fff; color: #1d2447; font-weight: 600; font-size: 13.5px; text-decoration: none; }
 .kb-edit-quote:hover { border-color: #b9bdca; }
+
+/* Proposta no detalhe do orçamento. */
+.kb-proposal { margin-bottom: 18px; padding: 14px 16px; border-radius: 10px; background: #f6f7fa; }
+.kb-proposal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.kb-proposal-head h3 { margin: 0; }
+.kb-proposal-head span { font-size: 12.5px; color: #7a7f91; }
+.kb-proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.kb-proposal-actions a { text-decoration: none; }
+.kb-proposal-actions > * { height: 38px; box-sizing: border-box; padding: 0 14px; }
+.kb-proposal-send { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border: 0; border-radius: 8px; background: #F65C2D; color: #fff; font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.kb-proposal-send:hover:not(:disabled) { background: #d4532a; }
+.kb-proposal-send:disabled { opacity: .6; cursor: wait; }
+.kb-proposal-hint { margin: 8px 0 0; font-size: 12.5px; color: #7a7f91; }

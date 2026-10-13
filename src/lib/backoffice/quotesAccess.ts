@@ -20,6 +20,7 @@ export type BackofficeQuoteSummary = {
   /** Quem montou no painel (null = veio do site). */
   createdBy: string | null;
   internalNotes: string;
+  proposalSentAt: string | null;
   createdAt: string;
   /** Para editar sem sobrescrever a mudança de outra pessoa. */
   updatedAt: string;
@@ -40,6 +41,7 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     total: quote.totalCents === null ? null : quote.totalCents / 100,
     createdBy: quote.createdBy ?? null,
     internalNotes: quote.internalNotes ?? "",
+    proposalSentAt: quote.proposalSentAt ?? null,
     createdAt: quote.createdAt,
     updatedAt: quote.updatedAt,
   };

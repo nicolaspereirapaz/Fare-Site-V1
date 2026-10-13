@@ -34,6 +34,8 @@ export type Quote = CreateQuoteInput & {
   createdBy: string | null;
   /** Observação só da equipe. */
   internalNotes: string;
+  /** Última vez que a proposta foi enviada ao cliente. */
+  proposalSentAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -49,6 +51,7 @@ type QuoteRow = {
   order_id?: string | null;
   created_by?: string | null;
   internal_notes?: string | null;
+  proposal_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -102,6 +105,7 @@ export function runQuoteMigrations(database: DatabaseSync) {
   const columns = new Set((database.prepare("PRAGMA table_info(fare_quotes)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!columns.has("created_by")) database.exec("ALTER TABLE fare_quotes ADD COLUMN created_by TEXT");
   if (!columns.has("internal_notes")) database.exec("ALTER TABLE fare_quotes ADD COLUMN internal_notes TEXT NOT NULL DEFAULT ''");
+  if (!columns.has("proposal_sent_at")) database.exec("ALTER TABLE fare_quotes ADD COLUMN proposal_sent_at TEXT");
 }
 
 function totalCents(items: QuoteCartItem[]): number | null {
@@ -121,6 +125,7 @@ function deserialize(row: QuoteRow): Quote {
     totalCents: row.total_cents,
     createdBy: row.created_by ?? null,
     internalNotes: row.internal_notes ?? "",
+    proposalSentAt: row.proposal_sent_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -192,6 +197,17 @@ export function replaceQuoteItems(
     .run(JSON.stringify(input.items), total, input.internalNotes, now, current.id, input.expectedUpdatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
   return { ...current, items: input.items, totalCents: total, internalNotes: input.internalNotes, updatedAt: now };
+}
+
+/** Proposta enviada: guarda a data e, se ainda aguardava orçamento, passa para "Em negociação". */
+export function markProposalSent(database: DatabaseSync, quoteId: string, now: Date = new Date()): Quote {
+  runQuoteMigrations(database);
+  const current = findQuoteById(database, quoteId);
+  if (!current) throw new Error(`Orçamento "${quoteId}" não encontrado.`);
+  const at = now.toISOString();
+  const status = current.status === "aguardando_orcamento" ? "em_negociacao" : current.status;
+  database.prepare("UPDATE fare_quotes SET proposal_sent_at = ?, status = ?, updated_at = ? WHERE id = ?").run(at, status, at, quoteId);
+  return { ...current, status, proposalSentAt: at, updatedAt: at };
 }
 
 export function listAllQuotes(database: DatabaseSync): Quote[] {

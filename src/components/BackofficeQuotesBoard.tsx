@@ -16,6 +16,7 @@ import {
 } from "@/components/backofficeShared";
 import { PAYMENT_LABELS, type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
+import { ProposalActions } from "@/components/staff/ProposalActions";
 import { QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
@@ -151,6 +152,12 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   const closeDialog = useCallback(() => {
     setSelected(null);
   }, []);
+  const reloadBoard = useCallback(() => {
+    load().then((payload) => {
+      setQuotes(payload.quotes);
+      setOrders(payload.orders);
+    }).catch(() => undefined);
+  }, [load]);
   const boardQuotes = quotes.filter((quote): quote is BackofficeQuoteSummary & { status: Column } =>
     (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status),
   );
@@ -242,6 +249,12 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           subtitle={`orçamento de ${formatDay(openQuote.createdAt)}${openQuote.createdBy ? ` · feito por ${openQuote.createdBy}` : " · pedido pelo site"}`}
           title={openQuote.customerName}
         >
+          <ProposalActions
+            blocked={openQuote.items.some((item) => item.unitPrice === null) ? "Há item sem preço. Clique em “Editar itens e gravações” e salve para gerar a proposta." : null}
+            onSent={reloadBoard}
+            quoteId={openQuote.id}
+            sentAt={openQuote.proposalSentAt}
+          />
           <DetailsSections
             billing={openQuote.billing}
             customerCompany={openQuote.customerCompany}

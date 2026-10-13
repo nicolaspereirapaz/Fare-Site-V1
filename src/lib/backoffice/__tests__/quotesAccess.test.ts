@@ -21,6 +21,7 @@ function buildQuote(overrides: Partial<Quote> = {}): Quote {
     totalCents: 26400,
     createdBy: null,
     internalNotes: "",
+    proposalSentAt: null,
     createdAt: "2026-10-08T12:00:00.000Z",
     updatedAt: "2026-10-08T12:00:00.000Z",
     ...overrides,
@@ -60,6 +61,7 @@ describe("lista de orçamentos do painel", () => {
       total: 264,
       createdBy: null,
       internalNotes: "",
+      proposalSentAt: null,
       createdAt: "2026-10-08T12:00:00.000Z",
       updatedAt: "2026-10-08T12:00:00.000Z",
     });
