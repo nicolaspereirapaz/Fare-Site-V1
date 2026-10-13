@@ -29,13 +29,30 @@ describe("catálogo XBZ local", () => {
     expect(readCatalogProducts(database)[0]).toMatchObject({ name: "Caneta original", stockAvailable: 12, price: 3.5 });
   });
 
-  it("na sincronização recorrente altera estoque, mas preserva metadados e preço", () => {
+  it("na sincronização recorrente altera estoque, foto e preço (o custo acompanha o fornecedor), mas preserva o nome", () => {
     persistInitialCatalog(database, [product()], "2026-09-28T12:00:00.000Z");
-    updateCatalogStock(database, [product({ name: "NOME QUE NÃO DEVE ENTRAR", price: 999, imageUrl: "outra", stockMain: 2, stockAvailable: 4 })], "2026-09-28T13:00:00.000Z");
+    updateCatalogStock(database, [product({ name: "NOME QUE NÃO DEVE ENTRAR", price: 4.2, formattedPrice: "R$ 4,20", imageUrl: "https://example.test/nova.jpg", stockMain: 2, stockAvailable: 4 })], "2026-09-28T13:00:00.000Z");
     expect(readCatalogProducts(database)[0]).toMatchObject({
-      name: "Caneta original", price: 3.5, imageUrl: "https://example.test/p.jpg",
+      name: "Caneta original", price: 4.2, formattedPrice: "R$ 4,20", imageUrl: "https://example.test/nova.jpg",
       stockMain: 2, stockAvailable: 4,
     });
+  });
+
+  it("produto que entrou com preço zero passa a ter preço quando o fornecedor corrige; zerar de novo tira da venda", () => {
+    persistInitialCatalog(database, [product({ price: 0 })], "2026-09-28T12:00:00.000Z");
+    updateCatalogStock(database, [product({ price: 21.48 })], "2026-09-28T13:00:00.000Z");
+    expect(readCatalogProducts(database)[0].price).toBe(21.48);
+    updateCatalogStock(database, [product({ price: 0 })], "2026-09-28T14:00:00.000Z");
+    expect(readCatalogProducts(database)[0].price).toBe(0);
+  });
+
+  it("produto que entrou sem foto ganha a foto quando o fornecedor publica; foto vazia nunca apaga a que existe", () => {
+    persistInitialCatalog(database, [product({ imageUrl: "" })], "2026-09-28T12:00:00.000Z");
+    updateCatalogStock(database, [product({ imageUrl: "https://example.test/chegou.jpg" })], "2026-09-28T13:00:00.000Z");
+    expect(readCatalogProducts(database)[0].imageUrl).toBe("https://example.test/chegou.jpg");
+
+    updateCatalogStock(database, [product({ imageUrl: "" })], "2026-09-28T14:00:00.000Z");
+    expect(readCatalogProducts(database)[0].imageUrl).toBe("https://example.test/chegou.jpg");
   });
 
   it("cadastra uma família nova uma única vez quando surge numa atualização", () => {

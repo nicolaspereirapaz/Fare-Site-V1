@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Proposta comercial — prévia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy: #2B3854; --navy-deep: #1d2447; --lilac: #656FA4; --orange: #F65C2D; --gray: #f2f2f3; --line: #e3e4ea; --muted: #6b7085; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #d9dbe2; font-family: Outfit, system-ui, sans-serif; color: #1d2447; }
+  .stage { display: flex; gap: 40px; align-items: flex-start; justify-content: center; padding: 40px; flex-wrap: wrap; }
+  .label { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #4a5068; margin: 0 0 12px; }
+
+  /* A4 */
+  .sheet { width: 794px; min-height: 1123px; background: #fff; box-shadow: 0 20px 50px rgba(29,36,71,.18); padding: 56px 60px 48px; display: flex; flex-direction: column; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 26px; border-bottom: 2px solid var(--navy); }
+  .top img { height: 54px; }
+  .doc { text-align: right; }
+  .doc h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+  .doc .num { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .doc .num b { color: var(--navy); }
+  .meta { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; margin: 28px 0 30px; }
+  .meta h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--lilac); }
+  .meta p { margin: 0; font-size: 14px; line-height: 1.55; }
+  .meta strong { font-size: 15px; }
+  .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dates div { background: var(--gray); border-radius: 8px; padding: 10px 12px; }
+  .dates span { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .dates b { font-size: 15px; }
+
+  table.items { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .items th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: var(--navy); padding: 10px 12px; font-weight: 700; }
+  .items th:first-child { border-radius: 8px 0 0 8px; } .items th:last-child { border-radius: 0 8px 8px 0; }
+  .items th.n, .items td.n { text-align: right; white-space: nowrap; }
+  .items td { padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .prod { display: flex; gap: 14px; }
+  .prod img { width: 64px; height: 64px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; flex: none; }
+  .prod b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .prod small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .tag { display: inline-block; margin-top: 6px; background: #f8e7df; color: #8f3416; font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 2px 8px; }
+
+  .totals { margin-left: auto; width: 320px; margin-top: 18px; font-size: 14px; }
+  .totals div { display: flex; justify-content: space-between; padding: 7px 0; }
+  .totals .grand { border-top: 2px solid var(--navy); margin-top: 6px; padding-top: 12px; font-size: 19px; font-weight: 800; }
+  .totals .grand span:last-child { color: var(--orange); }
+
+  .terms { margin-top: 34px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; font-size: 13px; line-height: 1.5; }
+  .terms h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--lilac); }
+  .terms p { margin: 0; color: #3c4257; }
+  .cta { margin-top: auto; padding-top: 30px; }
+  .cta-box { display: flex; justify-content: space-between; align-items: center; background: var(--navy-deep); color: #fff; border-radius: 12px; padding: 18px 22px; }
+  .cta-box b { font-size: 16px; } .cta-box span { display: block; font-size: 13px; opacity: .8; margin-top: 2px; }
+  .cta-box .wa { background: #25D366; color: #fff; font-weight: 700; border-radius: 999px; padding: 10px 18px; font-size: 14px; }
+  .foot { margin-top: 16px; display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+
+  /* WhatsApp */
+  .phone { width: 380px; background: #efeae2; border-radius: 28px; overflow: hidden; box-shadow: 0 20px 50px rgba(29,36,71,.18); border: 10px solid #1b1b1f; }
+  .wa-head { background: #075E54; color: #fff; padding: 14px 16px; display: flex; gap: 10px; align-items: center; }
+  .wa-head .av { width: 34px; height: 34px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .wa-head .av img { width: 22px; }
+  .wa-head b { font-size: 15px; } .wa-head small { display: block; font-size: 12px; opacity: .8; }
+  .chat { padding: 16px 12px 22px; }
+  .bubble { background: #d9fdd3; border-radius: 10px 0 10px 10px; padding: 9px 11px 6px; margin-left: 30px; font-size: 14px; line-height: 1.45; color: #111b21; box-shadow: 0 1px 1px rgba(0,0,0,.08); white-space: pre-wrap; }
+  .pdf { background: #d9fdd3; border-radius: 10px; padding: 6px; margin: 0 0 6px 30px; }
+  .pdf div { background: #c8ecc1; border-radius: 7px; padding: 10px; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .pdf i { width: 30px; height: 36px; background: #e5483e; border-radius: 3px; color: #fff; font-style: normal; font-size: 9px; font-weight: 800; display: grid; place-items: center; }
+  .pdf small { display: block; color: #54656f; font-size: 11.5px; }
+  .time { text-align: right; font-size: 11px; color: #667781; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div>
+    <p class="label">PDF da proposta (A4)</p>
+    <div class="sheet">
+      <div class="top">
+        <img src="../../public/images/fare-foto-logo-slogan.svg" alt="Fare Foto">
+        <div class="doc">
+          <h1>Proposta comercial</h1>
+          <div class="num">Orçamento <b>ORC-62AE01</b></div>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div>
+          <h2>Para</h2>
+          <p><strong>Padaria Boa Vista Ltda</strong><br>CNPJ 11.222.333/0001-81<br>Ana Souza · (11) 98888-7777<br>Jundiaí · SP</p>
+        </div>
+        <div>
+          <h2>Datas</h2>
+          <div class="dates">
+            <div><span>Emitida em</span><b>13/10/2026</b></div>
+            <div><span>Válida até</span><b>20/10/2026</b></div>
+          </div>
+        </div>
+      </div>
+
+      <table class="items">
+        <thead><tr><th>Produto</th><th class="n">Qtd.</th><th class="n">Unitário</th><th class="n">Total</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="prod"><img src="https://cdn.xbzbrindes.com.br/img/produtos/3/518-AZU-Caneta-Plastica-292.jpg" alt=""><div>
+              <b>Caneta Plástica com Detalhe Emborrachado</b>
+              <small>Cód. X10304 · Cor: Azul</small>
+              <span class="tag">Gravação a laser · 1 posição</span>
+            </div></div></td>
+            <td class="n">300</td><td class="n">R$ 4,53</td><td class="n">R$ 1.359,00</td>
+          </tr>
+          <tr>
+            <td><div class="prod"><img src="https://cdn.xbzbrindes.com.br/img/produtos/3/Squeeze-600ml-Aluminio-AZUL-163-1563375236.jpg" alt=""><div>
+              <b>Squeeze de Alumínio 650 ml</b>
+              <small>Cód. X11846 · Cor: Azul</small>
+              <span class="tag">DTF UV · arte 6 × 6 cm</span>
+            </div></div></td>
+            <td class="n">50</td><td class="n">R$ 28,90</td><td class="n">R$ 1.445,00</td>
+          </tr>
+          <tr>
+            <td><div class="prod"><img src="https://www.spotgifts.com.br/fotos/produtos/30500_105.jpg" alt=""><div>
+              <b>Camiseta Unissex de Corte Regular</b>
+              <small>Cód. S10025 · Cor: Vermelha · Tamanhos a definir</small>
+              <span class="tag">DTF Têxtil · arte 28 × 35 cm (costas)</span>
+            </div></div></td>
+            <td class="n">50</td><td class="n">R$ 56,16</td><td class="n">R$ 2.808,00</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="totals">
+        <div><span>Subtotal (3 itens)</span><span>R$ 5.612,00</span></div>
+        <div><span>Frete</span><span>A combinar</span></div>
+        <div class="grand"><span>Total</span><span>R$ 5.612,00</span></div>
+      </div>
+
+      <div class="terms">
+        <div><h3>Prazo de produção</h3><p>15 dias úteis após aprovação da arte e do pagamento.</p></div>
+        <div><h3>Pagamento</h3><p>Pix ou boleto à vista. Cartão em até 3× sem juros.</p></div>
+        <div><h3>Arte</h3><p>Enviamos a prova digital para aprovação antes da produção.</p></div>
+        <div><h3>Entrega</h3><p>Retirada na loja ou envio por transportadora (frete a combinar).</p></div>
+      </div>
+      <p class="note">Valores válidos para as quantidades e personalizações acima. Sujeito à disponibilidade de estoque do fornecedor na data da aprovação.</p>
+
+      <div class="cta">
+        <div class="cta-box">
+          <div><b>Para aprovar, é só responder no WhatsApp.</b><span>Atendimento: Bia · Fare Foto</span></div>
+          <span class="wa">(11) 95314-7703</span>
+        </div>
+        <div class="foot"><span>Fare Foto · farefoto.com.br</span><span>CNPJ da Fare Foto · endereço</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="label">Mensagem no WhatsApp</p>
+    <div class="phone">
+      <div class="wa-head"><div class="av"><img src="../../public/images/fare-foto-simbolo.svg" alt=""></div><div><b>Ana Souza</b><small>Padaria Boa Vista</small></div></div>
+      <div class="chat">
+        <div class="bubble">Olá, Ana! Aqui é a Bia, da Fare Foto 😊
+
+Segue a proposta do seu orçamento <b>ORC-62AE01</b>:
+
+• 300 × Caneta Plástica (azul) — laser — R$ 4,53/un.
+• 50 × Squeeze de Alumínio 650 ml (azul) — DTF UV — R$ 28,90/un.
+• 50 × Camiseta Unissex (vermelha) — DTF Têxtil costas — R$ 56,16/un.
+
+<b>Total: R$ 5.612,00</b> (frete a combinar)
+Prazo: 15 dias úteis após aprovação da arte.
+Válida até 20/10.
+
+Para aprovar, é só responder por aqui! 👍<div class="time">14:32 ✓✓</div></div>
+        <div style="height:8px"></div>
+        <div class="pdf"><div><i>PDF</i><div>Proposta-ORC-62AE01.pdf<small>1 página · 180 kB</small></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

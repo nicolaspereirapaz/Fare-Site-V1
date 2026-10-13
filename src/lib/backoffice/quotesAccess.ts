@@ -1,6 +1,6 @@
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole, type BackofficeSession } from "@/lib/backoffice/access";
-import type { QuoteBilling } from "@/lib/commerce";
+import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
 import { InvalidQuoteTransitionError, isQuoteStatus, QUOTE_STATUSES, quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
 import type { Quote } from "@/lib/quotes/repository";
 
@@ -13,7 +13,7 @@ export type BackofficeQuoteSummary = {
   customerCompany: string | null;
   notes: string | null;
   billing: QuoteBilling | null;
-  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null }>;
+  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"]; costing?: QuoteCartItem["costing"] }>;
   itemCount: number;
   /** null quando algum item está "sob consulta". */
   total: number | null;
@@ -30,7 +30,7 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     customerCompany: quote.customer.company ?? null,
     notes: quote.customer.notes || null,
     billing: quote.customer.billing ?? null,
-    items: quote.items.map(({ productName, quantity, selections, unitPrice }) => ({ productName, quantity, selections, unitPrice })),
+    items: quote.items.map(({ productName, quantity, selections, unitPrice, codes, costing }) => ({ productName, quantity, selections, unitPrice, codes, ...(costing ? { costing } : {}) })),
     itemCount: quote.items.length,
     total: quote.totalCents === null ? null : quote.totalCents / 100,
     createdAt: quote.createdAt,

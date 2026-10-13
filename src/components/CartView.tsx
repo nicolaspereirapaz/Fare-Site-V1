@@ -127,7 +127,7 @@ export function CartView() {
         <span className="eyebrow">Seu carrinho</span>
         <h1>Vamos montar seu pedido?</h1>
         <p>Configure os produtos que deseja e finalize o orçamento diretamente com a equipe.</p>
-        <Link className="button button-primary button-large" href="/produtos">
+        <Link className="button button-primary button-large" href="/brindes">
           Explorar produtos
         </Link>
       </div>
@@ -205,7 +205,7 @@ export function CartView() {
           </div>
         ) : null}
 
-        <Link className="back-link" href="/produtos">
+        <Link className="back-link" href="/brindes">
           <ArrowLeft aria-hidden="true" size={17} /> Adicionar mais produtos
         </Link>
       </section>

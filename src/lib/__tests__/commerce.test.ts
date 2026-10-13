@@ -70,3 +70,16 @@ describe("buildWhatsAppUrl", () => {
     expect(url).toBe("https://wa.me/5511953147703?text=Ol%C3%A1!%20Quero%20or%C3%A7amento.");
   });
 });
+
+describe("código do brinde na mensagem do WhatsApp", () => {
+  it("leva só o código Fare Foto, nunca o código do fornecedor nem o SKU", async () => {
+    const { buildQuoteMessage } = await import("@/lib/commerce");
+    const message = buildQuoteMessage({ name: "Ana" }, [{
+      id: "1", productName: "Caneca", slug: "brindes/abc", quantity: 100, selections: { "Variação": "Azul" }, unitPrice: 2,
+      codes: { fare: "X10001", supplier: "xbz", supplierCode: "06520", sku: "06520-AZU" },
+    }]);
+    expect(message).toContain("Código: X10001");
+    expect(message).not.toContain("06520");
+    expect(message).not.toMatch(/xbz/i);
+  });
+});

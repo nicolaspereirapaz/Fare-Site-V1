@@ -8,8 +8,7 @@ import { useCart } from "@/context/CartContext";
 
 const navItems = [
   { href: "/", label: "Início" },
-  { href: "/produtos", label: "Produtos" },
-  { href: "/brindes", label: "Brindes personalizados" },
+  { href: "/brindes", label: "Brindes" },
   { href: "/#categorias", label: "Categorias" },
   { href: "/#como-funciona", label: "Como funciona" },
   { href: "/#contato", label: "Contato" },
@@ -23,12 +22,23 @@ export function Header({ user }: { user: { name: string } | null }) {
     <header className="site-header">
       <div className="header-inner container-shell">
         <Link className="brand-link" href="/" aria-label="Fare Foto — início">
+          {/* Fundo branco: logo com o slogan em preto; no celular, a versão compacta (sem slogan). */}
           <Image
             alt="Fare Foto"
-            height={82}
+            className="brand-logo-full"
+            height={109}
             priority
-            src="/images/fare-foto-logo.svg"
-            width={150}
+            src="/images/fare-foto-logo-slogan.svg"
+            width={200}
+          />
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="brand-logo-compact"
+            height={87}
+            priority
+            src="/images/fare-foto-logo-compacto.svg"
+            width={200}
           />
         </Link>
 

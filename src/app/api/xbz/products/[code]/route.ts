@@ -20,7 +20,7 @@ export async function GET(_request: Request, context: RouteContext<"/api/xbz/pro
     }
 
     return Response.json({
-      product: toGiftProduct(product, pricesVisible),
+      product: toGiftProduct(product, pricesVisible, source.fareCodes),
       ...giftPricingDetail(product, pricesVisible),
       meta: { fetchedAt: source.fetchedAt, cached: source.cached },
     }, { headers: MEMBER_PRICING_HEADERS });

@@ -6,7 +6,7 @@ export default function NotFound() {
       <span className="eyebrow">Erro 404</span>
       <h1>Essa página não foi impressa.</h1>
       <p>O endereço pode ter mudado. Volte ao catálogo para continuar.</p>
-      <Link className="button button-primary button-large" href="/produtos">Ver produtos</Link>
+      <Link className="button button-primary button-large" href="/brindes">Ver brindes</Link>
     </section>
   );
 }

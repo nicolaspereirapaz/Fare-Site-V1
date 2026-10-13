@@ -3,17 +3,33 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpRight, ArrowUpDown, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ColorDots } from "@/components/ColorDots";
 import { formatProductName } from "@/lib/xbz";
 import type { PublicCatalogProduct, PublicProductsResponse } from "@/lib/publicCatalog";
+import { CATALOG_SORTS, PRICE_SORTS, SORT_LABELS, type CatalogSort } from "@/lib/catalogQuery";
 
 const PAGE_SIZE = 24;
 
 type CategoryCount = { name: string; count: number };
 
+/** Atalhos de quantidade (os mesmos da tabela de preços do produto). */
+const QUANTITY_SHORTCUTS = [50, 100, 250, 500, 1000];
+
+type Filters = { quantity: string; minPrice: string; maxPrice: string };
+const EMPTY_FILTERS: Filters = { quantity: "", minPrice: "", maxPrice: "" };
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "").slice(0, 6);
+}
+
+function priceInput(value: string) {
+  return value.replace(/[^\d,.]/g, "").slice(0, 9);
+}
+
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
-function XbzProductCard({ product, pricesVisible }: { product: PublicCatalogProduct; pricesVisible: boolean }) {
+export function XbzProductCard({ product, pricesVisible }: { product: PublicCatalogProduct; pricesVisible: boolean }) {
   const [imageFailed, setImageFailed] = useState(false);
   const href = `/brindes/${encodeURIComponent(product.publicId)}`;
   const hasPrice = pricesVisible && typeof product.startingPrice === "number";
@@ -35,21 +51,20 @@ function XbzProductCard({ product, pricesVisible }: { product: PublicCatalogProd
         )}
       </Link>
       <div className="product-card-content">
-        <span className="product-category">{product.category}</span>
+        <span className="product-card-meta">
+          <span className="product-category">{product.category}</span>
+          {product.code ? <span className="product-code">Cód. {product.code}</span> : null}
+        </span>
         <h3>
           <Link href={href}>{formatProductName(product.name)}</Link>
         </h3>
-        <p>
-          {product.colors.length
-            ? `${product.colors.length} ${product.colors.length === 1 ? "cor disponível" : "cores disponíveis"}`
-            : "Personalização sob consulta"}
-        </p>
+        {product.colors.length ? <ColorDots colors={product.colors} /> : <p>Personalização sob consulta</p>}
         <div className="product-card-footer">
           {hasPrice ? (
             <div>
-              <small>A partir de</small>
+              <small>{product.priceQuantity ? "Por unidade" : "A partir de"}</small>
               <strong>{currency.format(product.startingPrice as number)}</strong>
-              <small>/un. · pedido de 100 un.</small>
+              <small>/un. · pedido de {(product.priceQuantity ?? 100).toLocaleString("pt-BR")} un.</small>
             </div>
           ) : pricesVisible ? (
             <div>
@@ -71,12 +86,15 @@ function XbzProductCard({ product, pricesVisible }: { product: PublicCatalogProd
   );
 }
 
-export function XbzCatalog() {
+export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: string } = {}) {
   const [data, setData] = useState<(PublicProductsResponse & { pricesVisible?: boolean }) | null>(null);
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("Todos");
+  const [category, setCategory] = useState(initialCategory);
+  const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<CatalogSort>("relevancia");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +104,10 @@ export function XbzCatalog() {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (search) params.set("q", search);
       if (category !== "Todos") params.set("categoria", category);
+      if (filters.quantity) params.set("qtd", filters.quantity);
+      if (filters.minPrice) params.set("precoMin", filters.minPrice);
+      if (filters.maxPrice) params.set("precoMax", filters.maxPrice);
+      if (sort !== "relevancia") params.set("ordem", sort);
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
@@ -100,7 +122,7 @@ export function XbzCatalog() {
         setLoading(false);
       }
     },
-    [category, page, search],
+    [category, filters, page, search, sort],
   );
 
   useEffect(() => {
@@ -110,6 +132,10 @@ export function XbzCatalog() {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (search) params.set("q", search);
       if (category !== "Todos") params.set("categoria", category);
+      if (filters.quantity) params.set("qtd", filters.quantity);
+      if (filters.minPrice) params.set("precoMin", filters.minPrice);
+      if (filters.maxPrice) params.set("precoMax", filters.maxPrice);
+      if (sort !== "relevancia") params.set("ordem", sort);
 
       try {
         const response = await fetch(`/api/xbz/products?${params}`, { cache: "no-store" });
@@ -129,10 +155,24 @@ export function XbzCatalog() {
     return () => {
       active = false;
     };
-  }, [category, page, search]);
+  }, [category, filters, page, search, sort]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.meta.total / PAGE_SIZE)) : 1;
-  const hasActiveFilters = search !== "" || category !== "Todos";
+  const pricesVisible = Boolean(data?.pricesVisible);
+  const hasActiveFilters = search !== "" || category !== "Todos" || filters.quantity !== "" || filters.minPrice !== "" || filters.maxPrice !== "";
+  const sortOptions = CATALOG_SORTS.filter((option) => pricesVisible || !PRICE_SORTS.has(option));
+
+  function applyFilters(next: Filters = draftFilters) {
+    const min = next.minPrice.replace(",", ".");
+    const max = next.maxPrice.replace(",", ".");
+    // Faixa invertida (mín. maior que máx.): troca os dois em vez de não mostrar nada.
+    const swap = min && max && Number(min) > Number(max);
+    const clean = { quantity: next.quantity, minPrice: swap ? next.maxPrice : next.minPrice, maxPrice: swap ? next.minPrice : next.maxPrice };
+    setDraftFilters(clean);
+    setLoading(true);
+    setPage(1);
+    setFilters(clean);
+  }
 
   const totalCount = useMemo(
     () => categories.reduce((total, item) => total + item.count, 0),
@@ -144,6 +184,8 @@ export function XbzCatalog() {
     setDraftSearch("");
     setSearch("");
     setCategory("Todos");
+    setDraftFilters(EMPTY_FILTERS);
+    setFilters(EMPTY_FILTERS);
     setPage(1);
   }
 
@@ -177,6 +219,78 @@ export function XbzCatalog() {
           </span>
           <button className="catalog-search-submit" type="submit">
             Buscar
+          </button>
+        </form>
+
+        <form
+          className="catalog-filter-group catalog-refine"
+          onSubmit={(event) => {
+            event.preventDefault();
+            applyFilters();
+          }}
+        >
+          <fieldset className="catalog-refine-field">
+            <legend>Quantidade</legend>
+            <label className="catalog-number-input">
+              <input
+                aria-label="Quantidade"
+                inputMode="numeric"
+                onChange={(event) => setDraftFilters((current) => ({ ...current, quantity: onlyDigits(event.target.value) }))}
+                placeholder="Ex.: 300"
+                value={draftFilters.quantity}
+              />
+              <span aria-hidden="true">un.</span>
+            </label>
+            <div className="catalog-chips" role="group" aria-label="Quantidades comuns">
+              {QUANTITY_SHORTCUTS.map((quantity) => (
+                <button
+                  aria-pressed={filters.quantity === String(quantity)}
+                  className={filters.quantity === String(quantity) ? "catalog-chip active" : "catalog-chip"}
+                  key={quantity}
+                  onClick={() => applyFilters({ ...draftFilters, quantity: filters.quantity === String(quantity) ? "" : String(quantity) })}
+                  type="button"
+                >
+                  {quantity.toLocaleString("pt-BR")}
+                </button>
+              ))}
+            </div>
+            <small>Mostra só brindes com estoque para essa quantidade em pelo menos uma cor.</small>
+          </fieldset>
+
+          {pricesVisible ? (
+            <fieldset className="catalog-refine-field">
+              <legend>Preço por unidade</legend>
+              <div className="catalog-price-range">
+                <label className="catalog-number-input">
+                  <span aria-hidden="true">R$</span>
+                  <input
+                    aria-label="Preço mínimo por unidade"
+                    inputMode="decimal"
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, minPrice: priceInput(event.target.value) }))}
+                    placeholder="mín."
+                    value={draftFilters.minPrice}
+                  />
+                </label>
+                <span aria-hidden="true">–</span>
+                <label className="catalog-number-input">
+                  <span aria-hidden="true">R$</span>
+                  <input
+                    aria-label="Preço máximo por unidade"
+                    inputMode="decimal"
+                    onChange={(event) => setDraftFilters((current) => ({ ...current, maxPrice: priceInput(event.target.value) }))}
+                    placeholder="máx."
+                    value={draftFilters.maxPrice}
+                  />
+                </label>
+              </div>
+              <small>
+                Valor por unidade para {filters.quantity || draftFilters.quantity ? `${Number(draftFilters.quantity || filters.quantity).toLocaleString("pt-BR")} un.` : "pedidos de 100 un."}
+              </small>
+            </fieldset>
+          ) : null}
+
+          <button className="catalog-search-submit catalog-apply" type="submit">
+            Aplicar filtros
           </button>
         </form>
 
@@ -227,8 +341,29 @@ export function XbzCatalog() {
             <strong>
               {loading ? "Consultando…" : `${data?.meta.total ?? 0} ${data?.meta.total === 1 ? "produto" : "produtos"}`}
             </strong>
-            <span>Brindes personalizados para empresas, eventos e ocasiões especiais.</span>
+            <span>
+              {filters.quantity
+                ? `Com estoque para ${Number(filters.quantity).toLocaleString("pt-BR")} unidades.`
+                : "Brindes personalizados para empresas, eventos e ocasiões especiais."}
+            </span>
           </div>
+          <label className="catalog-sort-field">
+            <ArrowUpDown aria-hidden="true" size={16} />
+            <span>Ordenar por</span>
+            <select
+              aria-label="Ordenar por"
+              onChange={(event) => {
+                setLoading(true);
+                setPage(1);
+                setSort(event.target.value as CatalogSort);
+              }}
+              value={sortOptions.includes(sort) ? sort : "relevancia"}
+            >
+              {sortOptions.map((option) => (
+                <option key={option} value={option}>{SORT_LABELS[option]}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {error ? (

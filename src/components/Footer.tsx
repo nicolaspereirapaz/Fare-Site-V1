@@ -14,12 +14,12 @@ export function Footer() {
     <footer className="site-footer">
       <div className="container-shell footer-grid">
         <div className="footer-brand">
-          <Image alt="Fare Foto" height={82} src="/images/fare-foto-logo.svg" width={150} />
-          <p>Impressos, fotografia e personalizados feitos para guardar histórias e fortalecer marcas.</p>
+          <Image alt="Fare Foto" height={87} src="/images/fare-foto-logo-escuro.svg" width={200} />
+          <p>Brindes personalizados para empresas, equipes e eventos, com a sua marca e atendimento de perto.</p>
         </div>
         <div>
           <h2>Explore</h2>
-          <Link href="/produtos">Todos os produtos</Link>
+          <Link href="/brindes">Todos os brindes</Link>
           <Link href="/#categorias">Categorias</Link>
           <Link href="/#como-funciona">Como funciona</Link>
           <Link href="/#contato">Fale com a gente</Link>

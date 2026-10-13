@@ -15,6 +15,7 @@ import {
 } from "@/components/backofficeShared";
 import { PAYMENT_LABELS, type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
+import { QuoteItemPricing } from "@/components/QuoteItemPricing";
 import { QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
@@ -51,6 +52,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected>(null);
+  const [pricingIndex, setPricingIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const [quotesResponse, ordersResponse] = await Promise.all([
@@ -147,7 +149,16 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
     );
   }
 
-  const closeDialog = useCallback(() => setSelected(null), []);
+  const closeDialog = useCallback(() => {
+    setSelected(null);
+    setPricingIndex(null);
+  }, []);
+  const reloadQuotes = useCallback(() => {
+    load().then((payload) => {
+      setQuotes(payload.quotes);
+      setOrders(payload.orders);
+    }).catch(() => undefined);
+  }, [load]);
   const boardQuotes = quotes.filter((quote): quote is BackofficeQuoteSummary & { status: Column } =>
     (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status),
   );
@@ -235,15 +246,26 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           subtitle={`orçamento de ${formatDay(openQuote.createdAt)}`}
           title={openQuote.customerName}
         >
-          <DetailsSections
-            billing={openQuote.billing}
-            customerCompany={openQuote.customerCompany}
-            customerName={openQuote.customerName}
-            customerPhone={openQuote.customerPhone}
-            items={openQuote.items}
-            notes={openQuote.notes}
-            total={openQuote.total}
-          />
+          {pricingIndex !== null ? (
+            <QuoteItemPricing
+              index={pricingIndex}
+              key={`${openQuote.id}-${pricingIndex}`}
+              onBack={() => setPricingIndex(null)}
+              onSaved={reloadQuotes}
+              quoteId={openQuote.id}
+            />
+          ) : (
+            <DetailsSections
+              billing={openQuote.billing}
+              customerCompany={openQuote.customerCompany}
+              customerName={openQuote.customerName}
+              customerPhone={openQuote.customerPhone}
+              items={openQuote.items}
+              notes={openQuote.notes}
+              onPriceItem={setPricingIndex}
+              total={openQuote.total}
+            />
+          )}
         </DetailsDialog>
       ) : null}
 

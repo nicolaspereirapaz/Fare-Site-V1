@@ -17,7 +17,7 @@ function StaffBrand() {
   return (
     <div className="staff-brand">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt="Fare Foto" height={60} src="/images/fare-foto-logo.svg" width={110} />
+      <img alt="Fare Foto" height={60} src="/images/fare-foto-logo-slogan.svg" width={110} />
       <span>Equipe</span>
     </div>
   );

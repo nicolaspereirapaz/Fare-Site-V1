@@ -24,7 +24,7 @@ export function StaffTopbar({ name, role }: { name: string; role: string }) {
       <div className="staff-topbar-inner container-shell">
         <div className="staff-brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt="Fare Foto" className="staff-logo-light" height={48} src="/images/fare-foto-logo.svg" width={88} />
+          <img alt="Fare Foto" height={42} src="/images/fare-foto-logo-escuro.svg" width={97} />
           <span>Equipe</span>
         </div>
         <div className="staff-topbar-user">

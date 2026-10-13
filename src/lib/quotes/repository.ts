@@ -163,6 +163,32 @@ export function updateQuoteStatus(database: DatabaseSync, input: { quoteId: stri
 }
 
 /**
+ * Equipe forma o preço de um item (quantidade, personalização): troca o item e recalcula o total.
+ * Só enquanto o orçamento está aberto.
+ */
+export function priceQuoteItem(
+  database: DatabaseSync,
+  input: { quoteId: string; itemIndex: number; quantity: number; unitPrice: number; costing: QuoteCartItem["costing"] },
+): Quote {
+  runQuoteMigrations(database);
+  const current = findQuoteById(database, input.quoteId);
+  if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
+  if (!["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"].includes(current.status)) {
+    throw new Error("Este orçamento não pode mais ser alterado.");
+  }
+  if (!current.items[input.itemIndex]) throw new Error("Item não encontrado.");
+  const items = current.items.map((item, index) => (index === input.itemIndex
+    ? { ...item, quantity: input.quantity, quantityRange: undefined, unitPrice: input.unitPrice, costing: input.costing }
+    : item));
+  const total = totalCents(items);
+  const now = new Date().toISOString();
+  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+    .run(JSON.stringify(items), total, now, current.id, current.updatedAt);
+  if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
+  return { ...current, items, totalCents: total, updatedAt: now };
+}
+
+/**
  * Pagamento recebido: o orçamento vira PEDIDO (já em "Aguardando arte") e sai do quadro de orçamentos.
  * Tudo numa transação: ou cria o pedido e marca o orçamento, ou nada muda.
  */

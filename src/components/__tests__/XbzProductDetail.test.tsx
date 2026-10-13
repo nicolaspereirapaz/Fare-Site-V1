@@ -106,10 +106,25 @@ describe("página do brinde", () => {
     for (const thumb of screen.getAllByRole("button", { name: /^Ver cor / })) expect(thumb).toHaveClass("supplier-photo");
   });
 
+  it("a cor é escolhida por bolinhas (com o nome da cor escolhida) em vez da contagem de variações", async () => {
+    const user = userEvent.setup();
+    render(<XbzProductDetail code="abc" />);
+    await screen.findByRole("img", { name: /Caneca Acrílica — Azul/ });
+
+    expect(screen.queryByText(/variaç(ão|ões) disponíve/)).not.toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Cor" })).toBeInTheDocument();
+    expect(screen.getByText("Azul", { selector: ".color-picker-name" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Azul" })).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByRole("radio", { name: "Verde" }));
+    expect(screen.getByRole("radio", { name: "Verde" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("img", { name: /Caneca Acrílica — Verde/ })).toHaveAttribute("src", "/verde.jpg");
+  });
+
   it("adiciona ao carrinho com a foto da cor e os parâmetros de preço para recalcular", async () => {
     const user = userEvent.setup();
     render(<XbzProductDetail code="abc" />);
-    await user.click(await screen.findByRole("button", { name: "Verde" }));
+    await user.click(await screen.findByRole("radio", { name: "Verde" }));
     await user.click(screen.getByRole("button", { name: /Adicionar ao carrinho/ }));
 
     expect(addItem).toHaveBeenCalledWith(expect.objectContaining({
@@ -119,5 +134,18 @@ describe("página do brinde", () => {
       pricing: { unitSaleCents: 164, freightCents: 10000 },
       selections: expect.objectContaining({ "Variação": "Verde" }),
     }));
+  });
+
+  it("mostra o código Fare Foto abaixo do nome quando o cliente está cadastrado", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...payload, product: { ...payload.product, code: "X10001" } }), { status: 200 })));
+    render(<XbzProductDetail code="abc" />);
+    expect(await screen.findByText("Cód. X10001")).toBeInTheDocument();
+  });
+
+  it("visitante não vê código", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...payload, pricesVisible: false }), { status: 200 })));
+    render(<XbzProductDetail code="abc" />);
+    await screen.findByRole("img", { name: /Caneca Acrílica — Azul/ });
+    expect(screen.queryByText(/Cód\./)).not.toBeInTheDocument();
   });
 });

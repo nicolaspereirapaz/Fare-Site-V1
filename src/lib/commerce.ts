@@ -12,6 +12,22 @@ export type QuoteCartItem = {
    * (venda por unidade já com margem + frete do fornecedor a ratear, em centavos). Nunca o custo.
    */
   pricing?: { unitSaleCents: number; freightCents: number } | null;
+  /** Gravado pelo servidor no pedido: código Fare Foto, código real do fornecedor e SKU (painel da equipe). */
+  codes?: { fare: string; supplier: "xbz" | "spot" | "asia"; supplierCode: string; sku: string } | null;
+  /** Composição do preço feita pela equipe no painel (custo, personalização). Nunca vai para o cliente. */
+  costing?: ItemCosting | null;
+};
+
+export type ItemCosting = {
+  custoProduto: number;
+  personalizacao: string | null;
+  detalhe: string;
+  personalizacaoUnitaria: number;
+  custoPersonalizacaoTotal: number;
+  freteFornecedor: number;
+  tecnica: Record<string, unknown> & { tipo: string };
+  por: string;
+  em: string;
 };
 
 export type QuoteCustomer = {
@@ -102,6 +118,7 @@ export function buildQuoteMessage(customer: QuoteCustomer, items: QuoteCartItem[
 
     return [
       `${index + 1}. ${item.productName}`,
+      ...(item.codes?.fare ? [`  • Código: ${item.codes.fare}`] : []),
       `  • Quantidade: ${item.quantityRange ?? item.quantity}`,
       ...selectionLines,
       item.artworkName ? `  • Arte: ${item.artworkName}` : "  • Arte: enviarei no WhatsApp",

@@ -1,5 +1,6 @@
 import { unitPriceForQuantity, type CampaignQuantityPricing } from "@/lib/campaignPricing";
 import type { QuoteCartItem } from "@/lib/commerce";
+import type { ItemCodes } from "@/lib/productCodes";
 
 const GIFT_PREFIX = "brindes/";
 
@@ -14,10 +15,26 @@ export type GiftPricingLookup = (publicId: string) => CampaignQuantityPricing | 
 export function repriceCartItems(items: QuoteCartItem[], lookup: GiftPricingLookup): QuoteCartItem[] {
   return items.map((item) => {
     const pricing = item.slug.startsWith(GIFT_PREFIX) ? lookup(item.slug.slice(GIFT_PREFIX.length)) : null;
+    const rest = { ...item };
+    delete rest.costing; // composição de custo é só da equipe; nunca aceita do navegador
     return {
-      ...item,
+      ...rest,
       pricing,
       unitPrice: pricing ? unitPriceForQuantity(pricing, item.quantity) : null,
     };
+  });
+}
+
+/** Códigos do brinde pelo id público + cor escolhida; null se não for brinde do catálogo. */
+export type GiftCodesLookup = (publicId: string, variantLabel: string) => ItemCodes | null;
+
+/** Grava no item os códigos para a equipe (os que vierem do navegador são descartados). */
+export function attachItemCodes(items: QuoteCartItem[], lookup: GiftCodesLookup): QuoteCartItem[] {
+  return items.map((item) => {
+    const rest = { ...item };
+    delete rest.codes;
+    if (!item.slug.startsWith(GIFT_PREFIX)) return rest;
+    const codes = lookup(item.slug.slice(GIFT_PREFIX.length), item.selections?.["Variação"] ?? "");
+    return codes ? { ...rest, codes } : rest;
   });
 }

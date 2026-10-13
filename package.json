@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "export:landing": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/export-outubro-rosa.mts",
-    "equipe": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/equipe.mts"
+    "equipe": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/equipe.mts",
+    "fornecedores": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/fornecedores.mts",
+    "fotos": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/fotos.mts"
   },
   "dependencies": {
     "better-auth": "^1.7.6",

@@ -165,3 +165,17 @@ conta Resend + domínio verificado para o envio real de e-mails.
   voltar 1 etapa permitido (exceto do 1º passo pós-pagamento). Pedidos agora com 6 etapas:
   aguardando_arte → criando_arte → aguardando_producao → em_producao → aguardando_retirada → aguardando_feedback.
   Pagamento recebido cria o pedido em aguardando_arte.
+
+## 2026-10-11 — Fornecedores Spot e Asia Import + código Fare Foto (sem commit)
+
+- Fornecedores novos em `src/lib/suppliers/` (`spot.ts` = Spot Gifts/Stricker, `asiaImport.ts`, `catalog.ts`). Credenciais em `.env.local` (`SPOT_*`, `ASIA_*`). Chamar o fornecedor de **Spot** (Stricker é o nome da empresa).
+- Catálogo local: tabela `supplier_catalog_products` em `data/xbz-catalog.sqlite`; sincroniza sozinho (Spot 3 h, Asia 2 h) e `npm run fornecedores [-- spot|asia]` força agora. Asia exige POST form-urlencoded.
+- Categorias da loja inalteradas (23); a categoria do fornecedor só desempata o que cairia em "Outros".
+- Código Fare Foto: `X/S/A` + número (X10001…), tabela `fare_product_codes`, nunca muda. Só cliente cadastrado vê (card, página, busca, WhatsApp). Painel da equipe mostra Fare + código real + SKU (`codes` gravado pelo servidor no item).
+- Pendente: filtrar produtos parecidos entre fornecedores (usuário vai escolher o critério); confirmar se o "preço" da Asia é custo de revendedor.
+- Filtros do catálogo: `src/lib/catalogQuery.ts` (quantidade por estoque de uma cor, preço por unidade só para cadastrados, ordens relevância/menor/maior preço/cores/nome).
+- Fotos: a sincronização da XBZ agora atualiza a foto (antes congelava a da 1ª carga); grupo usa a 1ª cor com foto, ponta de estoque (P@/E@) usa a foto do produto normal, e produto sem foto nenhuma fica oculto até o fornecedor publicar. 3 links de foto da XBZ dão HTTP 500 no CDN deles.
+- Verificação diária das fotos: `src/lib/imageHealth.ts` (tabelas `image_health`/`image_check_state` no xbz-catalog.sqlite), roda sozinha 1x/dia em segundo plano; `npm run fotos` força agora. Foto que não abre (2 tentativas) some; produto sem nenhuma foto boa sai da loja e volta quando a foto abrir. `repairImageUrl` corrige links digitados errado pela XBZ (hhttps, link duplicado, "https://.xbzbrindes").
+- Formar preço no orçamento (painel → Orçamentos → item → "Formar preço"): `src/lib/backoffice/customization.ts` (Laser R$1 canetas/chaveiros, R$2,50 demais; DTF Têxtil Laraella 58 cm, R$29,90/m fracionado mín. 1 m + R$16; DTF UV FuturaIM folhas 20×28/28×40 com tabela por qtd das fotos do usuário, escolhe a combinação mais barata + R$10; Spot = customizationOptions da API; manual). Preço = (custo produto + personalização) × 2 + R$100 rateado. Vendedor vê o custo. API `src/app/api/backoffice/quotes/[id]/itens/[index]`, UI `src/components/QuoteItemPricing.tsx`, grava `costing` no item (removido se vier do navegador). Personalizações Spot em `spot_customizations` (xbz-catalog.sqlite), 1x/dia; `npm run fornecedores -- spot` também baixa.
+- Preço: produto/cor com custo zero ou vazio não aparece na loja. A sincronização da XBZ agora também atualiza o preço (antes congelava o da 1ª carga, 28/09): em 12/10 havia 105 itens com preço desatualizado (20 deles zerados na cópia, ex.: Sacola de Lona 19219 = R$ 21,48 na XBZ). Nome continua o da 1ª carga.
+- Asia: a variação com o mesmo código do produto-pai (ex.: GA9130, preço 0, estoque = soma das cores) é linha de total, não cor — ignorada quando há cores com sufixo. Só a GA9130 tinha isso (12/10).

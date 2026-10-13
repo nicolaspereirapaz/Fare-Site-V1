@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Info, LogIn, MessageCircle, PackageCheck, ShoppingBag, X } from "lucide-react";
+import { isLightSwatch, swatchFor } from "@/lib/colorSwatches";
 import { formatProductName } from "@/lib/xbz";
 import type { PublicCatalogProduct } from "@/lib/publicCatalog";
 import { CAMPAIGN_REFERENCE_QUANTITY, unitPriceForQuantity, type CampaignQuantityPricing } from "@/lib/campaignPricing";
@@ -210,11 +211,6 @@ export function XbzProductDetail({ code }: { code: string }) {
               <Check aria-hidden="true" size={17} />
               Personalização sob consulta
             </span>
-            <span>
-              <Check aria-hidden="true" size={17} />
-              {product.variants.length}{" "}
-              {product.variants.length === 1 ? "variação disponível" : "variações disponíveis"}
-            </span>
             <span><Check aria-hidden="true" size={17} />Atendimento personalizado</span>
           </div>
         </div>
@@ -223,6 +219,7 @@ export function XbzProductDetail({ code }: { code: string }) {
           <div className="config-heading">
             <span className="eyebrow">Configure seu brinde</span>
             <h1>{formatProductName(product.name)}</h1>
+            {product.code ? <span className="product-code product-code-detail">Cód. {product.code}</span> : null}
             {product.description ? <p>{product.description}</p> : null}
           </div>
 
@@ -238,23 +235,28 @@ export function XbzProductDetail({ code }: { code: string }) {
             <fieldset className="option-group">
               <legend>
                 <span>01</span>
-                Variação
+                Cor: <strong className="color-picker-name">{variant.label}</strong>
               </legend>
-              <div className="option-grid">
-                {product.variants.map((item) => (
-                  <button
-                    aria-pressed={item.publicId === variant.publicId}
-                    className={`option-button${item.publicId === variant.publicId ? " selected" : ""}`}
-                    key={item.publicId}
-                    onClick={() => {
-                      setVariantId(item.publicId);
-                      setImageFailed(false);
-                    }}
-                    type="button"
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div aria-label="Cor" className="color-picker" role="radiogroup">
+                {product.variants.map((item) => {
+                  const checked = item.publicId === variant.publicId;
+                  return (
+                    <button
+                      aria-checked={checked}
+                      aria-label={item.label}
+                      className={`color-picker-dot${checked ? " selected" : ""}${isLightSwatch(item.label) ? " light" : ""}`}
+                      key={item.publicId}
+                      onClick={() => {
+                        setVariantId(item.publicId);
+                        setImageFailed(false);
+                      }}
+                      role="radio"
+                      style={swatchFor(item.label)}
+                      title={item.label}
+                      type="button"
+                    />
+                  );
+                })}
               </div>
             </fieldset>
 

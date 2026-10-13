@@ -1,12 +1,30 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, X } from "lucide-react";
+import { Calculator, ArrowLeft, ArrowRight, CheckCircle2, X } from "lucide-react";
 import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 
 /** Partes comuns aos quadros de pedidos e de orçamentos do painel. */
-export type BackofficeItem = { productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null };
+export type BackofficeItem = {
+  productName: string;
+  quantity: number;
+  selections: Record<string, string>;
+  unitPrice: number | null;
+  codes?: { fare: string; supplier: "xbz" | "spot" | "asia"; supplierCode: string; sku: string } | null;
+  costing?: { personalizacao: string | null; custoProduto: number; personalizacaoUnitaria: number } | null;
+};
+
+const SUPPLIER_NAMES = { xbz: "XBZ", spot: "Spot", asia: "Asia Import" } as const;
+
+/** "X10001 · XBZ 06520 · SKU 06520-AZU" — só no painel da equipe. */
+export function itemCodeLine(item: BackofficeItem) {
+  const codes = item.codes;
+  if (!codes) return "";
+  return [codes.fare, `${SUPPLIER_NAMES[codes.supplier]} ${codes.supplierCode}`, codes.sku ? `SKU ${codes.sku}` : ""]
+    .filter((part) => part.trim())
+    .join(" · ");
+}
 
 const ERROR_MESSAGES: Record<string, string> = {
   AUTH_REQUIRED: "É necessário estar autenticado para acessar o backoffice.",
@@ -176,6 +194,7 @@ export function DetailsSections({
   items,
   total,
   notes,
+  onPriceItem,
 }: {
   customerName: string;
   customerPhone: string;
@@ -185,6 +204,8 @@ export function DetailsSections({
   items: BackofficeItem[];
   total: number | null;
   notes: string | null;
+  /** Orçamentos: abre "Formar preço" do item. */
+  onPriceItem?: (index: number) => void;
 }) {
   return (
     <>
@@ -222,7 +243,20 @@ export function DetailsSections({
           <tbody>
             {items.map((item, index) => (
               <tr key={`${item.productName}-${index}`}>
-                <td>{itemLine(item)}</td>
+                <td>
+                  {itemLine(item)}
+                  {itemCodeLine(item) ? <small className="kb-item-codes">{itemCodeLine(item)}</small> : null}
+                  {item.costing ? (
+                    <small className="kb-item-costing">
+                      {item.costing.personalizacao ?? "Sem personalização"} · custo {formatCurrency(item.costing.custoProduto + item.costing.personalizacaoUnitaria)}/un. · venda {item.unitPrice === null ? "—" : `${formatCurrency(item.unitPrice)}/un.`}
+                    </small>
+                  ) : null}
+                  {onPriceItem ? (
+                    <button className="kb-price-item" onClick={() => onPriceItem(index)} type="button">
+                      <Calculator aria-hidden="true" size={13} /> {item.costing ? "Refazer preço" : "Formar preço"}
+                    </button>
+                  ) : null}
+                </td>
                 <td>{item.unitPrice === null ? "Sob consulta" : formatCurrency(item.unitPrice * item.quantity)}</td>
               </tr>
             ))}

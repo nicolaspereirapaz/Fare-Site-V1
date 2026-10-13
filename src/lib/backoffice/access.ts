@@ -1,7 +1,7 @@
 import type { SessionReader } from "@/lib/auth/session";
 import { DEFAULT_USER_ROLE, isUserRole, type UserRole } from "@/lib/auth/roles";
 import { ORDEM_STATUS_PEDIDO, TransicaoStatusPedidoInvalidaError, type StatusPedido } from "@/lib/backoffice/orderStatus";
-import type { QuoteBilling } from "@/lib/commerce";
+import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import type { Order } from "@/lib/orders/repository";
 
@@ -30,7 +30,7 @@ export type BackofficeOrderSummary = {
   notes: string | null;
   /** Dados da nota gravados no pedido no momento da compra; null se o cadastro estava incompleto. */
   billing: QuoteBilling | null;
-  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null }>;
+  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"] }>;
   itemCount: number;
   total: number;
   createdAt: string;
@@ -75,7 +75,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     customerCompany: order.customer.company ?? null,
     notes: order.customer.notes || null,
     billing: order.customer.billing ?? null,
-    items: order.items.map(({ productName, quantity, selections, unitPrice }) => ({ productName, quantity, selections, unitPrice })),
+    items: order.items.map(({ productName, quantity, selections, unitPrice, codes }) => ({ productName, quantity, selections, unitPrice, codes })),
     itemCount: order.items.length,
     total: calculateOrderSummaryTotal(order.items),
     createdAt: order.createdAt,

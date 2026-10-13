@@ -25,4 +25,11 @@ describe("Header", () => {
     expect(screen.getByRole("link", { name: /Minha conta/ })).toHaveAttribute("href", "/minha-conta");
     expect(screen.queryByRole("link", { name: "Entrar" })).not.toBeInTheDocument();
   });
+
+  it("no lançamento o menu leva aos brindes, sem o catálogo de produtos próprios", () => {
+    renderHeader(null);
+
+    expect(screen.getByRole("link", { name: "Brindes" })).toHaveAttribute("href", "/brindes");
+    expect(screen.queryByRole("link", { name: "Produtos" })).not.toBeInTheDocument();
+  });
 });

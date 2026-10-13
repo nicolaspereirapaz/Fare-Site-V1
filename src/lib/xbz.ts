@@ -1,10 +1,14 @@
 import { classifyProduct, isInternalSupplierItem, PRODUCT_CATEGORIES } from "./productCategories";
 
+export type SupplierId = "xbz" | "spot" | "asia";
+
 export type Product = {
   id: string;
   sku: string;
   compoundCode: string;
   familyCode: string;
+  /** Origem do item (uso interno; nunca vai para o público). Ausente = XBZ. */
+  supplier?: SupplierId;
   name: string;
   description: string;
   productUrl: string;
@@ -133,7 +137,11 @@ export function inferCategory(name: string, suppliedCategory: string, descriptio
   return classifyProduct(name, description, suppliedCategory);
 }
 
-function resolveCategory(product: Pick<Product, "name" | "description" | "category">): string {
+function resolveCategory(product: Pick<Product, "name" | "description" | "category" | "supplier">): string {
+  // Spot/Asia já chegam classificados nas categorias da loja (com a pista do fornecedor para o que seria "Outros").
+  if (product.supplier && product.supplier !== "xbz" && (PRODUCT_CATEGORIES as readonly string[]).includes(product.category)) {
+    return product.category;
+  }
   if (product.category && !LEGACY_CATEGORIES.has(product.category)) {
     // Categoria válida do fornecedor ou já reclassificada.
     return (PRODUCT_CATEGORIES as readonly string[]).includes(product.category)
@@ -141,6 +149,18 @@ function resolveCategory(product: Pick<Product, "name" | "description" | "catego
       : product.category;
   }
   return classifyProduct(product.name, product.description);
+}
+
+/**
+ * Corrige erros óbvios de digitação nos links de foto do fornecedor ("hhttps://", link repetido,
+ * "https://.xbzbrindes" sem o "cdn") e descarta o que não é link. A verificação diária confirma se abre.
+ */
+export function repairImageUrl(value: string): string {
+  let url = value.trim().replace(/^h+ttps?:\/\//i, (match) => (match.toLowerCase().includes("https") ? "https://" : "http://"));
+  const second = url.indexOf("http", 8);
+  if (second > 0) url = url.slice(0, second);
+  url = url.replace(/^https:\/\/\.xbzbrindes\.com\.br\//i, "https://cdn.xbzbrindes.com.br/");
+  return /^https?:\/\/[^\s/.][^\s/]*\/\S+$/i.test(url) ? url : "";
 }
 
 export function normalizeProduct(raw: RawProduct): Product {
@@ -158,7 +178,7 @@ export function normalizeProduct(raw: RawProduct): Product {
     name,
     description,
     productUrl: text(raw.SiteLink ?? raw.siteLink),
-    imageUrl: text(raw.ImageLink ?? raw.imageLink),
+    imageUrl: repairImageUrl(text(raw.ImageLink ?? raw.imageLink)),
     category: inferCategory(name, suppliedCategory, description),
     subcategory: text(raw.WebSubTipo ?? raw.webSubTipo),
     primaryColor: text(raw.CorWebPrincipal ?? raw.corWebPrincipal),
@@ -191,11 +211,24 @@ export function normalizeProducts(payload: unknown): Product[] {
   return records.filter((item): item is RawProduct => Boolean(item) && typeof item === "object").map(normalizeProduct);
 }
 
+/** "P@02306-6" / "E@..." (ponta de estoque) → "02306-6": o mesmo produto no catálogo normal. */
+function baseFamilyCode(code: string) {
+  return code.replace(/^[A-Z][@$]/, "");
+}
+
 export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
   const groups = new Map<string, Product[]>();
+  // Fotos por família (inclusive itens sem estoque) para socorrer ponta de estoque sem foto.
+  const familyImages = new Map<string, string>();
+  for (const product of products) {
+    const key = `${product.supplier ?? "xbz"}:${baseFamilyCode(product.familyCode || product.compoundCode || "")}`;
+    if (product.imageUrl && !familyImages.has(key)) familyImages.set(key, product.imageUrl);
+  }
 
   for (const product of products) {
     if (product.stockAvailable <= 0) continue;
+    // Sem preço do fornecedor (vazio ou zero) a cor não é vendida; produto sem nenhuma cor com preço sai da loja.
+    if (product.price === null || !Number.isFinite(product.price) || product.price <= 0) continue;
     if (isInternalSupplierItem(product.name)) continue;
     const internalCode = product.familyCode || product.compoundCode || product.sku || product.id;
     const variants = groups.get(internalCode) ?? [];
@@ -203,8 +236,11 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
     groups.set(internalCode, variants);
   }
 
-  return Array.from(groups, ([internalCode, variants]) => {
+  const grouped = Array.from(groups, ([internalCode, variants]) => {
     const representative = variants[0];
+    const image = variants.find((variant) => variant.imageUrl)?.imageUrl
+      || familyImages.get(`${representative.supplier ?? "xbz"}:${baseFamilyCode(internalCode)}`)
+      || "";
     const colors = Array.from(new Set(
       variants.flatMap((variant) => [variant.primaryColor, variant.secondaryColor]).filter(Boolean),
     ));
@@ -218,7 +254,7 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
       name: representative.name,
       description: representative.description,
       productUrl: representative.productUrl,
-      imageUrl: representative.imageUrl,
+      imageUrl: image,
       category: resolveCategory(representative),
       subcategory: representative.subcategory,
       price: lowestPriced.price,
@@ -228,6 +264,8 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
       variants,
     };
   });
+  // Sem nenhuma foto, o produto não aparece na loja (volta sozinho quando o fornecedor publicar a foto).
+  return grouped.filter((product) => product.imageUrl);
 }
 
 function configuration() {

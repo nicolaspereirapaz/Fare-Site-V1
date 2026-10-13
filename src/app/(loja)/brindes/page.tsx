@@ -7,7 +7,11 @@ export const metadata: Metadata = {
     "Brindes personalizados para empresas, eventos, equipes e ocasiões especiais.",
 };
 
-export default function BrindesPage() {
+type BrindesPageProps = { searchParams: Promise<{ categoria?: string | string[] }> };
+
+export default async function BrindesPage({ searchParams }: BrindesPageProps) {
+  const { categoria } = await searchParams;
+  const initialCategory = (Array.isArray(categoria) ? categoria[0] : categoria)?.trim() || "Todos";
   return (
     <>
       <section className="page-hero catalog-hero">
@@ -22,7 +26,7 @@ export default function BrindesPage() {
       </section>
       <section className="catalog-section">
         <div className="container-shell">
-          <XbzCatalog />
+          <XbzCatalog initialCategory={initialCategory} />
         </div>
       </section>
     </>

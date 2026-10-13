@@ -310,3 +310,13 @@ describe("atualização de status de pedido no backoffice", () => {
     });
   });
 });
+
+describe("códigos no painel da equipe", () => {
+  it("a linha do item mostra o código Fare Foto e o código real do fornecedor com o SKU", async () => {
+    const { itemCodeLine } = await import("@/components/backofficeShared");
+    expect(itemCodeLine({ productName: "Caneca", quantity: 100, selections: {}, unitPrice: 1,
+      codes: { fare: "X10001", supplier: "xbz", supplierCode: "06520", sku: "06520-AZU" } }))
+      .toBe("X10001 · XBZ 06520 · SKU 06520-AZU");
+    expect(itemCodeLine({ productName: "Caneca", quantity: 100, selections: {}, unitPrice: 1 })).toBe("");
+  });
+});

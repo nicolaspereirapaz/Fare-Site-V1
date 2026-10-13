@@ -5,6 +5,7 @@ import {
   type CampaignQuantityPricing,
 } from "@/lib/campaignPricing";
 import { toPublicCatalogProduct, type PublicCatalogProduct } from "@/lib/publicCatalog";
+import { familyKey } from "@/lib/productCodes";
 import type { CatalogProduct } from "@/lib/xbz";
 
 /**
@@ -12,9 +13,20 @@ import type { CatalogProduct } from "@/lib/xbz";
  * fornecedor rateado; referência de 100 un.), mas visível SOMENTE para clientes com login.
  * O navegador recebe apenas o preço final — nunca o custo do fornecedor.
  */
-export function toGiftProduct(product: CatalogProduct, pricesVisible: boolean): PublicCatalogProduct {
+export function toGiftProduct(
+  product: CatalogProduct,
+  pricesVisible: boolean,
+  fareCodes?: Map<string, string>,
+): PublicCatalogProduct {
   const base = toPublicCatalogProduct(product);
-  return pricesVisible ? { ...base, startingPrice: campaignStartingPrice(product) } : base;
+  if (!pricesVisible) return base;
+  const code = product.variants[0] ? fareCodes?.get(familyKey(product.variants[0])) : undefined;
+  return { ...base, startingPrice: campaignStartingPrice(product), ...(code ? { code } : {}) };
+}
+
+/** Código Fare Foto do produto agrupado (ou undefined). */
+export function fareCodeOf(product: CatalogProduct, fareCodes?: Map<string, string>): string | undefined {
+  return product.variants[0] ? fareCodes?.get(familyKey(product.variants[0])) : undefined;
 }
 
 export type GiftPricingDetail = {

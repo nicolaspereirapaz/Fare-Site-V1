@@ -4,8 +4,9 @@ import { getCustomerProfile, saveCustomerProfile } from "@/lib/account/profileRe
 import { database } from "@/lib/auth";
 import { campaignQuantityPricing } from "@/lib/campaignPricing";
 import type { CheckoutOptions } from "@/lib/checkout";
-import { repriceCartItems } from "@/lib/orders/serverPricing";
-import { publicProductId } from "@/lib/publicCatalog";
+import { attachItemCodes, repriceCartItems } from "@/lib/orders/serverPricing";
+import { familyKey, supplierCodeOf, supplierOf } from "@/lib/productCodes";
+import { publicProductId, toPublicCatalogProduct } from "@/lib/publicCatalog";
 import { groupAvailableProducts } from "@/lib/xbz";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
 
@@ -14,11 +15,25 @@ export const checkoutServerDeps: Required<CheckoutOptions> = {
   // O valor sai do catálogo local, nunca do navegador.
   priceItems: async (items) => {
     if (!items.some((item) => item.slug.startsWith("brindes/"))) return repriceCartItems(items, () => null);
-    const { products } = await getLocalCatalog();
+    const { products, fareCodes } = await getLocalCatalog();
     const byId = new Map(groupAvailableProducts(products).map((product) => [publicProductId(product.internalCode), product]));
-    return repriceCartItems(items, (publicId) => {
+    const priced = repriceCartItems(items, (publicId) => {
       const product = byId.get(publicId);
       return product ? campaignQuantityPricing(product) : null;
+    });
+    // Códigos para a equipe: Fare Foto + código real do fornecedor + SKU da cor escolhida.
+    return attachItemCodes(priced, (publicId, label) => {
+      const product = byId.get(publicId);
+      const first = product?.variants[0];
+      if (!product || !first) return null;
+      const labels = toPublicCatalogProduct(product).variants.map((variant) => variant.label);
+      const chosen = product.variants[Math.max(0, labels.indexOf(label))] ?? first;
+      return {
+        fare: fareCodes.get(familyKey(first)) ?? "",
+        supplier: supplierOf(first),
+        supplierCode: supplierCodeOf(product.variants),
+        sku: chosen.supplier ? chosen.sku : chosen.compoundCode || chosen.sku,
+      };
     });
   },
   // Dados da nota vêm do cadastro salvo na conta (nunca do navegador) e ficam gravados.

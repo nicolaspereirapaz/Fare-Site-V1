@@ -4,6 +4,9 @@ import {
   catalogProductCount, getCatalogDatabase, markSyncQuotaExhausted, persistInitialCatalog,
   readCatalogProducts, readSyncState, recordSyncAttempt, recordSyncResult, updateCatalogStock,
 } from "@/lib/xbzCatalogRepository";
+import { readSupplierProducts, refreshSuppliersInBackground } from "@/lib/suppliers/catalog";
+import { assignFareCodes } from "@/lib/productCodes";
+import { hideBrokenImages, readBrokenImages, refreshImageHealthInBackground } from "@/lib/imageHealth";
 
 const DAILY_LIMIT = 24;
 const BUSINESS_INTERVAL_MS = 37 * 60 * 1000;
@@ -90,10 +93,19 @@ export async function getLocalCatalog(now = new Date()) {
   ensureScheduler(database);
   if (!empty) void runSingleFlight(database, false, now).catch(() => undefined);
 
+  refreshSuppliersInBackground(database, now);
+
   const { date } = saoPauloParts(now);
   const state = readSyncState(database, date);
+  // XBZ + Spot + Asia Import, todos nas mesmas categorias da loja.
+  const raw = [...readCatalogProducts(database), ...readSupplierProducts(database)];
+  // Verificação diária das fotos (em segundo plano); foto que não abre não aparece na loja.
+  refreshImageHealthInBackground(database, raw, now);
+  const products = hideBrokenImages(raw, readBrokenImages(database));
   return {
-    products: readCatalogProducts(database),
+    products,
+    /** Código Fare Foto (X/S/A + número) por produto; o número de um produto nunca muda. */
+    fareCodes: assignFareCodes(database, products),
     fetchedAt: state.lastSuccessAt ?? now.toISOString(),
     cached: true,
     sync: {

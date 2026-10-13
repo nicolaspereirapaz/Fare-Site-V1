@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   description:
     "Revelação de fotos, quadros, porta-retratos, materiais gráficos e brindes personalizados em Jundiaí.",
-  icons: { icon: "/images/fare-foto-logo.svg" },
+  icons: { icon: "/images/fare-foto-simbolo.svg" },
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

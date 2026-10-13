@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Product } from "@/lib/xbz";
+import { repairImageUrl, type Product } from "@/lib/xbz";
 
 export type CatalogSyncState = {
   dailyDate: string;
@@ -66,13 +66,17 @@ export function readCatalogProducts(database: DatabaseSync): Product[] {
     static_json: string; stock_main: number; stock_available: number;
     reliability: string; restock_date: string;
   }>;
-  return rows.map((row) => ({
-    ...(JSON.parse(row.static_json) as Product),
+  return rows.map((row) => {
+    const product = JSON.parse(row.static_json) as Product;
+    return {
+    ...product,
+    imageUrl: repairImageUrl(product.imageUrl ?? ""),
     stockMain: row.stock_main,
     stockAvailable: row.stock_available,
     reliability: row.reliability,
     restockDate: row.restock_date,
-  }));
+    };
+  });
 }
 
 export function persistInitialCatalog(database: DatabaseSync, products: Product[], now: string) {
@@ -99,6 +103,18 @@ export function updateCatalogStock(database: DatabaseSync, products: Product[], 
     UPDATE xbz_catalog_products SET stock_main = ?, stock_available = ?, reliability = ?,
       restock_date = ?, stock_updated_at = ? WHERE id = ?
   `);
+  // Foto e preço são atualizados a cada sincronização: o fornecedor publica fotos de produtos que
+  // entraram sem e reajusta o custo (o preço ao cliente segue). O nome continua o da 1ª carga.
+  // Foto vazia nunca apaga uma foto que já existe; preço zero tira a cor da venda até voltar.
+  const updatePrice = database.prepare(`
+    UPDATE xbz_catalog_products
+    SET static_json = json_set(static_json, '$.price', ?, '$.formattedPrice', ?)
+    WHERE id = ? AND json_extract(static_json, '$.price') IS NOT ?
+  `);
+  const updateImage = database.prepare(`
+    UPDATE xbz_catalog_products SET static_json = json_set(static_json, '$.imageUrl', ?)
+    WHERE id = ? AND json_extract(static_json, '$.imageUrl') IS NOT ?
+  `);
   const insert = database.prepare(`
     INSERT OR IGNORE INTO xbz_catalog_products
       (id, static_json, stock_main, stock_available, reliability, restock_date, created_at, stock_updated_at)
@@ -109,6 +125,10 @@ export function updateCatalogStock(database: DatabaseSync, products: Product[], 
     for (const product of products) {
       const result = update.run(product.stockMain, product.stockAvailable, product.reliability,
         product.restockDate, now, product.id);
+      if (result.changes > 0 && product.imageUrl) updateImage.run(product.imageUrl, product.id, product.imageUrl);
+      if (result.changes > 0 && product.price !== null && Number.isFinite(product.price)) {
+        updatePrice.run(product.price, product.formattedPrice ?? "", product.id, product.price);
+      }
       if (result.changes === 0) {
         insert.run(product.id, JSON.stringify(product), product.stockMain, product.stockAvailable,
           product.reliability, product.restockDate, now, now);

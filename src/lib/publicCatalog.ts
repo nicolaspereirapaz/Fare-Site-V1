@@ -33,6 +33,10 @@ export type PublicCatalogProduct = {
   variants: PublicCatalogVariant[];
   /** Somente na campanha: preço unitário de referência já calculado (nunca o custo). */
   startingPrice?: number | null;
+  /** Código Fare Foto (ex.: X10001), só para clientes cadastrados. Nunca o código do fornecedor. */
+  code?: string;
+  /** Quantidade usada no preço do card quando o cliente filtrou por quantidade (padrão: 100 un.). */
+  priceQuantity?: number;
 };
 
 export function publicProductId(internalCode: string): string {
