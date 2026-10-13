@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Document, Font, Image, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
-import { brl, type Proposal } from "@/lib/proposals/proposal";
+import { brl, proposalReplyLinks, type Proposal } from "@/lib/proposals/proposal";
 
 /** PDF A4 da proposta. Nome do produto é link para a página dele no site. */
 
@@ -31,7 +31,7 @@ function registerFonts() {
 const C = { navy: "#2B3854", ink: "#1d2447", lilac: "#656FA4", orange: "#F65C2D", line: "#e4e5ea", muted: "#737889", text: "#343a4d", soft: "#f4f5f8" };
 
 const s = StyleSheet.create({
-  page: { paddingTop: 40, paddingBottom: 56, paddingHorizontal: 44, fontFamily: "DM Sans", fontSize: 9.5, color: C.text, lineHeight: 1.4 },
+  page: { paddingTop: 40, paddingBottom: 32, paddingHorizontal: 44, fontFamily: "DM Sans", fontSize: 9.5, color: C.text, lineHeight: 1.4 },
   top: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: 16, borderBottomWidth: 1.5, borderBottomColor: C.navy },
   logo: { width: 96, height: 45 },
   title: { fontFamily: "Outfit", fontWeight: 700, fontSize: 19, lineHeight: 1.2, color: C.ink, textAlign: "right" },
@@ -52,7 +52,10 @@ const s = StyleSheet.create({
   colUnit: { width: 68, textAlign: "right" },
   colTotal: { width: 78, textAlign: "right" },
   thumb: { width: 44, height: 44, objectFit: "contain", borderWidth: 0.75, borderColor: C.line, borderRadius: 5, marginRight: 10 },
-  thumbBlank: { width: 44, height: 44, borderRadius: 5, backgroundColor: C.soft, marginRight: 10 },
+  /** Item sem foto: espaço vazio do tamanho da foto, para os nomes ficarem alinhados. */
+  thumbSpace: { width: 44, marginRight: 10 },
+  /** Empurra condições + WhatsApp para o pé da página. */
+  spacer: { flexGrow: 1 },
   prodName: { fontSize: 10.5, fontWeight: 700, color: C.ink, textDecoration: "none" },
   prodLink: { fontSize: 10.5, fontWeight: 700, color: C.navy, textDecoration: "underline" },
   small: { fontSize: 8.5, color: C.muted, marginTop: 1.5 },
@@ -69,12 +72,18 @@ const s = StyleSheet.create({
   cta: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: C.ink, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16 },
   ctaTitle: { color: "#fff", fontSize: 11, fontWeight: 700 },
   ctaSub: { color: "#c9cde0", fontSize: 8.5, marginTop: 2 },
-  ctaPhone: { color: "#fff", fontSize: 11, fontWeight: 700, textDecoration: "none" },
-  foot: { position: "absolute", bottom: 24, left: 44, right: 44, flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: C.muted, borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 6 },
+  ctaButtons: { flexDirection: "row", alignItems: "center" },
+  /** Botões são links inteiros (react-pdf: estilo no Link + Text dentro). */
+  btnApprove: { backgroundColor: C.orange, borderRadius: 6, paddingVertical: 8, paddingHorizontal: 16, textDecoration: "none" },
+  btnTalk: { borderWidth: 1, borderColor: "#8d93b5", borderRadius: 6, paddingVertical: 7, paddingHorizontal: 14, marginLeft: 8, textDecoration: "none" },
+  btnText: { color: "#fff", fontSize: 10, fontWeight: 700 },
+  foot: { marginTop: 14, flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: C.muted, borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 6 },
 });
 
 function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string }) {
   const { customer } = proposal;
+  const anyPhoto = proposal.items.some((item) => item.imageUrl);
+  const links = proposalReplyLinks(proposal);
   return (
     <Document author="Fare Foto" creator="Fare Foto" title={`Proposta ${proposal.code}`}>
       <Page size="A4" style={s.page}>
@@ -111,7 +120,7 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           <View key={index} style={s.row} wrap={false}>
             <View style={s.colProd}>
               {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              {item.imageUrl ? <Image src={item.imageUrl} style={s.thumb} /> : <View style={s.thumbBlank} />}
+              {item.imageUrl ? <Image src={item.imageUrl} style={s.thumb} /> : anyPhoto ? <View style={s.thumbSpace} /> : null}
               <View style={{ flex: 1 }}>
                 {item.url ? <Link src={item.url} style={s.prodLink}>{item.name}</Link> : <Text style={s.prodName}>{item.name}</Text>}
                 {item.code || item.color ? (
@@ -132,7 +141,9 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
         </View>
 
-        <View style={s.terms} wrap={false}>
+        <View style={s.spacer} />
+        <View wrap={false}>
+        <View style={s.terms}>
           {proposal.terms.map((term) => (
             <View key={term.title} style={s.term}>
               <Text style={s.label}>{term.title}</Text>
@@ -142,17 +153,21 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
         </View>
         {proposal.items.some((item) => item.url) ? <Text style={s.hint}>Clique no nome do produto para ver fotos e detalhes no site.</Text> : null}
 
-        <View style={s.cta} wrap={false}>
+        <View style={s.cta}>
           <View>
-            <Text style={s.ctaTitle}>Para aprovar, é só responder no WhatsApp.</Text>
-            <Text style={s.ctaSub}>Atendimento: {proposal.seller} · Fare Foto</Text>
+            <Text style={s.ctaTitle}>Gostou? Aprove pelo WhatsApp.</Text>
+            <Text style={s.ctaSub}>Atendimento: {proposal.seller} · {proposal.company.whatsapp}</Text>
           </View>
-          <Link src={`https://wa.me/55${proposal.company.whatsapp.replace(/\D/g, "")}`} style={s.ctaPhone}>{proposal.company.whatsapp}</Link>
+          <View style={s.ctaButtons}>
+            <Link src={links.approve} style={s.btnApprove}><Text style={s.btnText}>Aprovar</Text></Link>
+            <Link src={links.talk} style={s.btnTalk}><Text style={s.btnText}>Falar com atendente</Text></Link>
+          </View>
         </View>
-
-        <View style={s.foot} fixed>
+        {/* Rodapé no fluxo (o "fixed" absoluto do react-pdf não era desenhado). */}
+        <View style={s.foot}>
           <Text>{proposal.company.name} · {proposal.company.document} · {proposal.company.address}</Text>
-          <Text render={({ pageNumber, totalPages }) => (totalPages > 1 ? `${proposal.company.site} · ${pageNumber}/${totalPages}` : proposal.company.site)} />
+          <Text>{proposal.company.site}</Text>
+        </View>
         </View>
       </Page>
     </Document>

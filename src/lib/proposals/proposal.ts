@@ -140,3 +140,13 @@ export function proposalWhatsAppUrl(proposal: Proposal): string | null {
   const full = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
   return buildWhatsAppUrl(full, proposalWhatsAppText(proposal));
 }
+
+/** Botões do PDF: o cliente responde para o WhatsApp da Fare Foto com a mensagem já escrita. */
+export function proposalReplyLinks(proposal: Proposal): { approve: string; talk: string } {
+  const store = `55${proposal.company.whatsapp.replace(/\D/g, "")}`;
+  const hello = `Olá, ${proposal.seller}!`;
+  return {
+    approve: buildWhatsAppUrl(store, `${hello} Aprovo a proposta ${proposal.code} (total ${brl(proposal.total)}). Como seguimos?`),
+    talk: buildWhatsAppUrl(store, `${hello} Quero falar sobre a proposta ${proposal.code}.`),
+  };
+}

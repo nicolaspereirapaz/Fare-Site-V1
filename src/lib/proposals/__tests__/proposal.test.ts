@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QuoteCartItem } from "@/lib/commerce";
-import { buildProposal, proposalWhatsAppText, proposalWhatsAppUrl } from "@/lib/proposals/proposal";
+import { buildProposal, proposalReplyLinks, proposalWhatsAppText, proposalWhatsAppUrl } from "@/lib/proposals/proposal";
 import type { Quote } from "@/lib/quotes/repository";
 
 const ITEMS: QuoteCartItem[] = [
@@ -97,5 +97,18 @@ describe("mensagem do WhatsApp", () => {
     expect(url.origin + url.pathname).toBe("https://wa.me/5511988887777");
     expect(url.searchParams.get("text")).toBe(proposalWhatsAppText(proposal));
     expect(proposalWhatsAppUrl({ ...proposal, customer: { ...proposal.customer, phone: "" } })).toBeNull();
+  });
+});
+
+describe("botões do PDF (cliente responde para a Fare Foto)", () => {
+  it("Aprovar e Falar com atendente abrem o WhatsApp da loja com a mensagem pronta", () => {
+    const proposal = buildProposal(QUOTE, { seller: "Bia", now: NOW, siteUrl: SITE });
+    const links = proposalReplyLinks(proposal);
+    const approve = new URL(links.approve);
+    const talk = new URL(links.talk);
+    expect(approve.origin + approve.pathname).toBe("https://wa.me/5511953147703");
+    expect(talk.origin + talk.pathname).toBe("https://wa.me/5511953147703");
+    expect(approve.searchParams.get("text")).toBe("Olá, Bia! Aprovo a proposta ORC-B84713 (total R$ 1.983,00). Como seguimos?");
+    expect(talk.searchParams.get("text")).toBe("Olá, Bia! Quero falar sobre a proposta ORC-B84713.");
   });
 });
