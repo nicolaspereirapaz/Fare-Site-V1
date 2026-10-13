@@ -187,3 +187,16 @@ conta Resend + domínio verificado para o envio real de e-mails.
 - Clientes do painel: tabela `fare_panel_customers` (`src/lib/customers/repository.ts`); WhatsApp/e-mail/CPF-CNPJ únicos contra contas do site e painel (409 DUPLICATE). Dono do orçamento = `painel:<id>`; aparece em "Minha conta" quando a conta do site tem o mesmo e-mail CONFIRMADO.
 - `fare_quotes` ganhou `created_by` (null = site) e `internal_notes`. Card do quadro mostra "Site" ou "Feito por <nome>".
 - QA: `scratch/fornecedores/editor_check.js` e `editor_check2.js` (criam vendedor QA; apagar depois `fare_panel_customers`/`fare_quotes` de `@exemplo.com` e `npm run -s equipe -- remover`).
+
+## Proposta, desconto, preço à mão, sem cliente e quadro Trello (2026-10-13)
+- Proposta (PDF + WhatsApp): `src/lib/proposals/{proposal.ts,pdf.tsx}`; rota `quotes/[id]/proposta` (só equipe). Botões Aprovar/Falar com atendente vão para o WhatsApp da loja (7703). Nunca leva custo, fornecedor, SKU, observação interna. Enviar move "Aguardando orçamento" → "Em negociação".
+- Preço por peça arredondado SEMPRE PARA CIMA no centavo (`unitarioParaCima` em `backoffice/pricing.ts`): site, carrinho, servidor, orçamento e landing do Outubro Rosa (`outubro-rosa/js/core.js`).
+- Desconto no total (% ou R$): `src/lib/quotes/discount.ts`; coluna `discount_json` em `fare_quotes` e `fare_orders`; `total_cents` já descontado; o pedido criado no pagamento herda o desconto. Aparece no editor, painel, PDF, WhatsApp e Minha conta.
+- Valores digitados à mão (só equipe): `costOverride` (custo do produto), `priceOverride` (preço por peça; margem segue sobre o custo real) e `custoOverride` por gravação. Gravados em `costing.manual` / `gravacoes[].manual`.
+- Orçamento sem cliente: dono `sem-cliente` ("Cliente a definir", `NO_CUSTOMER_OWNER` em `quotes/quoteCode.ts`); cliente escolhido depois na edição (só se ainda não tinha). PDF sai sem o bloco "Para".
+- Gravação da Spot em níveis Componente → Local → Técnica → Área → Nº de cores (`suppliers/spotOptionPicker.ts`).
+- Editor no fluxo da brinde.me: busca → janela "Configuração do produto" (`components/staff/ProductConfigModal.tsx`) → Adicionar; lápis reabre. Tipos/utilidades em `quoteEditorShared.ts`.
+- Quadro estilo Trello (`@dnd-kit/core`): arrastar entre colunas; o navegador grava um PATCH por etapa do caminho (`backoffice/boardMoves.ts`), o servidor valida cada um. Cartão sem botões; clique abre o detalhe, que tem "Etapa" + ação final (Concluir pedido / Pagamento recebido). Total por coluna.
+- Pagamento: débito saiu dos pedidos novos (`CHECKOUT_PAYMENT_METHODS`); proposta diz "Pix ou boleto faturado".
+- QA (scratch/fornecedores): `desconto_check.js`, `modal_check.js`, `kanban_check.js`, `sem_cliente_check.js`, `spot_check.js`, `proposal_check2.js`. Todos criam vendedor QA e apagam o que criaram.
+- Pendências do usuário: filtros da busca de produto iguais aos da brinde.me (precisa de prints); hospedagem; e-mail real; preço da Asia; critério de produtos parecidos.
