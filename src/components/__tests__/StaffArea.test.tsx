@@ -81,6 +81,9 @@ describe("barra da equipe", () => {
     render(<StaffTopbar name="Joana Lima" role="vendedor" />);
     expect(screen.getByText("Joana Lima")).toBeInTheDocument();
     expect(screen.getByText("Vendedor")).toBeInTheDocument();
+    // Logo padrão do site (o mesmo do topo da loja), não a versão laranja para fundo escuro.
+    const logo = screen.getByAltText("Fare Foto");
+    expect(logo.getAttribute("src")).toContain("/images/fare-foto-logo-slogan.svg");
     await user.click(screen.getByRole("button", { name: "Sair" }));
     await waitFor(() => expect(signOut).toHaveBeenCalled());
     expect(push).toHaveBeenCalledWith("/equipe/entrar");

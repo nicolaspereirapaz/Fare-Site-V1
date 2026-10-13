@@ -4242,15 +4242,18 @@ aside.checkout-card .checkout-mode > label.active {
   top: 0;
   z-index: 20;
   border-bottom: 1px solid var(--line);
-  background: var(--navy-dark);
+  background: white;
 }
 
 .staff-topbar .staff-brand {
-  color: white;
+  color: var(--navy-dark);
 }
 
 .staff-topbar .staff-brand span {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: var(--line);
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .staff-topbar-inner {
@@ -4265,7 +4268,7 @@ aside.checkout-card .checkout-mode > label.active {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: white;
+  color: var(--navy-dark);
   font-size: 0.9rem;
 }
 
@@ -4274,22 +4277,20 @@ aside.checkout-card .checkout-mode > label.active {
 }
 
 .staff-role {
-  border-radius: 999px;
-  padding: 3px 10px;
-  background: rgba(255, 255, 255, 0.14);
-  font-size: 0.76rem;
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .staff-signout {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 999px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 7px 14px;
-  background: transparent;
-  color: white;
+  background: white;
+  color: var(--navy-dark);
   font: inherit;
   font-size: 0.84rem;
   font-weight: 700;
@@ -4351,7 +4352,11 @@ aside.checkout-card .checkout-mode > label.active {
 }
 
 .staff-topbar .staff-brand img {
-  height: 42px;
+  height: 50px;
+}
+
+.staff-signout:hover:not(:disabled) {
+  border-color: var(--navy);
 }
 
 .staff-logo-light {
