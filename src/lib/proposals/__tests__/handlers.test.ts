@@ -64,6 +64,14 @@ describe("proposta: rotas do painel", () => {
 });
 
 describe("marcar proposta enviada", () => {
+  it("não marca se o orçamento mudou depois de lido (ex.: encerrado enquanto as fotos carregavam)", () => {
+    const db = new DatabaseSync(":memory:");
+    const quote = createManualQuote(db, { ownerId: "u1", customer, items: [item], createdBy: "Bia", internalNotes: "", idempotencyKey: "k" });
+    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "em_negociacao" });
+    expect(() => markProposalSent(db, quote.id, new Date(), quote.updatedAt)).toThrow(/mudou/);
+    expect(findQuoteById(db, quote.id)!.proposalSentAt).toBeNull();
+  });
+
   it("em negociação ou aguardando pagamento: só guarda a data, sem mudar a situação", () => {
     const db = new DatabaseSync(":memory:");
     const quote = createManualQuote(db, { ownerId: "u1", customer, items: [item], createdBy: "Bia", internalNotes: "", idempotencyKey: "k" });

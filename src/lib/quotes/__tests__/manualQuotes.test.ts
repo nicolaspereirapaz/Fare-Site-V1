@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { QuoteCartItem } from "@/lib/commerce";
-import { createManualQuote, createQuote, findQuoteById, listQuotesByOwners, replaceQuoteItems, updateQuoteStatus } from "@/lib/quotes/repository";
+import { createManualQuote, createQuote, findQuoteById, listQuotesByOwners, markProposalSent, replaceQuoteItems, updateQuoteStatus } from "@/lib/quotes/repository";
 
 const item = (unitPrice: number | null, quantity = 10): QuoteCartItem => ({
   id: "i1", productName: "Caneta", slug: "brindes/cf93", quantity, selections: { "Variação": "Azul" }, artworkName: null, unitPrice,
@@ -50,6 +50,31 @@ describe("editar os itens de um orçamento", () => {
     updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "encerrado" });
     const fresh = findQuoteById(db, quote.id)!;
     expect(() => replaceQuoteItems(db, { quoteId: quote.id, items: [item(1)], internalNotes: "", expectedUpdatedAt: fresh.updatedAt })).toThrow(/não pode mais/);
+  });
+});
+
+describe("proteções contra corrida", () => {
+  it("duas edições no mesmo milissegundo: a segunda (versão velha) é recusada", () => {
+    const db = new DatabaseSync(":memory:");
+    const quote = createQuote(db, { userId: "u1", idempotencyKey: "k", customer, items: [item(null)] });
+    // Relógio parado: a 1ª edição cai no mesmo milissegundo da criação.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(quote.updatedAt));
+    try {
+      replaceQuoteItems(db, { quoteId: quote.id, items: [item(1)], internalNotes: "A", expectedUpdatedAt: quote.updatedAt });
+      expect(() => replaceQuoteItems(db, { quoteId: quote.id, items: [item(2)], internalNotes: "B", expectedUpdatedAt: quote.updatedAt })).toThrow(/outra pessoa/);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(findQuoteById(db, quote.id)!.internalNotes).toBe("A");
+  });
+
+  it("proposta não é marcada como enviada se o orçamento foi encerrado antes", () => {
+    const db = new DatabaseSync(":memory:");
+    const quote = createQuote(db, { userId: "u1", idempotencyKey: "k", customer, items: [item(1)] });
+    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "encerrado" });
+    expect(() => markProposalSent(db, quote.id)).toThrow(/fechado/i);
+    expect(findQuoteById(db, quote.id)!.proposalSentAt).toBeNull();
   });
 });
 

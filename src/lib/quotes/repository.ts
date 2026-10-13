@@ -182,6 +182,16 @@ export function createManualQuote(
 
 const EDITABLE_STATUSES = ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"];
 
+/**
+ * Nova "versão" do orçamento: sempre maior que a anterior, mesmo se duas gravações caírem
+ * no mesmo milissegundo (senão a segunda edição com a versão velha passaria).
+ */
+function nextVersion(previous: string): string {
+  const now = Date.now();
+  const last = Date.parse(previous);
+  return new Date(Number.isFinite(last) && now <= last ? last + 1 : now).toISOString();
+}
+
 /** Equipe edita os itens (e gravações) de um orçamento aberto; recusa se alguém mudou antes. */
 export function replaceQuoteItems(
   database: DatabaseSync,
@@ -192,7 +202,7 @@ export function replaceQuoteItems(
   if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
   if (!EDITABLE_STATUSES.includes(current.status)) throw new Error("Este orçamento não pode mais ser alterado.");
   const total = totalCents(input.items);
-  const now = new Date().toISOString();
+  const now = nextVersion(current.updatedAt);
   const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
     .run(JSON.stringify(input.items), total, input.internalNotes, now, current.id, input.expectedUpdatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
@@ -200,14 +210,21 @@ export function replaceQuoteItems(
 }
 
 /** Proposta enviada: guarda a data e, se ainda aguardava orçamento, passa para "Em negociação". */
-export function markProposalSent(database: DatabaseSync, quoteId: string, now: Date = new Date()): Quote {
+export function markProposalSent(database: DatabaseSync, quoteId: string, now: Date = new Date(), expectedUpdatedAt?: string): Quote {
   runQuoteMigrations(database);
   const current = findQuoteById(database, quoteId);
   if (!current) throw new Error(`Orçamento "${quoteId}" não encontrado.`);
+  // A proposta foi montada com a versão lida antes (fotos demoram); se mudou, não marca.
+  if (expectedUpdatedAt && current.updatedAt !== expectedUpdatedAt) throw new Error("O orçamento mudou enquanto a proposta era gerada. Abra de novo.");
+  if (!EDITABLE_STATUSES.includes(current.status)) throw new Error("Este orçamento já foi fechado.");
   const at = now.toISOString();
+  const version = nextVersion(current.updatedAt);
   const status = current.status === "aguardando_orcamento" ? "em_negociacao" : current.status;
-  database.prepare("UPDATE fare_quotes SET proposal_sent_at = ?, status = ?, updated_at = ? WHERE id = ?").run(at, status, at, quoteId);
-  return { ...current, status, proposalSentAt: at, updatedAt: at };
+  // Só marca se ninguém mexeu desde a leitura (encerrar/editar no meio do envio).
+  const result = database.prepare("UPDATE fare_quotes SET proposal_sent_at = ?, status = ?, updated_at = ? WHERE id = ? AND updated_at = ? AND status = ?")
+    .run(at, status, version, quoteId, current.updatedAt, current.status);
+  if (Number(result.changes) !== 1) throw new Error("O orçamento mudou enquanto a proposta era gerada. Abra de novo.");
+  return { ...current, status, proposalSentAt: at, updatedAt: version };
 }
 
 export function listAllQuotes(database: DatabaseSync): Quote[] {
@@ -230,7 +247,7 @@ export function updateQuoteStatus(database: DatabaseSync, input: { quoteId: stri
   // Virar pedido cria o pedido junto (convertQuoteToOrder); nunca só troca a situação.
   if (input.nextStatus === "virou_pedido") throw new InvalidQuoteTransitionError(current.status, input.nextStatus);
 
-  const now = new Date().toISOString();
+  const now = nextVersion(current.updatedAt);
   const result = database.prepare("UPDATE fare_quotes SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
     .run(input.nextStatus, now, input.quoteId, current.status);
   if (Number(result.changes) !== 1) throw new InvalidQuoteTransitionError(current.status, input.nextStatus);
@@ -256,7 +273,7 @@ export function priceQuoteItem(
     ? { ...item, quantity: input.quantity, quantityRange: undefined, unitPrice: input.unitPrice, costing: input.costing }
     : item));
   const total = totalCents(items);
-  const now = new Date().toISOString();
+  const now = nextVersion(current.updatedAt);
   const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
     .run(JSON.stringify(items), total, now, current.id, current.updatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");

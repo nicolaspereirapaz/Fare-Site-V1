@@ -77,6 +77,13 @@ describe("itens do orçamento montados no servidor", () => {
     expect(totals).toMatchObject({ total: 252, pending: 2 });
   });
 
+  it("cor que não existe mais vira erro do item, não troca de cor sozinha", () => {
+    const { items, preview } = buildQuoteItems([{ id: "a", source: "catalogo", publicId: "cf93", variant: "Cor removida", quantity: 100, gravacoes: [] }], lookup, actor, NOW);
+    expect(items).toHaveLength(0);
+    expect(preview[0]).toMatchObject({ id: "a", ok: false });
+    expect((preview[0] as { error: string }).error).toMatch(/cor/i);
+  });
+
   it("avisa quando a cor escolhida não tem estoque para a quantidade", () => {
     const { preview } = buildQuoteItems([{ id: "a", source: "catalogo", publicId: "cf93", variant: "Preto", quantity: 300, gravacoes: [] }], lookup, actor, NOW);
     expect(preview[0]).toMatchObject({ ok: true, stockWarning: "Estoque da cor: 120 un." });

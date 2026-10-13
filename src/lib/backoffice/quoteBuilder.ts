@@ -137,8 +137,9 @@ export function buildQuoteItems(
         if (draft.name.length < 2) throw new Error("Informe o nome do item.");
         if (!(draft.cost >= 0)) throw new Error("Informe o custo por peça do item.");
       }
-      const variant = product && draft.source === "catalogo" ? product.variants.find((entry) => entry.label === draft.variant) ?? product.variants[0] : null;
-      if (product && !variant) throw new Error("Produto sem cores disponíveis.");
+      const variant = product && draft.source === "catalogo" ? product.variants.find((entry) => entry.label === draft.variant) ?? null : null;
+      // Nunca troca de cor sozinho: a cor escolhida pode ter saído do catálogo.
+      if (product && !variant) throw new Error(product.variants.length ? `A cor "${draft.source === "catalogo" ? draft.variant : ""}" não está mais disponível. Escolha outra.` : "Produto sem cores disponíveis.");
       const productCost = variant ? variant.cost : (draft as Extract<DraftItem, { source: "avulso" }>).cost;
 
       const calc = calcularItemOrcamento({

@@ -53,7 +53,12 @@ export function createProposalHandlers(deps: ProposalDeps) {
     async send(request: Request, quoteId: string) {
       const ready = await prepare(request, quoteId);
       if (ready.error) return ready.error;
-      const updated = markProposalSent(deps.database(), quoteId);
+      let updated;
+      try {
+        updated = markProposalSent(deps.database(), quoteId, new Date(), ready.quote.updatedAt);
+      } catch (error) {
+        return json({ error: "QUOTE_CHANGED", message: error instanceof Error ? error.message : "O orçamento mudou." }, 409);
+      }
       return json({
         text: proposalWhatsAppText(ready.proposal),
         whatsappUrl: proposalWhatsAppUrl(ready.proposal),
