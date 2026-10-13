@@ -108,6 +108,16 @@ describe("cadastro pelo painel sem duplicar", () => {
   });
 });
 
+describe("contas do site com contato repetido (o site não bloqueia; a equipe é avisada)", () => {
+  it("na busca, aponta quem mais usa o mesmo WhatsApp ou CPF/CNPJ", () => {
+    siteAccount("u3", "Carlos Lima", "carlos@padariaboavista.com.br", { phone: "11 98888 7777", document: "11222333000181", company: "Padaria Boa Vista Ltda" });
+    const [ana] = searchCustomers(db, "Ana Souza");
+    expect(ana.alsoUsedBy).toEqual([{ name: "Carlos Lima", by: ["WhatsApp", "CPF/CNPJ"] }]);
+    const [paula] = searchCustomers(db, "Paula");
+    expect(paula.alsoUsedBy).toBeUndefined();
+  });
+});
+
 describe("vínculo com a conta do site", () => {
   it("cliente do painel que depois cria conta com o mesmo e-mail passa a ver os orçamentos dele", () => {
     const panel = createPanelCustomer(db, { name: "Marcos Teixeira", phone: "(11) 95555-8899", email: "marcos@teixeira.com.br" }, actor);

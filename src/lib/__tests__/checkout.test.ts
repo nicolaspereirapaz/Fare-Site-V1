@@ -188,6 +188,7 @@ describe("checkout protegido", () => {
 
   it.each([
     ["pagamento não permitido", { ...body, paymentMethod: "dinheiro" }],
+    ["cartão de débito (não aceito mais)", { ...body, paymentMethod: "cartao_debito" }],
     ["chave de idempotência ausente", { ...body, idempotencyKey: "" }],
     ["quantidade inválida", { ...body, items: [{ ...body.items[0], quantity: 0 }] }],
     ["preço negativo", { ...body, items: [{ ...body.items[0], unitPrice: -1 }] }],

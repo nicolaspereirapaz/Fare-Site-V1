@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
 /* Tipos vindos da API do editor (custo e estoque só para a equipe). */
-type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; createdBy?: string };
+type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; createdBy?: string; alsoUsedBy?: Array<{ name: string; by: string[] }> };
 type Duplicate = Customer & { by: string[] };
 type SpotOption = { id: string; tecnica: string; local: string; componente: string; area: string; cores: number; padrao: boolean };
 type Product = {
@@ -414,6 +414,11 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
             ) : (
               <CustomerPicker onPick={(picked) => { setCustomer(picked); setChangingCustomer(false); }} />
             )}
+            {customer && !changingCustomer && !fixedCustomer && customer.alsoUsedBy?.length ? (
+              <p className="qe-note-warn">
+                {customer.alsoUsedBy.map((other) => `${other.by.join(" e ")} também está no cadastro de ${other.name}`).join("; ")}. Confira se é a mesma pessoa.
+              </p>
+            ) : null}
           </section>
 
           <section className="qe-card">

@@ -21,6 +21,8 @@ export type CustomerSummary = {
   email: string;
   document: string;
   createdBy?: string;
+  /** Outros cadastros com o mesmo WhatsApp ou CPF/CNPJ (o site não bloqueia; a equipe é avisada). */
+  alsoUsedBy?: Array<{ name: string; by: Array<"WhatsApp" | "CPF/CNPJ"> }>;
 };
 
 export type DuplicateMatch = CustomerSummary & { by: Array<"WhatsApp" | "e-mail" | "CPF/CNPJ"> };
@@ -120,13 +122,25 @@ export function searchCustomers(database: DatabaseSync, query: string, limit = 8
   const digits = normalizeDocument(query);
   const numeric = /^[\d\s().+\-/]+$/.test(query.trim()) || /\d{3,}/.test(digits);
 
-  return allCustomers(database)
+  const everyone = allCustomers(database);
+  return everyone
     .filter(({ summary, phone, document }) => {
       const text = fold(`${summary.name} ${summary.company} ${summary.email}`);
       if (words.every((word) => text.includes(word))) return true;
       return numeric && digits.length >= 3 && (phone.includes(digits) || document.includes(digits));
     })
-    .map(({ summary }) => summary)
+    .map((customer) => {
+      const others = everyone
+        .filter((other) => other.summary.ref !== customer.summary.ref)
+        .map((other) => {
+          const by: Array<"WhatsApp" | "CPF/CNPJ"> = [];
+          if (customer.phone && other.phone === customer.phone) by.push("WhatsApp");
+          if (customer.document && other.document === customer.document) by.push("CPF/CNPJ");
+          return { name: other.summary.name, by };
+        })
+        .filter((other) => other.by.length);
+      return others.length ? { ...customer.summary, alsoUsedBy: others } : customer.summary;
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     .slice(0, limit);
 }

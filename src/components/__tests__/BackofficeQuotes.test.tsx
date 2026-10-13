@@ -144,7 +144,7 @@ describe("painel: aba Orçamentos", () => {
     await waitFor(() => expect(screen.queryByText("Comprou no Site")).not.toBeInTheDocument());
   });
 
-  it("'Ver detalhes' abre a janela com itens, observações, WhatsApp e as ações extras", async () => {
+  it("'Ver detalhes' abre a janela com itens, observações, proposta e as ações extras", async () => {
     const fetchMock = stubApi({ quotes: [{ ...QUOTE, status: "aguardando_pagamento" }] });
     const user = await openQuotesTab();
     const card = await cardOf("Cliente Orçamento");
@@ -153,7 +153,9 @@ describe("painel: aba Orçamentos", () => {
     const dialog = screen.getByRole("dialog", { name: "Cliente Orçamento" });
     expect(within(dialog).getByText("100 × Caneta Plástica · Azul")).toBeInTheDocument();
     expect(within(dialog).getByText("Até dia 20")).toBeInTheDocument();
-    expect(within(dialog).getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("href", expect.stringContaining("ORC-3F7A2C"));
+    // Só um caminho de WhatsApp: o da proposta (o botão solto do rodapé saiu).
+    expect(within(dialog).queryByRole("link", { name: /^WhatsApp$/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /Enviar no WhatsApp/ })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /Encerrar orçamento/ })).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "Voltar para Em negociação" }));

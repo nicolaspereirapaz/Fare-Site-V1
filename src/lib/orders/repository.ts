@@ -19,6 +19,9 @@ export const PAYMENT_METHODS = [
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** Formas aceitas em pedidos NOVOS (débito saiu; pedidos antigos continuam válidos). */
+export const CHECKOUT_PAYMENT_METHODS: readonly PaymentMethod[] = ["pix", "cartao_credito", "boleto", "faturamento_empresa"];
+
 export type CreateOrderInput = {
   userId: string;
   idempotencyKey: string;

@@ -165,7 +165,7 @@ describe("CartView", () => {
     expect(payment).toHaveValue("");
     expect(screen.getByRole("option", { name: "Pix" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Cartão de crédito" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Cartão de débito" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Cartão de débito" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Boleto" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Faturamento para empresa" })).toBeInTheDocument();
     expect(screen.getByText(/faturamento para empresa está sujeito à aprovação/i)).toBeInTheDocument();

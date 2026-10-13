@@ -233,11 +233,6 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
               <Link className="kb-edit-quote" href={`/equipe/orcamentos/${openQuote.id}`}>
                 <PencilLine aria-hidden="true" size={15} /> Editar itens e gravações
               </Link>
-              {openQuote.customerPhone ? (
-                <a className="kb-whatsapp" href={whatsAppReplyUrl(openQuote.customerName, openQuote.customerPhone, openQuote.code, "orçamento")} rel="noopener noreferrer" target="_blank">
-                  <MessageCircle aria-hidden="true" size={15} /> WhatsApp
-                </a>
-              ) : null}
               <button className="kb-danger" disabled={updatingId === openQuote.id} onClick={() => changeQuote(openQuote, "encerrado")} type="button">
                 <XCircle aria-hidden="true" size={15} /> Encerrar orçamento
               </button>

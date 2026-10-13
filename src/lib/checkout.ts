@@ -4,7 +4,7 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/orders/labels";
 import { orderCode } from "@/lib/orders/orderCode";
 import type { SessionReader } from "@/lib/auth/session";
 import type { CreateOrderInput, Order, PaymentMethod } from "@/lib/orders/repository";
-import { PAYMENT_METHODS } from "@/lib/orders/repository";
+import { CHECKOUT_PAYMENT_METHODS } from "@/lib/orders/repository";
 import { quoteCode } from "@/lib/quotes/quoteCode";
 import type { CreateQuoteInput, Quote } from "@/lib/quotes/repository";
 
@@ -85,7 +85,7 @@ function isQuoteRequestBody(value: unknown): value is QuoteRequestBody {
 function isCheckoutBody(value: unknown): value is CheckoutBody {
   return isQuoteRequestBody(value)
     && typeof (value as Record<string, unknown>).paymentMethod === "string"
-    && PAYMENT_METHODS.includes((value as Record<string, unknown>).paymentMethod as PaymentMethod);
+    && CHECKOUT_PAYMENT_METHODS.includes((value as Record<string, unknown>).paymentMethod as PaymentMethod);
 }
 
 /** Guarda WhatsApp/empresa do pedido na conta (só completa o que ainda está vazio). */

@@ -131,3 +131,4 @@
   .qe-gform-grid, .qe-grid-3, .qe-loose-grid { grid-template-columns: 1fr 1fr; }
   .qe-addbar { grid-template-columns: 1fr; }
 }
+.qe-note-warn { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: #fff6e5; color: #8a5a00; font-size: 13px; line-height: 1.4; }

@@ -245,7 +245,6 @@ export function CartView() {
                   <option value="">Selecione</option>
                   <option value="pix">Pix</option>
                   <option value="cartao_credito">Cartão de crédito</option>
-                  <option value="cartao_debito">Cartão de débito</option>
                   <option value="boleto">Boleto</option>
                   <option value="faturamento_empresa">Faturamento para empresa</option>
                 </select>
