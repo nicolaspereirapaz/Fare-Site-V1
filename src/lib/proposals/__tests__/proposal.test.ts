@@ -42,8 +42,12 @@ describe("proposta para o cliente", () => {
     });
     expect(proposal.items[1]).toMatchObject({ name: "Banner lona 90 × 120 cm", url: null, code: null, color: null, engravings: [] });
     expect(proposal.terms.map((term) => term.title)).toEqual(["Prazo de produção", "Pagamento", "Frete", "Validade"]);
-    expect(proposal.terms[0].text).toBe("7 dias após a aprovação da arte e o sinal de 50%.");
-    expect(proposal.terms[1].text).toBe("Pix; boleto faturado sob análise de CNPJ; cartão de crédito via simulação. Início da produção mediante sinal de 50%.");
+    expect(proposal.terms[0].text).toBe("7 dias após a aprovação da arte.");
+    expect(proposal.terms[1].text).toBe("Pix, boleto faturado (sob análise de CNPJ) ou cartão de crédito (via simulação).");
+    expect(proposal.terms[3].text).toBe("Até 20/10/2026, sujeita ao estoque do fornecedor.");
+    // O sinal fica em destaque separado, não misturado com o pagamento.
+    expect(proposal.notice).toBe("Início da produção mediante sinal de 50%.");
+    expect(proposal.terms.some((term) => term.text.includes("50%"))).toBe(false);
     expect(proposal.company).toEqual({ name: "Fare Foto", document: "CNPJ 50.344.377/0001-36", address: "Rua do Rosário, 68 - Centro · Jundiaí/SP", whatsapp: "(11) 95314-7703", site: "farefoto.com.br" });
   });
 
@@ -84,7 +88,7 @@ describe("mensagem do WhatsApp", () => {
       "• 2 × Banner lona 90 × 120 cm — R$ 126,00/un.",
       "",
       "*Total: R$ 1.983,00* (frete a combinar)",
-      "Produção: 7 dias após a aprovação da arte e o sinal de 50%.",
+      "Produção: 7 dias após a aprovação da arte. Início mediante sinal de 50%.",
       "Válida até 20/10/2026.",
       "",
       "O PDF com os detalhes vai em seguida. Para aprovar, é só responder por aqui!",

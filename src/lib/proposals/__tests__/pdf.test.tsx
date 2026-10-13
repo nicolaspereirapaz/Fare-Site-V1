@@ -14,6 +14,7 @@ const PROPOSAL: Proposal = {
   ],
   total: 1983,
   terms: [{ title: "Prazo de produção", text: "7 dias." }],
+  notice: "Início da produção mediante sinal de 50%.",
   company: FARE_COMPANY,
 };
 

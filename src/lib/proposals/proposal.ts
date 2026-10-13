@@ -10,8 +10,10 @@ import type { Quote } from "@/lib/quotes/repository";
 
 export const PROPOSAL_VALIDITY_DAYS = 7;
 export const PROPOSAL_TERMS = {
-  production: "7 dias após a aprovação da arte e o sinal de 50%.",
-  payment: "Pix; boleto faturado sob análise de CNPJ; cartão de crédito via simulação. Início da produção mediante sinal de 50%.",
+  production: "7 dias após a aprovação da arte.",
+  payment: "Pix, boleto faturado (sob análise de CNPJ) ou cartão de crédito (via simulação).",
+  /** Destaque separado no PDF, junto do total. */
+  deposit: "Início da produção mediante sinal de 50%.",
   freight: "A combinar.",
 };
 export const FARE_COMPANY = {
@@ -44,6 +46,7 @@ export type Proposal = {
   items: ProposalItem[];
   total: number;
   terms: Array<{ title: string; text: string }>;
+  notice: string;
   company: typeof FARE_COMPANY;
 };
 
@@ -102,8 +105,9 @@ export function buildProposal(
       { title: "Prazo de produção", text: PROPOSAL_TERMS.production },
       { title: "Pagamento", text: PROPOSAL_TERMS.payment },
       { title: "Frete", text: PROPOSAL_TERMS.freight },
-      { title: "Validade", text: `${PROPOSAL_VALIDITY_DAYS} dias (até ${formatDate(new Date(now.getTime() + PROPOSAL_VALIDITY_DAYS * 86_400_000))}). Sujeito ao estoque do fornecedor na data da aprovação.` },
+      { title: "Validade", text: `Até ${formatDate(new Date(now.getTime() + PROPOSAL_VALIDITY_DAYS * 86_400_000))}, sujeita ao estoque do fornecedor.` },
     ],
+    notice: PROPOSAL_TERMS.deposit,
     company: FARE_COMPANY,
   };
 }
@@ -127,7 +131,7 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     ...lines,
     "",
     `*Total: ${brl(proposal.total)}* (frete a combinar)`,
-    `Produção: ${PROPOSAL_TERMS.production}`,
+    `Produção: ${PROPOSAL_TERMS.production} Início mediante sinal de 50%.`,
     `Válida até ${proposal.validUntil}.`,
     "",
     "O PDF com os detalhes vai em seguida. Para aprovar, é só responder por aqui!",

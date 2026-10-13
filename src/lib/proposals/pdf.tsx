@@ -61,15 +61,19 @@ const s = StyleSheet.create({
   small: { fontSize: 8.5, color: C.muted, marginTop: 1.5 },
   engraving: { fontSize: 8.5, color: C.text, marginTop: 2 },
   unit: { fontWeight: 700, color: C.ink },
-  totals: { marginTop: 12, marginLeft: "auto", width: 220 },
+  /** Pé da página: condições à esquerda, totais à direita. */
+  bottom: { flexDirection: "row", alignItems: "flex-end", borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 12 },
+  terms: { flex: 1, paddingRight: 22 },
+  term: { flexDirection: "row", marginBottom: 4 },
+  termTitle: { width: 92, fontSize: 8.5, fontWeight: 700, color: C.lilac },
+  termText: { flex: 1, fontSize: 8.5, color: C.text },
+  notice: { marginTop: 6, alignSelf: "flex-start", backgroundColor: "#fdeee8", color: "#a93c1a", fontSize: 8.5, fontWeight: 700, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8 },
+  totals: { width: 210 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   grand: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: C.navy },
   grandValue: { fontFamily: "Outfit", fontWeight: 700, fontSize: 17, color: C.ink },
-  terms: { marginTop: 24, flexDirection: "row", flexWrap: "wrap" },
-  term: { width: "50%", paddingRight: 16, marginBottom: 10 },
-  termText: { color: C.text },
-  hint: { marginTop: 4, fontSize: 8, color: C.muted },
-  cta: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: C.ink, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16 },
+  hint: { marginTop: 6, fontSize: 7.5, color: C.muted },
+  cta: { marginTop: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: C.ink, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16 },
   ctaTitle: { color: "#fff", fontSize: 11, fontWeight: 700 },
   ctaSub: { color: "#c9cde0", fontSize: 8.5, marginTop: 2 },
   ctaButtons: { flexDirection: "row", alignItems: "center" },
@@ -135,23 +139,26 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           </View>
         ))}
 
-        <View style={s.totals} wrap={false}>
-          <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.total)}</Text></View>
-          <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View>
-          <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
-        </View>
+        {proposal.items.some((item) => item.url) ? <Text style={s.hint}>Clique no nome do produto para ver fotos e detalhes no site.</Text> : null}
 
         <View style={s.spacer} />
         <View wrap={false}>
-        <View style={s.terms}>
-          {proposal.terms.map((term) => (
-            <View key={term.title} style={s.term}>
-              <Text style={s.label}>{term.title}</Text>
-              <Text style={s.termText}>{term.text}</Text>
-            </View>
-          ))}
+        <View style={s.bottom}>
+          <View style={s.terms}>
+            {proposal.terms.map((term) => (
+              <View key={term.title} style={s.term}>
+                <Text style={s.termTitle}>{term.title}</Text>
+                <Text style={s.termText}>{term.text}</Text>
+              </View>
+            ))}
+            <Text style={s.notice}>{proposal.notice}</Text>
+          </View>
+          <View style={s.totals}>
+            <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.total)}</Text></View>
+            <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View>
+            <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
+          </View>
         </View>
-        {proposal.items.some((item) => item.url) ? <Text style={s.hint}>Clique no nome do produto para ver fotos e detalhes no site.</Text> : null}
 
         <View style={s.cta}>
           <View>
