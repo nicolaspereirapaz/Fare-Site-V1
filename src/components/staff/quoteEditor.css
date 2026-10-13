@@ -167,3 +167,7 @@
   .qe-thumb img { width: 58px; height: 58px; }
   .qe-engr, .qe-gform:not(.qe-loose), .qe-indent { margin-left: 0; }
 }
+/* Personalização da Spot: campos em cascata, ocupando a linha toda abaixo de Técnica/Local */
+.qe-spot { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding-top: 12px; border-top: 1px dashed var(--qe-line); }
+@media (max-width: 760px) { .qe-spot { grid-template-columns: 1fr 1fr; } }
+.qe-spot select:disabled { background: #f6f7fa; color: var(--qe-text); opacity: 1; }

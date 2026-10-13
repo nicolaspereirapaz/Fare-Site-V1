@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { spotChoices } from "@/lib/suppliers/spotOptionPicker";
 
 /* Tipos vindos da API do editor (custo e estoque só para a equipe). */
 type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; createdBy?: string; alsoUsedBy?: Array<{ name: string; by: string[] }> };
@@ -55,7 +56,7 @@ const TECNICAS = [
   { tipo: "laser", label: "Laser" },
   { tipo: "dtf-textil", label: "DTF Têxtil" },
   { tipo: "dtf-uv", label: "DTF UV" },
-  { tipo: "spot", label: "Personalização da Spot" },
+  { tipo: "spot", label: "Pelo fornecedor (Spot)" },
   { tipo: "manual", label: "Outra (custo digitado)" },
 ];
 
@@ -315,9 +316,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
       if (!result) return setEngravingCalc(null);
       if (!result.ok) return setEngravingCalc({ text: result.error, error: true });
       const g = result.gravacoes[0];
-      // Laser já vem "R$ x por peça"; folhas/metros mostram a conta e o total.
-      const perPiece = /por peça$/.test(g.detalhe);
-      setEngravingCalc({ text: perPiece ? `${g.detalhe} · ${brl(g.custoTotal)} no total` : `${g.detalhe ? `${g.detalhe} = ` : ""}${brl(g.custoTotal)} · ${brl(g.custoUnitario)} por peça` });
+      // Preço por peça (laser, Spot): custo/peça e total. Folhas/metros (DTF): mostra a conta.
+      const perPiece = /por peça/.test(g.detalhe);
+      setEngravingCalc({ text: perPiece ? `Custo ${brl(g.custoUnitario)} por peça · ${brl(g.custoTotal)} no total` : `${g.detalhe ? `${g.detalhe} = ` : ""}${brl(g.custoTotal)} · ${brl(g.custoUnitario)} por peça` });
     }).catch(() => undefined);
     return () => {
       active = false;
@@ -559,12 +560,14 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
                   {engraving?.itemId === item.id ? (
                     <div className="qe-gform">
                       <div className="qe-gform-grid">
-                        <label className="qe-field"><span>Técnica</span>
+                        <label className="qe-field"><span>Gravação</span>
                           <select onChange={(event) => setEngraving({ ...engraving, tipo: event.target.value })} value={engraving.tipo}>
                             {tecnicas.map((t) => <option key={t.tipo} value={t.tipo}>{t.label}</option>)}
                           </select>
                         </label>
-                        <label className="qe-field"><span>Local</span><input onChange={(event) => setEngraving({ ...engraving, local: event.target.value })} placeholder="Frente, verso, tampa…" value={engraving.local} /></label>
+                        {engraving.tipo !== "spot" ? (
+                          <label className="qe-field"><span>Local</span><input onChange={(event) => setEngraving({ ...engraving, local: event.target.value })} placeholder="Frente, verso, tampa…" value={engraving.local} /></label>
+                        ) : null}
                         {engraving.tipo === "dtf-textil" || engraving.tipo === "dtf-uv" ? (
                           <>
                             <label className="qe-field"><span>Largura (cm)</span><input inputMode="decimal" onChange={(event) => setEngraving({ ...engraving, largura: event.target.value })} value={engraving.largura} /></label>
@@ -577,17 +580,29 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
                             <label className="qe-field"><span>Custo/peça</span><input inputMode="decimal" onChange={(event) => setEngraving({ ...engraving, custo: event.target.value })} placeholder="0,00" value={engraving.custo} /></label>
                           </>
                         ) : null}
-                        {engraving.tipo === "spot" && engravingProduct ? (
-                          <label className="qe-field qe-span-2"><span>Opção da Spot</span>
-                            <select onChange={(event) => setEngraving({ ...engraving, spotId: event.target.value })} value={engraving.spotId}>
-                              {engravingProduct.spotOptions.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.tecnica} · {option.local}{option.componente ? ` (${option.componente})` : ""} · {option.area}{option.cores > 1 ? ` · até ${option.cores} cores` : ""}
-                                </option>
+                        {engraving.tipo === "spot" && engravingProduct ? (() => {
+                          // Componente → Local → Técnica → Área → Nº de cores (cada um só com o que existe acima).
+                          const choices = spotChoices(engravingProduct.spotOptions, { fromId: engraving.spotId });
+                          return (
+                            <div className="qe-spot">
+                              {choices.levels.map((level) => (
+                                <label className="qe-field" key={level.key}>
+                                  <span>{level.label}</span>
+                                  <select
+                                    disabled={level.values.length === 1}
+                                    onChange={(event) => {
+                                      const next = spotChoices(engravingProduct.spotOptions, { fromId: engraving.spotId, [level.key]: event.target.value });
+                                      if (next.option) setEngraving({ ...engraving, spotId: next.option.id });
+                                    }}
+                                    value={level.selected}
+                                  >
+                                    {level.values.map((value) => <option key={value.value} value={value.value}>{value.label}</option>)}
+                                  </select>
+                                </label>
                               ))}
-                            </select>
-                          </label>
-                        ) : null}
+                            </div>
+                          );
+                        })() : null}
                       </div>
                       <div className="qe-gcalc">
                         <p className={engravingCalc?.error ? "qe-error" : undefined}>{engravingCalc?.text ?? "Preencha para calcular."}</p>
