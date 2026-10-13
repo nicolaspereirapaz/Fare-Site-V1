@@ -90,37 +90,29 @@ describe("painel: aba Orçamentos", () => {
     expect(screen.queryByText("Desistiu")).not.toBeInTheDocument();
   });
 
-  it("'Avançar' leva para Em negociação e lá dá para voltar", async () => {
+  it("cartão sem botões de etapa; clicar abre o detalhe e 'Etapa' move (pulando etapas, passo a passo)", async () => {
     const fetchMock = stubApi();
     const user = await openQuotesTab();
     const card = await cardOf("Cliente Orçamento");
     expect(within(card).getByText("#ORC-3F7A2C")).toBeInTheDocument();
     expect(within(card).getByText("R$ 264,00")).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: /Encerrar/ })).not.toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: /Voltar/ })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /Avançar|Voltar|Encerrar|Pago/ })).not.toBeInTheDocument();
 
-    await user.click(within(card).getByRole("button", { name: "Avançar para Em negociação" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      `/api/backoffice/quotes/${QUOTE.id}`,
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "em_negociacao" }) }),
-    ));
-    const column = screen.getByRole("region", { name: "Em negociação" });
+    await user.click(card);
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "aguardando_pagamento");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const patches = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH").map(([, init]) => JSON.parse(String((init as RequestInit).body)).status);
+    expect(patches).toEqual(["em_negociacao", "aguardando_pagamento"]);
+    const column = screen.getByRole("region", { name: "Aguardando pagamento" });
     expect(await within(column).findByText("Cliente Orçamento")).toBeInTheDocument();
-    expect(within(column).getByRole("button", { name: "Avançar para Aguardando pagamento" })).toBeInTheDocument();
-
-    await user.click(within(column).getByRole("button", { name: "Voltar para Aguardando orçamento" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      `/api/backoffice/quotes/${QUOTE.id}`,
-      expect.objectContaining({ body: JSON.stringify({ status: "aguardando_orcamento" }) }),
-    ));
   });
 
   it("pagamento recebido: o orçamento vira pedido e sai do quadro de orçamentos", async () => {
     const fetchMock = stubApi({ quotes: [{ ...QUOTE, status: "aguardando_pagamento" }] });
     const user = await openQuotesTab();
-    const card = await cardOf("Cliente Orçamento");
+    await user.click(await cardOf("Cliente Orçamento"));
 
-    await user.click(within(card).getByRole("button", { name: /Pagamento recebido/ }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Pagamento recebido/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       `/api/backoffice/quotes/${QUOTE.id}`,
       expect.objectContaining({ body: JSON.stringify({ status: "virou_pedido" }) }),
@@ -136,7 +128,8 @@ describe("painel: aba Orçamentos", () => {
     expect(within(card).getByText("#FF-ORDER9")).toBeInTheDocument();
     expect(within(card).getByText("Pedido do site")).toBeInTheDocument();
 
-    await user.click(within(card).getByRole("button", { name: /Pagamento recebido/ }));
+    await user.click(card);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Pagamento recebido/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/backoffice/orders/order-9",
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "aguardando_arte" }) }),
@@ -147,9 +140,7 @@ describe("painel: aba Orçamentos", () => {
   it("'Ver detalhes' abre a janela com itens, observações, proposta e as ações extras", async () => {
     const fetchMock = stubApi({ quotes: [{ ...QUOTE, status: "aguardando_pagamento" }] });
     const user = await openQuotesTab();
-    const card = await cardOf("Cliente Orçamento");
-
-    await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await user.click(await cardOf("Cliente Orçamento"));
     const dialog = screen.getByRole("dialog", { name: "Cliente Orçamento" });
     expect(within(dialog).getByText("100 × Caneta Plástica · Azul")).toBeInTheDocument();
     expect(within(dialog).getByText("Até dia 20")).toBeInTheDocument();
@@ -158,7 +149,7 @@ describe("painel: aba Orçamentos", () => {
     expect(within(dialog).getByRole("button", { name: /Enviar no WhatsApp/ })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /Encerrar orçamento/ })).toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("button", { name: "Voltar para Em negociação" }));
+    await user.selectOptions(within(dialog).getByLabelText("Etapa"), "em_negociacao");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       `/api/backoffice/quotes/${QUOTE.id}`,
       expect.objectContaining({ body: JSON.stringify({ status: "em_negociacao" }) }),

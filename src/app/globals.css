@@ -4617,16 +4617,6 @@ aside.checkout-card .checkout-mode > label.active {
   font-weight: 700;
 }
 
-.kb-card-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  border-top: 1px solid #f2f2f3;
-  padding-top: 12px;
-}
-
-.kb-next,
 .kb-primary,
 .kb-secondary,
 .kb-danger,
@@ -4642,46 +4632,6 @@ aside.checkout-card .checkout-mode > label.active {
   cursor: pointer;
 }
 
-.kb-next {
-  border: 1px solid var(--navy);
-  padding: 6px 10px;
-  background: white;
-  color: var(--navy);
-  font-size: 0.8rem;
-}
-
-.kb-next:hover:not(:disabled) {
-  background: var(--navy);
-  color: white;
-}
-
-.kb-next.kb-pay {
-  border-color: var(--success);
-  color: var(--success);
-}
-
-.kb-next.kb-pay:hover:not(:disabled) {
-  background: var(--success);
-  color: white;
-}
-
-.kb-details {
-  margin-left: auto;
-  border: 0;
-  padding: 6px 2px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.kb-details:hover {
-  color: var(--navy-dark);
-}
-
-.kb-next:disabled,
 .kb-primary:disabled,
 .kb-secondary:disabled,
 .kb-danger:disabled {
@@ -4914,93 +4864,6 @@ aside.checkout-card .checkout-mode > label.active {
   }
 }
 
-/* Kanban: grupo Voltar | Avançar (um bloco só, compacto) */
-.kb-card-foot {
-  flex-wrap: nowrap;
-}
-
-.kb-card-foot .kb-details {
-  margin-right: auto;
-  margin-left: 0;
-  padding-left: 0;
-}
-
-.kb-steps {
-  display: inline-flex;
-  overflow: hidden;
-  border: 1px solid var(--navy);
-  border-radius: 8px;
-}
-
-.kb-steps:has(.kb-pay) {
-  border-color: var(--success);
-}
-
-.kb-steps > button {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 0;
-  padding: 0 12px;
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.kb-steps > .kb-back {
-  width: 34px;
-  justify-content: center;
-  padding: 0;
-  border-right: 1px solid var(--navy);
-  background: white;
-  color: var(--navy);
-}
-
-.kb-steps:has(.kb-pay) > .kb-back {
-  border-right-color: var(--success);
-  color: var(--success);
-}
-
-.kb-steps > .kb-back:hover:not(:disabled) {
-  background: var(--navy-soft);
-}
-
-.kb-steps:has(.kb-pay) > .kb-back:hover:not(:disabled) {
-  background: var(--green-soft, #e3f3ea);
-}
-
-.kb-steps > .kb-next {
-  background: var(--navy);
-  color: white;
-}
-
-.kb-steps > .kb-next:hover:not(:disabled) {
-  background: var(--navy-dark);
-  color: white;
-}
-
-.kb-steps > .kb-next.kb-pay {
-  background: var(--success);
-  color: white;
-}
-
-.kb-steps > .kb-next.kb-pay:hover:not(:disabled) {
-  background: #106244;
-}
-
-.kb-steps > button:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.kb-card-foot .kb-details {
-  white-space: nowrap;
-}
-
 /* Kanban de pedidos com 6 etapas: página mais larga e colunas que cabem lado a lado */
 .kb-page.container-shell {
   width: min(100% - 32px, 1840px);
@@ -5015,31 +4878,6 @@ aside.checkout-card .checkout-mode > label.active {
 
 .kb-card {
   container-type: inline-size;
-}
-
-/* Coluna estreita: botões ocupam a largura do cartão e "Ver detalhes" vai para baixo */
-@container (max-width: 240px) {
-  .kb-card-foot {
-    flex-direction: column-reverse;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .kb-card-foot .kb-details {
-    align-self: center;
-    margin: 0;
-    padding: 0;
-  }
-
-  .kb-steps {
-    display: flex;
-    width: 100%;
-  }
-
-  .kb-steps > .kb-next {
-    flex: 1;
-    justify-content: center;
-  }
 }
 
 .kb-code,
@@ -6389,3 +6227,235 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-items tfoot tr.kb-subtotal td, .kb-items tfoot tr.kb-discount td { font-weight: 500; color: var(--muted); border-top: 0; padding-top: 4px; padding-bottom: 4px; }
 .kb-items tfoot tr.kb-discount td:last-child { color: #167b55; font-weight: 700; }
 .account-quote-discount strong { color: #167b55; }
+
+/* ===== Quadro estilo Trello: arrastar e soltar ===== */
+.kb-column {
+  min-height: 220px;
+  border: 0;
+  border-radius: 14px;
+  background: #ebecf0;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.kb-column-header {
+  border-bottom: 0;
+  padding: 12px 14px 4px;
+}
+
+.kb-count {
+  min-width: 22px;
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: rgba(29, 36, 71, 0.08);
+  color: var(--navy-dark);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.kb-column-total {
+  margin: 0;
+  padding: 0 14px 6px 30px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-column-body {
+  flex: 1;
+  align-content: start;
+  gap: 8px;
+  padding: 6px 8px 10px;
+}
+
+.kb-empty {
+  border: 1.5px dashed rgba(29, 36, 71, 0.14);
+  border-radius: 10px;
+  padding: 22px 10px;
+  font-size: 0.8rem;
+}
+
+.kb-card {
+  gap: 0;
+  border-radius: 10px;
+  padding: 11px 12px 10px;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.18), 0 0 0 1px rgba(9, 30, 66, 0.04);
+  cursor: grab;
+  touch-action: manipulation;
+  transition: box-shadow 0.12s ease, transform 0.12s ease;
+  user-select: none;
+}
+
+.kb-card:hover {
+  box-shadow: 0 4px 12px rgba(9, 30, 66, 0.14), 0 0 0 1px rgba(43, 56, 84, 0.18);
+}
+
+.kb-card:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.kb-card.is-ghosted {
+  opacity: 0.35;
+}
+
+.kb-card.is-busy {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.kb-card-ghost .kb-card-row,
+.kb-card-ghost {
+  display: flex;
+  flex-direction: column;
+}
+
+.kb-card-ghost {
+  width: 260px;
+  border-radius: 10px;
+  padding: 11px 12px 10px;
+  background: white;
+  box-shadow: 0 14px 32px rgba(9, 30, 66, 0.28);
+  transform: rotate(2.5deg);
+  cursor: grabbing;
+}
+
+.kb-card-ghost .kb-card-row {
+  flex-direction: row;
+}
+
+.kb-title {
+  margin: 4px 0 2px;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.kb-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.kb-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 9px;
+  font-size: 0.74rem;
+}
+
+.kb-card-meta .kb-tag,
+.kb-card-meta .kb-warning {
+  margin-top: 0;
+}
+
+.kb-card-meta .kb-origin {
+  font-size: 0.74rem;
+}
+
+.kb-meta {
+  margin-left: auto;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.kb-warning {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Durante o arraste: colunas que aceitam ficam realçadas; as que não aceitam, apagadas */
+.kb-board.is-dragging .kb-column.can-drop {
+  box-shadow: inset 0 0 0 2px rgba(43, 56, 84, 0.12);
+}
+
+.kb-board.is-dragging .kb-column.is-over {
+  background: #dfe3ee;
+  box-shadow: inset 0 0 0 2px var(--navy);
+}
+
+.kb-board.is-dragging .kb-column.no-drop {
+  opacity: 0.45;
+}
+
+/* "Etapa" na janela de detalhes */
+.kb-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.kb-stage select {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 32px 0 12px;
+  background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a7f91' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center;
+  appearance: none;
+  color: var(--navy-dark);
+  font: inherit;
+  font-weight: 700;
+}
+
+.kb-stage select:disabled {
+  opacity: 0.6;
+}
+
+.kb-dialog-foot .kb-primary.kb-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Ajustes finos do quadro */
+.kb-column-header h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-board-6 .kb-column-header h2 {
+  font-size: 0.86rem;
+}
+
+.kb-toolbar-6 {
+  max-width: calc(6 * 290px + 5 * 12px);
+}
+
+.kb-dialog-foot .kb-danger {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.kb-dialog-foot {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 700px) {
+  .kb-dialog-foot {
+    flex-wrap: wrap;
+  }
+}
+
+.kb-board-6 .kb-column-header {
+  gap: 6px;
+  padding-inline: 12px;
+}
+
+.kb-board-6 .kb-column-header h2 {
+  font-size: 0.84rem;
+  letter-spacing: -0.005em;
+}
+
+.kb-board-6 {
+  grid-template-columns: repeat(6, minmax(224px, 290px));
+}

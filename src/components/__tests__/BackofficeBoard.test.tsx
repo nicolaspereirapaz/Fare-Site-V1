@@ -106,62 +106,49 @@ describe("painel: aba Pedidos", () => {
     expect(screen.queryByText("Desistiu")).not.toBeInTheDocument();
   });
 
-  it("'Avançar' leva o cartão para a próxima etapa; na 1ª etapa não há 'Voltar'", async () => {
+  it("quadro estilo Trello: o cartão não tem botões de avançar/voltar; arrasta-se ou muda a etapa no detalhe", async () => {
+    stubOrdersApi([ORDER]);
+    render(<BackofficeBoard canCancel={false} />);
+    const card = await cardOf("Cliente Teste");
+    expect(within(card).queryByRole("button", { name: /Avançar|Voltar|Concluir/ })).not.toBeInTheDocument();
+    expect(card).toHaveAttribute("aria-roledescription", "cartão arrastável");
+  });
+
+  it("'Etapa' no detalhe move o pedido; pular etapas grava cada passo em ordem", async () => {
     const fetchMock = stubOrdersApi([ORDER]);
     const user = userEvent.setup();
     render(<BackofficeBoard canCancel={false} />);
-    const card = await cardOf("Cliente Teste");
-    expect(within(card).queryByRole("button", { name: /Voltar/ })).not.toBeInTheDocument();
+    await user.click(await cardOf("Cliente Teste"));
+    const dialog = screen.getByRole("dialog", { name: "Cliente Teste" });
 
-    await user.click(within(card).getByRole("button", { name: "Avançar para Criando arte" }));
+    await user.selectOptions(within(dialog).getByLabelText("Etapa"), "em_producao");
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backoffice/orders/order-1",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "criando_arte" }) }),
-    ));
-    const column = screen.getByRole("region", { name: "Criando arte" });
-    expect(await within(column).findByText("Cliente Teste")).toBeInTheDocument();
-    expect(within(column).getByRole("button", { name: "Avançar para Aguardando produção" })).toBeInTheDocument();
-    expect(within(column).getByRole("button", { name: "Voltar para Aguardando arte" })).toBeInTheDocument();
-  });
-
-  it("Aguardando produção fica entre Criando arte e Em produção", async () => {
-    const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_producao" }]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    const card = await cardOf("Cliente Teste");
-    expect(within(card).getByRole("button", { name: "Voltar para Criando arte" })).toBeInTheDocument();
-
-    await user.click(within(card).getByRole("button", { name: "Avançar para Em produção" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backoffice/orders/order-1",
-      expect.objectContaining({ body: JSON.stringify({ status: "em_producao" }) }),
-    ));
-  });
-
-  it("'Voltar' devolve o cartão para a etapa anterior", async () => {
-    const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_retirada" }]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    const card = await cardOf("Cliente Teste");
-
-    await user.click(within(card).getByRole("button", { name: "Voltar para Em produção" }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backoffice/orders/order-1",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "em_producao" }) }),
-    ));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const patches = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH").map(([, init]) => JSON.parse(String((init as RequestInit).body)).status);
+    expect(patches).toEqual(["criando_arte", "aguardando_producao", "em_producao"]);
     const column = screen.getByRole("region", { name: "Em produção" });
     expect(await within(column).findByText("Cliente Teste")).toBeInTheDocument();
   });
 
-  it("em Aguardando feedback, 'Concluir pedido' tira o pedido do quadro", async () => {
+  it("voltar etapa pelo detalhe também funciona", async () => {
+    const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_retirada" }]);
+    const user = userEvent.setup();
+    render(<BackofficeBoard canCancel={false} />);
+    await user.click(await cardOf("Cliente Teste"));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "em_producao");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/backoffice/orders/order-1",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "em_producao" }) }),
+    ));
+  });
+
+  it("em Aguardando feedback, 'Concluir pedido' (no detalhe) tira o pedido do quadro", async () => {
     const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_feedback" }]);
     const user = userEvent.setup();
     render(<BackofficeBoard canCancel />);
-    const card = await cardOf("Cliente Teste");
+    await user.click(await cardOf("Cliente Teste"));
 
-    await user.click(within(card).getByRole("button", { name: /Concluir pedido/ }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Concluir pedido/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/backoffice/orders/order-1",
@@ -181,7 +168,7 @@ describe("painel: aba Pedidos", () => {
     render(<BackofficeBoard canCancel={false} />);
     const card = await cardOf("Cliente Teste");
 
-    await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await user.click(card);
     const dialog = screen.getByRole("dialog", { name: "Cliente Teste" });
 
     expect(within(dialog).getByText("#FF-ORDER1")).toBeInTheDocument();
@@ -194,11 +181,11 @@ describe("painel: aba Pedidos", () => {
     expect(within(dialog).getByText("Pagamento recebido")).toBeInTheDocument();
     expect(within(dialog).getByText(/Joana/)).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("href", expect.stringContaining("FF-ORDER1"));
-    expect(within(dialog).getByRole("button", { name: "Avançar para Criando arte" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Etapa")).toHaveValue("aguardando_arte");
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await user.click(card);
     await user.click(screen.getByRole("button", { name: "Fechar" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -209,7 +196,7 @@ describe("painel: aba Pedidos", () => {
     const { unmount } = render(<BackofficeBoard canCancel={false} />);
     let card = await cardOf("Cliente Teste");
     expect(within(card).queryByRole("button", { name: /Cancelar/ })).not.toBeInTheDocument();
-    await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await user.click(card);
     expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Cancelar pedido/ })).not.toBeInTheDocument();
     unmount();
 
@@ -219,7 +206,7 @@ describe("painel: aba Pedidos", () => {
     render(<BackofficeBoard canCancel />);
     card = await cardOf("Cliente Teste");
     expect(within(card).queryByRole("button", { name: /Cancelar/ })).not.toBeInTheDocument();
-    await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await user.click(card);
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Cancelar pedido/ }));
     expect(confirm).toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalledWith("/api/backoffice/orders/order-1", expect.anything());
@@ -229,8 +216,8 @@ describe("painel: aba Pedidos", () => {
     stubOrdersApi([ORDER], { status: 409, body: { error: "INVALID_TRANSITION" } });
     const user = userEvent.setup();
     render(<BackofficeBoard canCancel={false} />);
-    await screen.findByText("Cliente Teste");
-    await user.click(screen.getByRole("button", { name: "Avançar para Criando arte" }));
+    await user.click(await cardOf("Cliente Teste"));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "criando_arte");
     expect(await screen.findByRole("alert")).toHaveTextContent("Essa transição de status não é permitida.");
   });
 

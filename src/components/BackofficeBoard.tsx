@@ -9,15 +9,19 @@ import type { QuoteBilling } from "@/lib/commerce";
 import {
   DetailsDialog,
   DetailsSections,
+  FinalAction,
   formatDate,
   formatDay,
   itemsSummary,
+  KanbanBoard,
   KanbanCard,
+  KanbanCardBody,
   KanbanColumn,
   messageFor,
-  StepButtons,
+  StageSelect,
   whatsAppReplyUrl,
 } from "@/components/backofficeShared";
+import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
 import type { PaymentMethod } from "@/lib/orders/repository";
 import { QuotesBoard } from "@/components/BackofficeQuotesBoard";
 
@@ -65,23 +69,6 @@ export const STATUS_COLORS: Record<StatusPedido, { dot: string; bg: string; fg: 
   cancelado: { dot: "#a12a2a", bg: "#fdecec", fg: "#a12a2a" },
 };
 
-/** Etapa seguinte e anterior de cada coluna do quadro de pedidos. */
-const FORWARD: Partial<Record<StatusPedido, StatusPedido>> = {
-  aguardando_arte: "criando_arte",
-  criando_arte: "aguardando_producao",
-  aguardando_producao: "em_producao",
-  em_producao: "aguardando_retirada",
-  aguardando_retirada: "aguardando_feedback",
-  aguardando_feedback: "concluido",
-};
-const BACK: Partial<Record<StatusPedido, StatusPedido>> = {
-  criando_arte: "aguardando_arte",
-  aguardando_producao: "criando_arte",
-  em_producao: "aguardando_producao",
-  aguardando_retirada: "em_producao",
-  aguardando_feedback: "aguardando_retirada",
-};
-
 const HISTORY_LABELS: Partial<Record<StatusPedido, string>> = {
   aguardando_arte: "Pagamento recebido",
   criando_arte: "Arte iniciada",
@@ -105,24 +92,8 @@ export type BackofficeBoardProps = {
   canCancel: boolean;
 };
 
-function OrderSteps({ order, busy, onMove, large = false }: { order: BackofficeOrder; busy: boolean; onMove: (to: StatusPedido) => void; large?: boolean }) {
-  const back = BACK[order.status];
-  const next = FORWARD[order.status];
-  return (
-    <StepButtons
-      back={back && podeTransicionarStatusPedido(order.status, back) ? { label: `Voltar para ${STATUS_LABELS[back]}`, onClick: () => onMove(back) } : null}
-      busy={busy}
-      large={large}
-      next={
-        next && podeTransicionarStatusPedido(order.status, next)
-          ? next === "concluido"
-            ? { label: "Concluir pedido", text: "Concluir", final: true, onClick: () => onMove(next) }
-            : { label: `Avançar para ${STATUS_LABELS[next]}`, onClick: () => onMove(next) }
-          : null
-      }
-    />
-  );
-}
+type BoardColumn = (typeof COLUNAS_QUADRO_PEDIDOS)[number];
+const isBoardColumn = (status: string): status is BoardColumn => (COLUNAS_QUADRO_PEDIDOS as readonly string[]).includes(status);
 
 /** "Pagamento recebido", "Enviado para produção"… ou "Voltou para Criando arte". */
 function historyLabel(entry: OrderHistoryEntry) {
@@ -166,20 +137,26 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     };
   }, [fetchOrders]);
 
-  async function move(order: BackofficeOrder, nextStatus: StatusPedido) {
-    if (nextStatus === "cancelado" && !window.confirm(`Cancelar o pedido #${order.code} de ${order.customerName}? Isso não pode ser desfeito.`)) {
+  /** Grava as etapas em ordem (arrastar/pular colunas passa por cada uma). Mostra o cartão já no destino enquanto salva. */
+  async function moveThrough(order: BackofficeOrder, steps: StatusPedido[]) {
+    if (!steps.length) return;
+    if (steps.includes("cancelado") && !window.confirm(`Cancelar o pedido #${order.code} de ${order.customerName}? Isso não pode ser desfeito.`)) {
       return;
     }
+    const target = steps[steps.length - 1];
     setUpdatingId(order.id);
+    setOrders((list) => list.map((entry) => (entry.id === order.id ? { ...entry, status: target } : entry)));
     let transitionError: string | null = null;
     try {
-      const response = await fetch(`/api/backoffice/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(messageFor(payload.error));
+      for (const step of steps) {
+        const response = await fetch(`/api/backoffice/orders/${order.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: step }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) throw new Error(messageFor(payload.error));
+      }
       setOpenId(null);
     } catch (caughtError) {
       transitionError = caughtError instanceof Error ? caughtError.message : "Erro inesperado.";
@@ -193,8 +170,25 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     setUpdatingId(null);
   }
 
+  const move = (order: BackofficeOrder, next: StatusPedido) => moveThrough(order, [next]);
+  /** Até uma coluna do quadro: passa por cada etapa no caminho. */
+  function moveToColumn(order: BackofficeOrder, column: StatusPedido) {
+    if (!isBoardColumn(order.status) || !isBoardColumn(column)) return;
+    const path = movePath(COLUNAS_QUADRO_PEDIDOS, order.status, column, podeTransicionarStatusPedido);
+    if (path === null) return setError("Essa transição de status não é permitida.");
+    void moveThrough(order, path);
+  }
+
   const closeDialog = useCallback(() => setOpenId(null), []);
   const open = orders.find((order) => order.id === openId) ?? null;
+  const cardProps = (order: BackofficeOrder) => ({
+    code: order.code,
+    summary: itemsSummary(order.items),
+    title: order.customerCompany || order.customerName,
+    total: order.total,
+    warning: order.billing ? null : "Sem dados de faturamento",
+    meta: `Pago em ${formatDay(order.history?.find((entry) => entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
+  });
 
   return (
     <div id="backoffice-panel-pedidos" role="tabpanel" aria-labelledby="backoffice-tab-pedidos">
@@ -211,27 +205,40 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
           <p>Carregando quadro…</p>
         </div>
       ) : (
-        <div className="kb-board kb-board-6">
+        <KanbanBoard
+          canDrop={(cardId, column) => {
+            const order = orders.find((entry) => entry.id === cardId);
+            return Boolean(order && isBoardColumn(order.status) && isBoardColumn(column) && movePath(COLUNAS_QUADRO_PEDIDOS, order.status, column, podeTransicionarStatusPedido) !== null);
+          }}
+          className="kb-board-6"
+          onMove={(cardId, column) => {
+            const order = orders.find((entry) => entry.id === cardId);
+            if (order) moveToColumn(order, column as StatusPedido);
+          }}
+          renderOverlay={(cardId) => {
+            const order = orders.find((entry) => entry.id === cardId);
+            return order ? <KanbanCardBody {...cardProps(order)} /> : null;
+          }}
+        >
           {COLUNAS_QUADRO_PEDIDOS.map((status) => {
             const column = orders.filter((order) => order.status === status);
             return (
-              <KanbanColumn color={STATUS_COLORS[status].dot} count={column.length} empty="Nenhum pedido nesta etapa." key={status} title={STATUS_LABELS[status]}>
+              <KanbanColumn
+                color={STATUS_COLORS[status].dot}
+                count={column.length}
+                empty="Arraste um pedido para cá."
+                id={status}
+                key={status}
+                title={STATUS_LABELS[status]}
+                total={column.reduce((sum, order) => sum + order.total, 0)}
+              >
                 {column.map((order) => (
-                  <KanbanCard
-                    action={<OrderSteps busy={updatingId === order.id} onMove={(to) => move(order, to)} order={order} />}
-                    code={order.code}
-                    key={order.id}
-                    onDetails={() => setOpenId(order.id)}
-                    summary={itemsSummary(order.items)}
-                    title={order.customerCompany || order.customerName}
-                    total={order.total}
-                    warning={order.billing ? null : "Sem dados de faturamento"}
-                  />
+                  <KanbanCard {...cardProps(order)} busy={updatingId === order.id} id={order.id} key={order.id} onDetails={() => setOpenId(order.id)} />
                 ))}
               </KanbanColumn>
             );
           })}
-        </div>
+        </KanbanBoard>
       )}
 
       {open ? (
@@ -239,7 +246,18 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
           code={open.code}
           footer={
             <>
-              <OrderSteps busy={updatingId === open.id} large onMove={(to) => move(open, to)} order={open} />
+              {isBoardColumn(open.status) ? (
+                <StageSelect
+                  busy={updatingId === open.id}
+                  labels={STATUS_LABELS}
+                  onChange={(next) => moveToColumn(open, next)}
+                  options={reachableColumns(COLUNAS_QUADRO_PEDIDOS, open.status, podeTransicionarStatusPedido)}
+                  value={open.status}
+                />
+              ) : null}
+              {podeTransicionarStatusPedido(open.status, "concluido") ? (
+                <FinalAction busy={updatingId === open.id} label="Concluir pedido" onClick={() => move(open, "concluido")} />
+              ) : null}
               {open.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(open.customerName, open.customerPhone, open.code, "pedido")} rel="noopener noreferrer" target="_blank">
                   <MessageCircle aria-hidden="true" size={15} /> WhatsApp

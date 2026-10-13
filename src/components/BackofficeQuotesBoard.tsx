@@ -6,18 +6,22 @@ import { MessageCircle, PencilLine, RefreshCw, ShoppingCart, TriangleAlert, XCir
 import {
   DetailsDialog,
   DetailsSections,
+  FinalAction,
   formatDay,
   itemsSummary,
+  KanbanBoard,
   KanbanCard,
+  KanbanCardBody,
   KanbanColumn,
   messageFor,
-  StepButtons,
+  StageSelect,
   whatsAppReplyUrl,
 } from "@/components/backofficeShared";
+import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
 import { PAYMENT_LABELS, type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
 import { ProposalActions } from "@/components/staff/ProposalActions";
-import { QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
+import { canTransitionQuote, NO_CUSTOMER_NAME, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
 
@@ -27,16 +31,9 @@ const COLUMN_COLORS: Record<Column, { dot: string; bg: string; fg: string }> = {
   aguardando_pagamento: { dot: "#b7791f", bg: "#fbf0dc", fg: "#7a4f0d" },
 };
 
-/** Etapa seguinte e anterior de cada coluna (na última, avançar = pagamento recebido → vira pedido). */
-const QUOTE_NEXT: Record<Column, QuoteStatus> = {
-  aguardando_orcamento: "em_negociacao",
-  em_negociacao: "aguardando_pagamento",
-  aguardando_pagamento: "virou_pedido",
-};
-const QUOTE_BACK: Partial<Record<Column, Column>> = {
-  em_negociacao: "aguardando_orcamento",
-  aguardando_pagamento: "em_negociacao",
-};
+const isColumn = (status: string): status is Column => (QUOTE_BOARD_COLUMNS as readonly string[]).includes(status);
+/** Pedido feito no site (esperando pagamento) mora na última coluna e não se arrasta. */
+const ORDER_PREFIX = "pedido:";
 
 type Selected = { kind: "quote"; id: string } | { kind: "order"; id: string } | null;
 
@@ -86,17 +83,19 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
     };
   }, [load]);
 
-  async function send(id: string, url: string, status: string) {
+  async function send(id: string, url: string, statuses: string[]) {
     setUpdatingId(id);
     let changeError: string | null = null;
     try {
-      const response = await fetch(url, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(messageFor(payload.error));
+      for (const status of statuses) {
+        const response = await fetch(url, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) throw new Error(messageFor(payload.error));
+      }
       setSelected(null);
     } catch (caught) {
       changeError = caught instanceof Error ? caught.message : "Erro inesperado.";
@@ -114,39 +113,21 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
 
   function changeQuote(quote: BackofficeQuoteSummary, next: QuoteStatus) {
     if (next === "encerrado" && !window.confirm(`Encerrar o orçamento #${quote.code} de ${quote.customerName}?`)) return;
-    void send(quote.id, `/api/backoffice/quotes/${quote.id}`, next);
+    void send(quote.id, `/api/backoffice/quotes/${quote.id}`, [next]);
+  }
+
+  /** Até uma coluna do quadro (arrastar ou "Etapa"): passa por cada etapa no caminho. */
+  function moveQuote(quote: BackofficeQuoteSummary & { status: Column }, column: Column) {
+    const path = movePath(QUOTE_BOARD_COLUMNS, quote.status, column, canTransitionQuote);
+    if (path === null) return setError("Essa transição de status não é permitida.");
+    if (!path.length) return;
+    setQuotes((list) => list.map((entry) => (entry.id === quote.id ? { ...entry, status: column } : entry)));
+    void send(quote.id, `/api/backoffice/quotes/${quote.id}`, path);
   }
 
   function changeOrder(order: BackofficeOrder, next: "aguardando_arte" | "cancelado") {
     if (next === "cancelado" && !window.confirm(`Cancelar o pedido #${order.code} de ${order.customerName}? Isso não pode ser desfeito.`)) return;
-    void send(order.id, `/api/backoffice/orders/${order.id}`, next);
-  }
-
-  function quoteSteps(quote: BackofficeQuoteSummary & { status: Column }, large = false) {
-    const back = QUOTE_BACK[quote.status];
-    const next = QUOTE_NEXT[quote.status];
-    return (
-      <StepButtons
-        back={back ? { label: `Voltar para ${QUOTE_STATUS_LABELS[back]}`, onClick: () => changeQuote(quote, back) } : null}
-        busy={updatingId === quote.id}
-        large={large}
-        next={
-          next === "virou_pedido"
-            ? { label: "Pagamento recebido", text: large ? "Pagamento recebido" : "Pago", final: true, onClick: () => changeQuote(quote, next) }
-            : { label: `Avançar para ${QUOTE_STATUS_LABELS[next]}`, onClick: () => changeQuote(quote, next) }
-        }
-      />
-    );
-  }
-
-  function siteOrderSteps(order: BackofficeOrder, large = false) {
-    return (
-      <StepButtons
-        busy={updatingId === order.id}
-        large={large}
-        next={{ label: "Pagamento recebido", text: large ? "Pagamento recebido" : "Pago", final: true, onClick: () => changeOrder(order, "aguardando_arte") }}
-      />
-    );
+    void send(order.id, `/api/backoffice/orders/${order.id}`, [next]);
   }
 
   const closeDialog = useCallback(() => {
@@ -164,6 +145,24 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   const siteOrders = orders.filter((order) => order.status === "aguardando_pagamento");
   const openQuote = selected?.kind === "quote" ? boardQuotes.find((quote) => quote.id === selected.id) ?? null : null;
   const openOrder = selected?.kind === "order" ? siteOrders.find((order) => order.id === selected.id) ?? null : null;
+  const quoteCard = (quote: BackofficeQuoteSummary) => ({
+    code: quote.code,
+    summary: itemsSummary(quote.items),
+    tag: <span className="kb-origin">{quote.createdBy ? `Feito por ${quote.createdBy}` : "Site"}</span>,
+    title: quote.customerCompany || quote.customerName,
+    total: quote.total,
+    warning: quote.billing || quote.createdBy || quote.customerName === NO_CUSTOMER_NAME ? null : "Sem dados de faturamento",
+    meta: quote.proposalSentAt ? `Proposta enviada ${formatDay(quote.proposalSentAt)}` : `Criado ${formatDay(quote.createdAt)}`,
+  });
+  const orderCard = (order: BackofficeOrder) => ({
+    code: order.code,
+    summary: itemsSummary(order.items),
+    tag: <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> Pedido do site</span>,
+    title: order.customerCompany || order.customerName,
+    total: order.total,
+    warning: order.billing ? null : "Sem dados de faturamento",
+    meta: `Pedido ${formatDay(order.createdAt)}`,
+  });
 
   return (
     <div aria-labelledby="backoffice-tab-orcamentos" id="backoffice-panel-orcamentos" role="tabpanel">
@@ -180,7 +179,25 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           <p>Carregando orçamentos…</p>
         </div>
       ) : (
-        <div className="kb-board kb-board-3">
+        <KanbanBoard
+          canDrop={(cardId, column) => {
+            const quote = boardQuotes.find((entry) => entry.id === cardId);
+            return Boolean(quote && isColumn(column) && movePath(QUOTE_BOARD_COLUMNS, quote.status, column, canTransitionQuote) !== null);
+          }}
+          className="kb-board-3"
+          onMove={(cardId, column) => {
+            const quote = boardQuotes.find((entry) => entry.id === cardId);
+            if (quote && isColumn(column)) moveQuote(quote, column);
+          }}
+          renderOverlay={(cardId) => {
+            if (cardId.startsWith(ORDER_PREFIX)) {
+              const order = siteOrders.find((entry) => `${ORDER_PREFIX}${entry.id}` === cardId);
+              return order ? <KanbanCardBody {...orderCard(order)} /> : null;
+            }
+            const quote = boardQuotes.find((entry) => entry.id === cardId);
+            return quote ? <KanbanCardBody {...quoteCard(quote)} /> : null;
+          }}
+        >
           {QUOTE_BOARD_COLUMNS.map((status) => {
             const columnQuotes = boardQuotes.filter((quote) => quote.status === status);
             const columnOrders = status === "aguardando_pagamento" ? siteOrders : [];
@@ -188,40 +205,22 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
               <KanbanColumn
                 color={COLUMN_COLORS[status].dot}
                 count={columnQuotes.length + columnOrders.length}
-                empty="Nada nesta etapa."
+                empty="Arraste um orçamento para cá."
+                id={status}
                 key={status}
                 title={QUOTE_STATUS_LABELS[status]}
+                total={[...columnQuotes, ...columnOrders].reduce((sum, entry) => sum + (entry.total ?? 0), 0)}
               >
                 {columnQuotes.map((quote) => (
-                  <KanbanCard
-                    action={quoteSteps(quote)}
-                    code={quote.code}
-                    key={quote.id}
-                    onDetails={() => setSelected({ kind: "quote", id: quote.id })}
-                    summary={itemsSummary(quote.items)}
-                    tag={<span className="kb-origin">{quote.createdBy ? `Feito por ${quote.createdBy}` : "Site"}</span>}
-                    title={quote.customerCompany || quote.customerName}
-                    total={quote.total}
-                    warning={quote.billing || quote.createdBy ? null : "Sem dados de faturamento"}
-                  />
+                  <KanbanCard {...quoteCard(quote)} busy={updatingId === quote.id} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
                 ))}
                 {columnOrders.map((order) => (
-                  <KanbanCard
-                    action={siteOrderSteps(order)}
-                    code={order.code}
-                    key={order.id}
-                    onDetails={() => setSelected({ kind: "order", id: order.id })}
-                    summary={itemsSummary(order.items)}
-                    tag={<span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> Pedido do site</span>}
-                    title={order.customerCompany || order.customerName}
-                    total={order.total}
-                    warning={order.billing ? null : "Sem dados de faturamento"}
-                  />
+                  <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} onDetails={() => setSelected({ kind: "order", id: order.id })} />
                 ))}
               </KanbanColumn>
             );
           })}
-        </div>
+        </KanbanBoard>
       )}
 
       {openQuote ? (
@@ -229,7 +228,16 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           code={openQuote.code}
           footer={
             <>
-              {quoteSteps(openQuote, true)}
+              <StageSelect
+                busy={updatingId === openQuote.id}
+                labels={QUOTE_STATUS_LABELS}
+                onChange={(next) => isColumn(next) && moveQuote(openQuote, next)}
+                options={reachableColumns(QUOTE_BOARD_COLUMNS, openQuote.status, canTransitionQuote)}
+                value={openQuote.status}
+              />
+              {openQuote.status === "aguardando_pagamento" ? (
+                <FinalAction busy={updatingId === openQuote.id} label="Pagamento recebido" onClick={() => changeQuote(openQuote, "virou_pedido")} />
+              ) : null}
               <Link className="kb-edit-quote" href={`/equipe/orcamentos/${openQuote.id}`}>
                 <PencilLine aria-hidden="true" size={15} /> Editar itens e gravações
               </Link>
@@ -269,7 +277,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           code={openOrder.code}
           footer={
             <>
-              {siteOrderSteps(openOrder, true)}
+              <FinalAction busy={updatingId === openOrder.id} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} />
               {openOrder.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(openOrder.customerName, openOrder.customerPhone, openOrder.code, "pedido")} rel="noopener noreferrer" target="_blank">
                   <MessageCircle aria-hidden="true" size={15} /> WhatsApp

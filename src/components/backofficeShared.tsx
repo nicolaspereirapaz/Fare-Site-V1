@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, X } from "lucide-react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CheckCircle2, X } from "lucide-react";
 import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 
@@ -74,56 +87,129 @@ export function whatsAppReplyUrl(name: string, phone: string, code: string, what
   return buildWhatsAppUrl(full, `Olá, ${name.split(" ")[0]}! Aqui é da Fare Foto, sobre o seu ${what} #${code}.`);
 }
 
-/** Coluna do quadro: borda delimitando a etapa, bolinha colorida e contador. */
-export function KanbanColumn({ title, color, count, empty, children }: { title: string; color: string; count: number; empty: string; children: ReactNode }) {
-  const headingId = useId();
+/** Quadro com arrastar e soltar (estilo Trello). `onMove(cardId, columnId)` decide o que fazer; o cartão arrastado aparece "flutuando". */
+export function KanbanBoard({
+  className,
+  onMove,
+  canDrop,
+  renderOverlay,
+  children,
+}: {
+  className: string;
+  onMove: (cardId: string, columnId: string) => void;
+  /** Coluna aceita este cartão? (as que não aceitam ficam apagadas durante o arraste) */
+  canDrop: (cardId: string, columnId: string) => boolean;
+  renderOverlay: (cardId: string) => ReactNode;
+  children: ReactNode;
+}) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  // Arrastar só depois de mover 6px: um clique simples continua abrindo o detalhe.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
   return (
-    <section aria-labelledby={headingId} className="kb-column">
+    <BoardDragContext.Provider value={{ dragging, canDrop }}>
+      <DndContext
+        collisionDetection={closestCorners}
+        onDragCancel={() => setDragging(null)}
+        onDragEnd={(event: DragEndEvent) => {
+          setDragging(null);
+          if (event.over) onMove(String(event.active.id), String(event.over.id));
+        }}
+        onDragStart={(event: DragStartEvent) => setDragging(String(event.active.id))}
+        sensors={sensors}
+      >
+        <div className={`kb-board ${className}${dragging ? " is-dragging" : ""}`}>{children}</div>
+        <DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>{dragging ? <div className="kb-card-ghost">{renderOverlay(dragging)}</div> : null}</DragOverlay>
+      </DndContext>
+    </BoardDragContext.Provider>
+  );
+}
+
+const BoardDragContext = createContext<{ dragging: string | null; canDrop: (cardId: string, columnId: string) => boolean }>({ dragging: null, canDrop: () => true });
+
+/** Coluna do quadro: borda delimitando a etapa, bolinha colorida e contador; recebe cartões arrastados. */
+export function KanbanColumn({ id, title, color, count, empty, total, children }: { id: string; title: string; color: string; count: number; empty: string; total?: number; children: ReactNode }) {
+  const headingId = useId();
+  const { dragging, canDrop } = useContext(BoardDragContext);
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const allowed = dragging ? canDrop(dragging, id) : true;
+  const state = dragging ? (allowed ? (isOver ? " is-over" : " can-drop") : " no-drop") : "";
+  return (
+    <section aria-labelledby={headingId} className={`kb-column${state}`} ref={setNodeRef}>
       <header className="kb-column-header">
         <span aria-hidden="true" className="kb-dot" style={{ background: color }} />
         <h2 id={headingId}>{title}</h2>
         <span className="kb-count">{count}</span>
       </header>
+      {total !== undefined && count > 0 ? <p className="kb-column-total">{formatCurrency(total)}</p> : null}
       <div className="kb-column-body">{count === 0 ? <p className="kb-empty">{empty}</p> : children}</div>
     </section>
   );
 }
 
-/** Cartão do quadro: só o essencial; o resto fica em "Ver detalhes". */
-export function KanbanCard({
-  code,
-  total,
-  title,
-  summary,
-  tag,
-  warning,
-  action,
-  onDetails,
-}: {
+type CardProps = {
   code: string;
   total: number | null;
   title: string;
   summary: string;
   tag?: ReactNode;
   warning?: string | null;
-  action?: ReactNode;
-  onDetails: () => void;
-}) {
+  /** Rodapé discreto: data, quem fez, proposta enviada… */
+  meta?: string;
+};
+
+/** Conteúdo do cartão (usado no quadro e no cartão "flutuando" durante o arraste). */
+export function KanbanCardBody({ code, total, title, summary, tag, warning, meta }: CardProps) {
   return (
-    <article className="kb-card">
+    <>
       <div className="kb-card-row">
         <span className="kb-code">#{code}</span>
         <span className="kb-value">{total === null ? "Sob consulta" : formatCurrency(total)}</span>
       </div>
-      {tag}
       <strong className="kb-title">{title}</strong>
       <span className="kb-summary">{summary}</span>
-      {warning ? <span className="kb-warning"><span aria-hidden="true">⚠ </span><span>{warning}</span></span> : null}
-      <div className="kb-card-foot">
-        <button className="kb-details" onClick={onDetails} type="button">Ver detalhes</button>
-        {action ? <span className="kb-steps">{action}</span> : null}
-      </div>
+      {tag || warning || meta ? (
+        <div className="kb-card-meta">
+          {tag}
+          {warning ? <span className="kb-warning" title={warning}><span aria-hidden="true">⚠ </span>{warning}</span> : null}
+          {meta ? <span className="kb-meta">{meta}</span> : null}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Cartão do quadro: arrasta para outra coluna; clique (ou Enter) abre os detalhes. */
+export function KanbanCard({ id, busy = false, onDetails, ...props }: CardProps & { id: string; busy?: boolean; onDetails: () => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled: busy });
+  return (
+    <article
+      {...attributes}
+      {...listeners}
+      aria-label={`${props.title} — #${props.code}`}
+      aria-roledescription="cartão arrastável"
+      className={`kb-card${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}`}
+      onClick={onDetails}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onDetails();
+        else listeners?.onKeyDown?.(event);
+      }}
+      ref={setNodeRef}
+    >
+      <KanbanCardBody {...props} />
     </article>
+  );
+}
+
+/** "Etapa" na janela de detalhes: move o cartão sem arrastar (celular, teclado). */
+export function StageSelect<S extends string>({ value, options, labels, busy, onChange }: { value: S; options: readonly S[]; labels: Record<S, string>; busy: boolean; onChange: (next: S) => void }) {
+  const selectId = useId();
+  return (
+    <label className="kb-stage" htmlFor={selectId}>
+      <span>Etapa</span>
+      <select disabled={busy || options.length < 2} id={selectId} onChange={(event) => onChange(event.target.value as S)} value={value}>
+        {options.map((option) => <option key={option} value={option}>{labels[option]}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -297,45 +383,11 @@ export function DetailsSections({
   );
 }
 
-export type StepAction = { label: string; onClick: () => void };
-
-/**
- * Par de botões das etapas: "← Voltar" e "Avançar →".
- * Na última etapa o avançar vira uma ação final verde (ex.: "Concluir", "Pagamento recebido").
- */
-export function StepButtons({
-  back,
-  next,
-  busy,
-  large = false,
-}: {
-  back?: StepAction | null;
-  next?: (StepAction & { text?: string; final?: boolean }) | null;
-  busy: boolean;
-  large?: boolean;
-}) {
+/** Ação final verde da janela (ex.: "Concluir pedido", "Pagamento recebido"). */
+export function FinalAction({ label, busy, onClick }: { label: string; busy: boolean; onClick: () => void }) {
   return (
-    <>
-      {back ? (
-        <button aria-label={back.label} className={large ? "kb-secondary" : "kb-back"} disabled={busy} onClick={back.onClick} title={back.label} type="button">
-          <ArrowLeft aria-hidden="true" size={large ? 15 : 16} />
-          {large ? " Voltar" : null}
-        </button>
-      ) : null}
-      {next ? (
-        <button
-          aria-label={next.label}
-          className={`${large ? "kb-primary" : "kb-next"}${next.final ? " kb-pay" : ""}`}
-          disabled={busy}
-          onClick={next.onClick}
-          title={next.label}
-          type="button"
-        >
-          {next.final ? <CheckCircle2 aria-hidden="true" size={15} /> : null}
-          {next.text ?? "Avançar"}
-          {next.final ? null : <ArrowRight aria-hidden="true" size={15} />}
-        </button>
-      ) : null}
-    </>
+    <button className="kb-primary kb-pay" disabled={busy} onClick={onClick} type="button">
+      <CheckCircle2 aria-hidden="true" size={15} /> {label}
+    </button>
   );
 }
