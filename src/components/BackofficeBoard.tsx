@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ClipboardList, FileText, LayoutGrid, MessageCircle, RefreshCw, TriangleAlert, XCircle } from "lucide-react";
+import { ClipboardList, FileText, LayoutGrid, MessageCircle, Plus, RefreshCw, TriangleAlert, XCircle } from "lucide-react";
 import { COLUNAS_QUADRO_PEDIDOS, ORDEM_STATUS_PEDIDO, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { OrderHistoryEntry } from "@/lib/backoffice/access";
 import type { QuoteBilling } from "@/lib/commerce";
@@ -299,18 +299,16 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos" }: Backoffic
 
   return (
     <div className="kb-page container-shell">
-      <header className="kb-heading kb-heading-actions">
-        <div>
+      <header className="kb-heading">
         <h1>{tab === "pedidos" ? "Quadro de pedidos" : "Quadro de orçamentos"}</h1>
         <p>
           {tab === "pedidos"
-            ? "Pedidos pagos, da arte à entrega. Ao concluir, o pedido sai do quadro."
-            : "Orçamentos e pedidos esperando pagamento. Quando o pagamento entra, vira pedido em “Aguardando arte”."}
+            ? "Acompanhe cada pedido pago da criação da arte até a entrega."
+            : "Acompanhe cada negociação até o pagamento. Pago, o orçamento segue para Pedidos."}
         </p>
-        </div>
-        {tab === "orcamentos" ? <Link className="kb-new-quote" href="/equipe/orcamentos/novo">Novo orçamento</Link> : null}
       </header>
 
+      <div className={`kb-toolbar ${tab === "pedidos" ? "kb-toolbar-6" : "kb-toolbar-3"}`}>
       <div aria-label="Seções do painel" className="kb-tabs" role="tablist">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
@@ -330,6 +328,12 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos" }: Backoffic
             {label}
           </button>
         ))}
+      </div>
+        {tab === "orcamentos" ? (
+          <Link className="kb-new-quote" href="/equipe/orcamentos/novo">
+            <Plus aria-hidden="true" size={16} /> Novo orçamento
+          </Link>
+        ) : null}
       </div>
 
       {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} />}

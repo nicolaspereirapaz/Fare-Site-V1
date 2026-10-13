@@ -4422,44 +4422,76 @@ aside.checkout-card .checkout-mode > label.active {
   padding-bottom: 56px;
 }
 
+/* Título centralizado; abas sublinhadas + "Novo orçamento" numa barra da largura do quadro */
+.kb-heading {
+  max-width: 640px;
+  margin: 4px auto 26px;
+  text-align: center;
+}
+
 .kb-heading h1 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   color: var(--navy-dark);
   font-family: var(--font-outfit), sans-serif;
-  font-size: 1.75rem;
+  font-size: 1.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .kb-heading p {
-  margin: 0 0 18px;
+  margin: 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.kb-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 auto 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.kb-toolbar-3 {
+  max-width: 1052px;
+}
+
+.kb-toolbar-6 {
+  max-width: 1800px;
 }
 
 .kb-tabs {
-  display: inline-flex;
-  gap: 4px;
-  margin-bottom: 20px;
+  display: flex;
+  gap: 22px;
 }
 
 .kb-tabs button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  margin-bottom: -1px;
   border: 0;
-  border-radius: 8px;
-  padding: 8px 14px;
+  border-bottom: 2px solid transparent;
+  padding: 10px 2px 11px;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.92rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.kb-tabs button.active {
-  background: white;
+.kb-tabs button:hover {
   color: var(--navy-dark);
-  box-shadow: 0 1px 2px rgba(25, 26, 29, 0.08);
+}
+
+.kb-tabs button.active {
+  border-bottom-color: var(--navy-dark);
+  color: var(--navy-dark);
+  font-weight: 700;
 }
 
 .kb-board {
@@ -5016,16 +5048,6 @@ aside.checkout-card .checkout-mode > label.active {
 }
 
 /* Kanban centralizado na página: colunas com largura máxima e o conjunto no meio */
-.kb-heading,
-.kb-tabs {
-  text-align: center;
-}
-
-.kb-tabs {
-  display: flex;
-  width: max-content;
-  margin-inline: auto;
-}
 
 .kb-board {
   justify-content: center;
@@ -6338,9 +6360,15 @@ aside.checkout-card .checkout-mode > label.active {
 .account-quote-engraving { display: block; margin-top: 2px; color: var(--muted, #737889); }
 
 /* Quadro de orçamentos: botão novo, origem do card e editar. */
-.kb-heading-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
-.kb-new-quote { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: 8px; background: #F65C2D; color: #fff; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; box-shadow: 0 1px 2px rgba(212,83,42,.35); }
+.kb-new-quote { display: inline-flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 8px; padding: 0 14px 0 12px; border-radius: 8px; background: #F65C2D; color: #fff; font-weight: 600; font-size: 0.88rem; text-decoration: none; white-space: nowrap; box-shadow: 0 1px 2px rgba(212,83,42,.3); transition: background-color .15s ease; }
 .kb-new-quote:hover { background: #d4532a; }
+@media (max-width: 600px) {
+  .kb-heading { margin-bottom: 18px; }
+  .kb-heading h1 { font-size: 1.55rem; }
+  .kb-toolbar { flex-wrap: wrap; border-bottom: 0; }
+  .kb-tabs { width: 100%; border-bottom: 1px solid var(--line); }
+  .kb-new-quote { width: 100%; justify-content: center; margin-bottom: 0; }
+}
 .kb-origin { font-size: 12px; color: #7a7f91; }
 .kb-edit-quote { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid #d5d8e1; background: #fff; color: #1d2447; font-weight: 600; font-size: 13.5px; text-decoration: none; }
 .kb-edit-quote:hover { border-color: #b9bdca; }
