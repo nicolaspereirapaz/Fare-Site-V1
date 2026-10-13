@@ -62,12 +62,12 @@ const s = StyleSheet.create({
   engraving: { fontSize: 8.5, color: C.text, marginTop: 2 },
   unit: { fontWeight: 700, color: C.ink },
   /** Pé da página: condições à esquerda, totais à direita. */
-  bottom: { flexDirection: "row", alignItems: "flex-end", borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 12 },
+  bottom: { flexDirection: "row", alignItems: "flex-start", borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 12 },
   terms: { flex: 1, paddingRight: 22 },
   term: { flexDirection: "row", marginBottom: 4 },
   termTitle: { width: 92, fontSize: 8.5, fontWeight: 700, color: C.lilac },
   termText: { flex: 1, fontSize: 8.5, color: C.text },
-  notice: { marginTop: 6, alignSelf: "flex-start", backgroundColor: "#fdeee8", color: "#a93c1a", fontSize: 8.5, fontWeight: 700, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8 },
+  notice: { marginBottom: 10, alignSelf: "stretch", textAlign: "center", backgroundColor: "#fdeee8", color: "#a93c1a", fontSize: 8.5, fontWeight: 700, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8 },
   totals: { width: 210 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   grand: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: C.navy },
@@ -151,9 +151,10 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
                 <Text style={s.termText}>{term.text}</Text>
               </View>
             ))}
-            <Text style={s.notice}>{proposal.notice}</Text>
           </View>
           <View style={s.totals}>
+            {/* Sinal de 50% no alto da coluna do total (espaço que ficava vazio). */}
+            <Text style={s.notice}>{proposal.notice}</Text>
             <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.total)}</Text></View>
             <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View>
             <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
