@@ -2,72 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
-import { spotChoices } from "@/lib/suppliers/spotOptionPicker";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PencilLine, Search, X } from "lucide-react";
+import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductConfigModal";
+import {
+  brl,
+  EMPTY_TOTALS,
+  engravingSummary,
+  fromServerItem,
+  initials,
+  newId,
+  postJson,
+  useDebounced,
+  type Customer,
+  type Duplicate,
+  type Item,
+  type Preview,
+  type Product,
+  type ServerItem,
+  type Totals,
+} from "@/components/staff/quoteEditorShared";
 
-/* Tipos vindos da API do editor (custo e estoque só para a equipe). */
-type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; createdBy?: string; alsoUsedBy?: Array<{ name: string; by: string[] }> };
-type Duplicate = Customer & { by: string[] };
-type SpotOption = { id: string; tecnica: string; local: string; componente: string; area: string; cores: number; padrao: boolean };
-type Product = {
-  publicId: string; name: string; category: string; imageUrl: string; fareCode: string; supplierCode: string; supplier: string;
-  variants: Array<{ label: string; cost: number; stock: number; imageUrl: string }>;
-  spotOptions: SpotOption[];
-};
-type Tecnica = Record<string, unknown> & { tipo: string };
-/* Valores digitados à mão ficam como texto ("1,25"); vazio = calculado pelo sistema. */
-type Gravacao = { tecnica: Tecnica; local: string; custoOverride?: string };
-type Manual = { costOverride?: string; priceOverride?: string };
-type Item =
-  | ({ id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: Gravacao[] } & Manual)
-  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: Gravacao[] } & Manual);
-type PreviewGravacao = { descricao: string; local: string; detalhe: string; custoUnitario: number; custoTotal: number; manual?: true };
-type Preview =
-  | { id: string; ok: true; unitPrice: number; total: number; cost: number; productCost: number; gravacoes: PreviewGravacao[]; stockWarning?: string; manual: { cost: boolean; price: boolean }; suggestedPrice: number }
-  | { id: string; ok: false; error: string };
-type Totals = { subtotal: number; discount: number; total: number; cost: number; margin: number; pending: number };
 type DiscountForm = { type: "percent" | "value"; value: string };
-const EMPTY_TOTALS: Totals = { subtotal: 0, discount: 0, total: 0, cost: 0, margin: 0, pending: 0 };
-type EngravingForm = { itemId: string; index: number | null; tipo: string; local: string; largura: string; altura: string; spotId: string; nome: string; custo: string };
-
-const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const brl = (value: number) => money.format(value).replace(/\u00a0/g, " ");
-const parseNumber = (value: string) => (value.trim() ? Number(value.replace(/\./g, (dot, _o, all: string) => (all.includes(",") ? "" : dot)).replace(",", ".")) : NaN);
-const newId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-/** 1.5 → "1,50" (campo de dinheiro); só dígitos, vírgula e ponto ao digitar. */
-const moneyInput = (value: number) => value.toFixed(2).replace(".", ",");
-const cleanMoney = (value: string) => value.replace(/[^\d.,]/g, "").slice(0, 12);
-type ServerGravacao = Omit<Gravacao, "custoOverride"> & { custoOverride?: number };
-type ServerItem = Omit<Item, "costOverride" | "priceOverride" | "gravacoes"> & { costOverride?: number; priceOverride?: number; gravacoes: ServerGravacao[] };
-/** Item salvo (números) → item do editor (texto nos campos digitados à mão). */
-function fromServerItem(item: ServerItem): Item {
-  const { costOverride, priceOverride, gravacoes, ...rest } = item;
-  return {
-    ...rest,
-    ...(costOverride === undefined ? {} : { costOverride: moneyInput(costOverride) }),
-    ...(priceOverride === undefined ? {} : { priceOverride: moneyInput(priceOverride) }),
-    gravacoes: gravacoes.map(({ custoOverride, ...g }) => (custoOverride === undefined ? g : { ...g, custoOverride: moneyInput(custoOverride) })),
-  } as Item;
-}
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
-
-const TECNICAS = [
-  { tipo: "laser", label: "Laser" },
-  { tipo: "dtf-textil", label: "DTF Têxtil" },
-  { tipo: "dtf-uv", label: "DTF UV" },
-  { tipo: "spot", label: "Pelo fornecedor (Spot)" },
-  { tipo: "manual", label: "Outra (custo digitado)" },
-];
-
-function useDebounced<T>(value: T, delay = 250) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
 
 function highlight(text: string, query: string) {
   const word = query.trim().split(/\s+/)[0];
@@ -75,35 +31,6 @@ function highlight(text: string, query: string) {
   const index = text.toLowerCase().indexOf(word.toLowerCase());
   if (index < 0) return text;
   return <>{text.slice(0, index)}<mark>{text.slice(index, index + word.length)}</mark>{text.slice(index + word.length)}</>;
-}
-
-function tecnicaFromForm(form: EngravingForm): Tecnica | null {
-  if (form.tipo === "laser") return { tipo: "laser" };
-  if (form.tipo === "dtf-textil" || form.tipo === "dtf-uv") {
-    const larguraCm = parseNumber(form.largura);
-    const alturaCm = parseNumber(form.altura);
-    return larguraCm > 0 && alturaCm > 0 ? { tipo: form.tipo, larguraCm, alturaCm } : null;
-  }
-  if (form.tipo === "spot") return form.spotId ? { tipo: "spot", opcaoId: form.spotId } : null;
-  if (form.tipo === "manual") {
-    const custoUnitario = parseNumber(form.custo);
-    return form.nome.trim() && custoUnitario >= 0 ? { tipo: "manual", nome: form.nome.trim(), custoUnitario } : null;
-  }
-  return null;
-}
-
-function formFromGravacao(itemId: string, index: number | null, gravacao?: Gravacao, spotDefault = ""): EngravingForm {
-  const t = gravacao?.tecnica ?? { tipo: "laser" };
-  const str = (value: unknown) => (value === undefined || value === null ? "" : String(value).replace(".", ","));
-  return {
-    itemId, index, tipo: t.tipo, local: gravacao?.local ?? "",
-    largura: str(t.larguraCm), altura: str(t.alturaCm), spotId: String(t.opcaoId ?? spotDefault), nome: String(t.nome ?? ""), custo: str(t.custoUnitario),
-  };
-}
-
-async function postJson<T>(url: string, body: unknown, method = "POST"): Promise<{ ok: boolean; status: number; data: T }> {
-  const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  return { ok: response.ok, status: response.status, data: (await response.json().catch(() => ({}))) as T };
 }
 
 /* ------------------------------------------------------------------ cliente */
@@ -190,7 +117,7 @@ function CustomerPicker({ onPick }: { onPick: (customer: Customer) => void }) {
     <div className="qe-picker">
       <div className="qe-search">
         <Search aria-hidden="true" size={16} />
-        <input aria-label="Buscar cliente" autoFocus onChange={(event) => setQuery(event.target.value)} placeholder="Nome, empresa, WhatsApp ou CPF/CNPJ" value={query} />
+        <input aria-label="Buscar cliente" onChange={(event) => setQuery(event.target.value)} placeholder="Nome, empresa, WhatsApp ou CPF/CNPJ" value={query} />
       </div>
       {query.trim() ? (
         <div className="qe-menu" role="listbox">
@@ -229,11 +156,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const [totals, setTotals] = useState<Totals>(EMPTY_TOTALS);
   const [discount, setDiscount] = useState<DiscountForm>({ type: "percent", value: "" });
   const [discountError, setDiscountError] = useState<string | null>(null);
-  const [engraving, setEngraving] = useState<EngravingForm | null>(null);
-  const [engravingCalc, setEngravingCalc] = useState<{ text: string; error?: boolean } | null>(null);
+  const [modal, setModal] = useState<ModalStart | null>(null);
   const [productQuery, setProductQuery] = useState("");
   const [productResults, setProductResults] = useState<Product[]>([]);
-  const [loose, setLoose] = useState<{ name: string; cost: string; quantity: string } | null>(null);
   const [loading, setLoading] = useState(Boolean(quoteId));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -302,76 +227,25 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     };
   }, [productQueryDebounced]);
 
-  // Cálculo ao vivo da gravação sendo editada.
-  const engravingKey = useDebounced(JSON.stringify(engraving), 250);
-  useEffect(() => {
-    const form = JSON.parse(engravingKey) as EngravingForm | null;
-    if (!form) return;
-    const item = items.find((entry) => entry.id === form.itemId);
-    const tecnica = tecnicaFromForm(form);
-    let active = true;
-    const run = !item || !tecnica
-      ? Promise.resolve(null)
-      : postJson<{ preview?: Preview[] }>("/api/backoffice/orcamento-editor/previa", { items: [{ ...item, gravacoes: [{ tecnica, local: form.local }] }] });
-    run.then((response) => {
-      if (!active) return;
-      const result = response?.data.preview?.[0];
-      if (!result) return setEngravingCalc(null);
-      if (!result.ok) return setEngravingCalc({ text: result.error, error: true });
-      const g = result.gravacoes[0];
-      // Preço por peça (laser, Spot): custo/peça e total. Folhas/metros (DTF): mostra a conta.
-      const perPiece = /por peça/.test(g.detalhe);
-      setEngravingCalc({ text: perPiece ? `Custo ${brl(g.custoUnitario)} por peça · ${brl(g.custoTotal)} no total` : `${g.detalhe ? `${g.detalhe} = ` : ""}${brl(g.custoTotal)} · ${brl(g.custoUnitario)} por peça` });
-    }).catch(() => undefined);
-    return () => {
-      active = false;
-    };
-    // items muda junto quando o item muda; aqui só recalcula pelo formulário.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engravingKey]);
-
-  function updateItem(id: string, change: Partial<Item>) {
-    setItems((list) => list.map((item) => (item.id === id ? ({ ...item, ...change } as Item) : item)));
-  }
-
-  function addProduct(product: Product) {
+  /** Escolheu o produto na busca: abre a configuração (só entra na lista ao clicar em Adicionar). */
+  function chooseProduct(product: Product) {
     setProducts((map) => ({ ...map, [product.publicId]: product }));
-    const variant = product.variants.find((entry) => entry.stock >= 100) ?? product.variants[0];
-    setItems((list) => [...list, { id: newId(), source: "catalogo", publicId: product.publicId, variant: variant?.label ?? "", quantity: 100, gravacoes: [] }]);
+    setModal({ kind: "catalogo", product });
     setProductQuery("");
     setProductResults([]);
   }
 
-  function addLoose() {
-    if (!loose) return;
-    const cost = parseNumber(loose.cost);
-    const quantity = Number.parseInt(loose.quantity, 10);
-    if (loose.name.trim().length < 2 || !(cost >= 0) || !(quantity > 0)) return;
-    setItems((list) => [...list, { id: newId(), source: "avulso", name: loose.name.trim(), cost, quantity, gravacoes: [] }]);
-    setLoose(null);
+  function editItem(item: Item) {
+    if (item.source === "avulso") return setModal({ kind: "avulso", item });
+    const product = products[item.publicId];
+    if (product) setModal({ kind: "catalogo", product, item });
   }
 
-  function openEngraving(item: Item, index: number | null) {
-    const product = item.source === "catalogo" ? products[item.publicId] : undefined;
-    const spotDefault = product?.spotOptions.find((option) => option.padrao)?.id ?? product?.spotOptions[0]?.id ?? "";
-    const form = formFromGravacao(item.id, index, index === null ? undefined : item.gravacoes[index], spotDefault);
-    if (index === null && product?.supplier === "spot" && spotDefault) form.tipo = "spot";
-    setEngravingCalc(null);
-    setEngraving(form);
-  }
-
-  function saveEngraving() {
-    if (!engraving) return;
-    const tecnica = tecnicaFromForm(engraving);
-    if (!tecnica || engravingCalc?.error) return;
-    const gravacao = { tecnica, local: engraving.local.trim() };
-    setItems((list) => list.map((item) => {
-      if (item.id !== engraving.itemId) return item;
-      const gravacoes = engraving.index === null ? [...item.gravacoes, gravacao] : item.gravacoes.map((g, i) => (i === engraving.index ? gravacao : g));
-      return { ...item, gravacoes };
-    }));
-    setEngraving(null);
-  }
+  const closeModal = useCallback(() => setModal(null), []);
+  const saveFromModal = useCallback((item: Item) => {
+    setItems((list) => (list.some((entry) => entry.id === item.id) ? list.map((entry) => (entry.id === item.id ? item : entry)) : [...list, item]));
+    setModal(null);
+  }, []);
 
   async function submit() {
     setSaving(true);
@@ -402,12 +276,6 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   // Cliente é opcional: sem ele o orçamento fica "Cliente a definir".
   const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving;
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
-  const engravingItem = engraving ? items.find((item) => item.id === engraving.itemId) : undefined;
-  const engravingProduct = engravingItem?.source === "catalogo" ? products[engravingItem.publicId] : undefined;
-  const tecnicas = useMemo(
-    () => TECNICAS.filter((t) => t.tipo !== "spot" || (engravingProduct?.supplier === "spot" && engravingProduct.spotOptions.length > 0)),
-    [engravingProduct],
-  );
 
   if (loading) return <main className="qe-page"><p className="qe-hint">Carregando orçamento…</p></main>;
   if (loadError) return <main className="qe-page"><p className="qe-error">{loadError}</p><Link className="qe-btn-text" href="/equipe?aba=orcamentos">Voltar aos orçamentos</Link></main>;
@@ -453,213 +321,94 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
           <section className="qe-card">
             <h2>Produtos</h2>
             {items.length ? (
-              <div className="qe-cols"><span>Produto</span><span>Cor</span><span className="qe-r">Qtd.</span><span className="qe-r">Unitário</span><span className="qe-r">Total</span><span /></div>
-            ) : <p className="qe-hint">Nenhum produto ainda. Busque no catálogo ou adicione um item fora do catálogo.</p>}
+              <div className="qe-cols qe-cols-list"><span>Produto</span><span>Cor</span><span className="qe-r">Qtd.</span><span className="qe-r">Unitário</span><span className="qe-r">Total</span><span /></div>
+            ) : <p className="qe-hint">Nenhum produto ainda. Busque abaixo e configure cor, quantidade e gravação.</p>}
 
             {items.map((item) => {
               const product = item.source === "catalogo" ? products[item.publicId] : undefined;
-              const variant = product?.variants.find((entry) => entry.label === (item.source === "catalogo" ? item.variant : "")) ?? product?.variants[0];
+              const variant = product?.variants.find((entry) => entry.label === (item.source === "catalogo" ? item.variant : ""));
               const result = preview[item.id];
               const ok = result?.ok ? result : null;
               return (
                 <div className="qe-item" key={item.id}>
-                  <div className="qe-line">
+                  <div className="qe-line qe-line-list">
                     <div className="qe-prod">
                       {product ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <span className="qe-thumb"><img alt="" src={variant?.imageUrl || product.imageUrl} /></span>
-                      ) : <span className="qe-thumb qe-thumb-blank">avulso</span>}
+                        <span className="qe-thumb qe-thumb-md"><img alt="" src={variant?.imageUrl || product.imageUrl} /></span>
+                      ) : <span className="qe-thumb qe-thumb-md qe-thumb-blank">avulso</span>}
                       <div>
                         <b>{productLabel(item)}</b>
                         <small>{product ? `${product.fareCode} · ${product.supplierCode}` : "Fora do catálogo"}</small>
-                        <label className="qe-cost">
-                          <span>Custo/peça R$</span>
-                          <input
-                            aria-label={`Custo por peça de ${productLabel(item)}`}
-                            className={item.costOverride ? "is-manual" : undefined}
-                            disabled={!editable}
-                            inputMode="decimal"
-                            onChange={(event) => updateItem(item.id, { costOverride: cleanMoney(event.target.value) || undefined })}
-                            placeholder={moneyInput(item.source === "avulso" ? item.cost : variant?.cost ?? 0)}
-                            title={item.costOverride ? "Custo digitado. Apague para voltar ao do catálogo." : "Custo do catálogo. Digite para alterar."}
-                            value={item.costOverride ?? ""}
-                          />
-                        </label>
+                        <small>
+                          {ok ? `Custo ${brl(ok.productCost)}/un.` : ""}
+                          {item.costOverride ? <span className="qe-hand"> digitado</span> : null}
+                        </small>
+                        {item.gravacoes.length ? (
+                          <ul className="qe-glist">
+                            {item.gravacoes.map((gravacao, index) => {
+                              const calc = ok?.gravacoes[index];
+                              return (
+                                <li key={index}>
+                                  {engravingSummary(calc, gravacao)}
+                                  {calc ? <span className="qe-muted"> · {brl(calc.custoUnitario)}/un.</span> : null}
+                                  {gravacao.custoOverride ? <span className="qe-hand"> digitado</span> : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : <small className="qe-faint">Sem gravação</small>}
                       </div>
                     </div>
-                    {product ? (
-                      <select aria-label="Cor" disabled={!editable} onChange={(event) => updateItem(item.id, { variant: event.target.value })} value={item.source === "catalogo" ? item.variant : ""}>
-                        {product.variants.map((entry) => <option key={entry.label} value={entry.label}>{entry.label}</option>)}
-                      </select>
-                    ) : <span />}
-                    <input
-                      aria-label="Quantidade"
-                      className="qe-qty"
-                      disabled={!editable}
-                      inputMode="numeric"
-                      onChange={(event) => updateItem(item.id, { quantity: Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0 })}
-                      value={item.quantity || ""}
-                    />
-                    <div className="qe-price">
-                      <input
-                        aria-label={`Preço por peça de ${productLabel(item)}`}
-                        className={item.priceOverride ? "qe-money is-manual" : "qe-money"}
-                        disabled={!editable}
-                        inputMode="decimal"
-                        onChange={(event) => updateItem(item.id, { priceOverride: cleanMoney(event.target.value) || undefined })}
-                        placeholder={ok ? moneyInput(ok.suggestedPrice) : "—"}
-                        title={item.priceOverride ? "Preço digitado. Apague para voltar ao calculado." : "Preço calculado. Digite para alterar."}
-                        value={item.priceOverride ?? ""}
-                      />
-                      {item.priceOverride && ok && editable ? (
-                        <button className="qe-reset" onClick={() => updateItem(item.id, { priceOverride: undefined })} title="Voltar ao preço calculado" type="button">
-                          calculado {brl(ok.suggestedPrice)}
-                        </button>
-                      ) : null}
-                    </div>
+                    <span className="qe-cell">{item.source === "catalogo" ? item.variant : "—"}</span>
+                    <span className="qe-r">{item.quantity.toLocaleString("pt-BR")}</span>
+                    <span className="qe-r qe-unit">
+                      {ok ? brl(ok.unitPrice) : "—"}
+                      {item.priceOverride ? <small className="qe-hand qe-block">digitado</small> : null}
+                    </span>
                     <span className="qe-r">{ok ? brl(ok.total) : "—"}</span>
                     {editable ? (
-                      <button aria-label={`Remover ${productLabel(item)}`} className="qe-rm" onClick={() => setItems((list) => list.filter((entry) => entry.id !== item.id))} type="button"><X size={14} /></button>
+                      <span className="qe-row-acts">
+                        <button aria-label={`Editar ${productLabel(item)}`} className="qe-rm qe-edit" onClick={() => editItem(item)} title="Editar" type="button"><PencilLine size={15} /></button>
+                        <button aria-label={`Remover ${productLabel(item)}`} className="qe-rm" onClick={() => setItems((list) => list.filter((entry) => entry.id !== item.id))} title="Remover" type="button"><X size={15} /></button>
+                      </span>
                     ) : <span />}
                   </div>
-                  {result && !result.ok ? <p className="qe-error qe-indent">{result.error}</p> : null}
-                  {ok?.stockWarning ? <p className="qe-warn qe-indent">{ok.stockWarning}</p> : null}
-
-                  <div className="qe-engr">
-                    {item.gravacoes.map((gravacao, index) => {
-                      const calc = ok?.gravacoes[index];
-                      return (
-                        <div className="qe-eline" key={index}>
-                          <span><b>{calc?.descricao ?? "Gravação"}</b>{gravacao.local ? <span className="qe-muted"> · {gravacao.local}</span> : null}</span>
-                          <label className="qe-cost qe-ecost">
-                            <span>Custo/peça R$</span>
-                            <input
-                              aria-label={`Custo por peça da gravação ${calc?.descricao ?? ""}`}
-                              className={gravacao.custoOverride ? "is-manual" : undefined}
-                              disabled={!editable}
-                              inputMode="decimal"
-                              onChange={(event) => updateItem(item.id, {
-                                gravacoes: item.gravacoes.map((g, i) => (i === index ? { ...g, custoOverride: cleanMoney(event.target.value) || undefined } : g)),
-                              })}
-                              placeholder={calc && !calc.manual ? moneyInput(calc.custoUnitario) : ""}
-                              title={gravacao.custoOverride ? "Custo digitado. Apague para voltar ao calculado." : "Custo calculado. Digite para alterar."}
-                              value={gravacao.custoOverride ?? ""}
-                            />
-                          </label>
-                          {editable ? (
-                            <span className="qe-eacts">
-                              <button onClick={() => openEngraving(item, index)} type="button">Editar</button>
-                              <button onClick={() => updateItem(item.id, { gravacoes: item.gravacoes.filter((_, i) => i !== index) })} type="button">Remover</button>
-                            </span>
-                          ) : <span />}
-                        </div>
-                      );
-                    })}
-                    {!item.gravacoes.length ? <span className="qe-none">Sem gravação</span> : null}
-                    {editable && engraving?.itemId !== item.id ? (
-                      <button className="qe-btn-text qe-add-g" onClick={() => openEngraving(item, null)} type="button">+ Adicionar gravação</button>
-                    ) : null}
-                  </div>
-
-                  {engraving?.itemId === item.id ? (
-                    <div className="qe-gform">
-                      <div className="qe-gform-grid">
-                        <label className="qe-field"><span>Gravação</span>
-                          <select onChange={(event) => setEngraving({ ...engraving, tipo: event.target.value })} value={engraving.tipo}>
-                            {tecnicas.map((t) => <option key={t.tipo} value={t.tipo}>{t.label}</option>)}
-                          </select>
-                        </label>
-                        {engraving.tipo !== "spot" ? (
-                          <label className="qe-field"><span>Local</span><input onChange={(event) => setEngraving({ ...engraving, local: event.target.value })} placeholder="Frente, verso, tampa…" value={engraving.local} /></label>
-                        ) : null}
-                        {engraving.tipo === "dtf-textil" || engraving.tipo === "dtf-uv" ? (
-                          <>
-                            <label className="qe-field"><span>Largura (cm)</span><input inputMode="decimal" onChange={(event) => setEngraving({ ...engraving, largura: event.target.value })} value={engraving.largura} /></label>
-                            <label className="qe-field"><span>Altura (cm)</span><input inputMode="decimal" onChange={(event) => setEngraving({ ...engraving, altura: event.target.value })} value={engraving.altura} /></label>
-                          </>
-                        ) : null}
-                        {engraving.tipo === "manual" ? (
-                          <>
-                            <label className="qe-field"><span>Nome</span><input onChange={(event) => setEngraving({ ...engraving, nome: event.target.value })} placeholder="Ex.: Silk 1 cor" value={engraving.nome} /></label>
-                            <label className="qe-field"><span>Custo/peça</span><input inputMode="decimal" onChange={(event) => setEngraving({ ...engraving, custo: event.target.value })} placeholder="0,00" value={engraving.custo} /></label>
-                          </>
-                        ) : null}
-                        {engraving.tipo === "spot" && engravingProduct ? (() => {
-                          // Componente → Local → Técnica → Área → Nº de cores (cada um só com o que existe acima).
-                          const choices = spotChoices(engravingProduct.spotOptions, { fromId: engraving.spotId });
-                          return (
-                            <div className="qe-spot">
-                              {choices.levels.map((level) => (
-                                <label className="qe-field" key={level.key}>
-                                  <span>{level.label}</span>
-                                  <select
-                                    disabled={level.values.length === 1}
-                                    onChange={(event) => {
-                                      const next = spotChoices(engravingProduct.spotOptions, { fromId: engraving.spotId, [level.key]: event.target.value });
-                                      if (next.option) setEngraving({ ...engraving, spotId: next.option.id });
-                                    }}
-                                    value={level.selected}
-                                  >
-                                    {level.values.map((value) => <option key={value.value} value={value.value}>{value.label}</option>)}
-                                  </select>
-                                </label>
-                              ))}
-                            </div>
-                          );
-                        })() : null}
-                      </div>
-                      <div className="qe-gcalc">
-                        <p className={engravingCalc?.error ? "qe-error" : undefined}>{engravingCalc?.text ?? "Preencha para calcular."}</p>
-                        <div>
-                          <button className="qe-btn qe-btn-secondary" onClick={() => setEngraving(null)} type="button">Cancelar</button>
-                          <button className="qe-btn qe-btn-primary" disabled={!tecnicaFromForm(engraving) || Boolean(engravingCalc?.error)} onClick={saveEngraving} type="button">Salvar gravação</button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+                  {result && !result.ok ? <p className="qe-error qe-indent-md">{result.error}</p> : null}
+                  {ok?.stockWarning ? <p className="qe-warn qe-indent-md">{ok.stockWarning}</p> : null}
                 </div>
               );
             })}
 
             {editable ? (
-              loose ? (
-                <div className="qe-gform qe-loose">
-                  <div className="qe-loose-grid">
-                    <label className="qe-field"><span>Item fora do catálogo</span><input autoFocus onChange={(event) => setLoose({ ...loose, name: event.target.value })} placeholder="Ex.: Banner lona 90 × 120 cm" value={loose.name} /></label>
-                    <label className="qe-field"><span>Custo/peça</span><input inputMode="decimal" onChange={(event) => setLoose({ ...loose, cost: event.target.value })} placeholder="0,00" value={loose.cost} /></label>
-                    <label className="qe-field"><span>Qtd.</span><input inputMode="numeric" onChange={(event) => setLoose({ ...loose, quantity: event.target.value })} value={loose.quantity} /></label>
+              <div className="qe-addbar">
+                <div className="qe-picker">
+                  <div className="qe-search">
+                    <Search aria-hidden="true" size={16} />
+                    <input aria-label="Adicionar produto" onChange={(event) => setProductQuery(event.target.value)} placeholder="Adicionar produto — código Fare, código do fornecedor ou nome" value={productQuery} />
                   </div>
-                  <div className="qe-actions">
-                    <button className="qe-btn qe-btn-secondary" onClick={() => setLoose(null)} type="button">Cancelar</button>
-                    <button className="qe-btn qe-btn-primary" onClick={addLoose} type="button">Adicionar item</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="qe-addbar">
-                  <div className="qe-picker">
-                    <div className="qe-search">
-                      <Search aria-hidden="true" size={16} />
-                      <input aria-label="Adicionar produto" onChange={(event) => setProductQuery(event.target.value)} placeholder="Adicionar produto — código Fare, código do fornecedor ou nome" value={productQuery} />
+                  {productQuery.trim().length >= 2 ? (
+                    <div className="qe-menu">
+                      {productResults.map((product) => {
+                        const cost = Math.min(...product.variants.map((variant) => variant.cost));
+                        const stock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
+                        return (
+                          <button className="qe-opt" key={product.publicId} onClick={() => chooseProduct(product)} type="button">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <span className="qe-thumb qe-thumb-sm"><img alt="" src={product.imageUrl} /></span>
+                            <span>
+                              <b>{product.name}</b>
+                              <small>{product.fareCode} · {product.supplierCode} · custo {brl(cost)} · {product.variants.length} {product.variants.length === 1 ? "cor" : "cores"} · {stock.toLocaleString("pt-BR")} em estoque</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {!productResults.length ? <p className="qe-menu-empty">{productQueryDebounced === productQuery.trim() ? "Nenhum produto encontrado." : "Buscando…"}</p> : null}
                     </div>
-                    {productQuery.trim().length >= 2 ? (
-                      <div className="qe-menu">
-                        {productResults.map((product) => {
-                          const cost = Math.min(...product.variants.map((variant) => variant.cost));
-                          return (
-                            <button className="qe-opt" key={product.publicId} onClick={() => addProduct(product)} type="button">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <span className="qe-thumb qe-thumb-sm"><img alt="" src={product.imageUrl} /></span>
-                              <span><b>{product.name}</b><small>{product.fareCode} · {product.supplierCode} · custo {brl(cost)} · {product.variants.length} {product.variants.length === 1 ? "cor" : "cores"}</small></span>
-                            </button>
-                          );
-                        })}
-                        {!productResults.length ? <p className="qe-menu-empty">{productQueryDebounced === productQuery.trim() ? "Nenhum produto encontrado." : "Buscando…"}</p> : null}
-                      </div>
-                    ) : null}
-                  </div>
-                  <button className="qe-btn qe-btn-secondary" onClick={() => setLoose({ name: "", cost: "", quantity: "100" })} type="button">Item fora do catálogo</button>
+                  ) : null}
                 </div>
-              )
+                <button className="qe-btn qe-btn-secondary" onClick={() => setModal({ kind: "avulso" })} type="button">Item fora do catálogo</button>
+              </div>
             ) : null}
           </section>
 
@@ -729,9 +478,6 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
             <div className="qe-sum-row"><span>Margem</span><span className="qe-margin">{brl(totals.margin)} · {marginPercent}%</span></div>
           </div>
 
-          {items.some((item) => item.costOverride || item.priceOverride || item.gravacoes.some((g) => g.custoOverride)) ? (
-            <p className="qe-manual-note"><span aria-hidden="true" className="qe-manual-dot" /> Valores com fundo laranja foram digitados à mão.</p>
-          ) : null}
           <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p>
           {saveError ? <p className="qe-error">{saveError}</p> : null}
           {editable ? (
@@ -742,6 +488,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
           {!fixedCustomer && !customer ? <p className="qe-hint qe-center">Sem cliente, fica como “Cliente a definir”. Dá para escolher depois.</p> : null}
         </aside>
       </div>
+
+      {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} start={modal} /> : null}
     </main>
   );
 }
