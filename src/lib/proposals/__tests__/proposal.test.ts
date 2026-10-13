@@ -19,7 +19,7 @@ const QUOTE: Quote = {
     name: "Ana Souza", company: "Padaria Boa Vista", phone: "(11) 98888-7777",
     billing: { personType: "pj", document: "11.222.333/0001-81", companyName: "Padaria Boa Vista Ltda", tradeName: "", stateRegistration: "ISENTO", address: { cep: "13201-000", street: "Rua A", number: "1", complement: "", district: "Centro", city: "Jundiaí", state: "SP" } },
   },
-  items: ITEMS, status: "aguardando_orcamento", orderId: null, totalCents: 198300, createdBy: "Bia", internalNotes: "não mostrar", proposalSentAt: null, createdAt: "2026-10-12T15:00:00.000Z", updatedAt: "2026-10-12T15:00:00.000Z",
+  items: ITEMS, status: "aguardando_orcamento", orderId: null, totalCents: 198300, createdBy: "Bia", internalNotes: "não mostrar", proposalSentAt: null, discount: null, createdAt: "2026-10-12T15:00:00.000Z", updatedAt: "2026-10-12T15:00:00.000Z",
 };
 
 const NOW = new Date("2026-10-13T14:00:00.000Z");
@@ -73,6 +73,33 @@ describe("proposta para o cliente", () => {
 
   it("orçamento fechado não gera proposta", () => {
     expect(() => buildProposal({ ...QUOTE, status: "encerrado" }, { seller: "Bia", now: NOW, siteUrl: SITE })).toThrow(/fechado/i);
+  });
+});
+
+describe("desconto no total", () => {
+  const COM_DESCONTO: Quote = { ...QUOTE, discount: { type: "percent", value: 10 }, totalCents: 178470 };
+
+  it("sem desconto: subtotal igual ao total e nenhuma linha de desconto", () => {
+    const proposal = buildProposal(QUOTE, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal).toMatchObject({ subtotal: 1983, discount: null, total: 1983 });
+  });
+
+  it("por porcentagem: mostra subtotal, linha 'Desconto (10%)' e o total já descontado", () => {
+    const proposal = buildProposal(COM_DESCONTO, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal).toMatchObject({ subtotal: 1983, discount: { label: "Desconto (10%)", amount: 198.3 }, total: 1784.7 });
+  });
+
+  it("por valor: linha 'Desconto' com o valor", () => {
+    const proposal = buildProposal({ ...QUOTE, discount: { type: "value", value: 83 } }, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal).toMatchObject({ subtotal: 1983, discount: { label: "Desconto", amount: 83 }, total: 1900 });
+  });
+
+  it("WhatsApp e botão Aprovar citam o total com desconto", () => {
+    const proposal = buildProposal(COM_DESCONTO, { seller: "Bia", now: NOW, siteUrl: SITE });
+    const text = proposalWhatsAppText(proposal);
+    expect(text).toContain("Subtotal: R$ 1.983,00 · Desconto (10%): − R$ 198,30");
+    expect(text).toContain("*Total: R$ 1.784,70* (frete a combinar)");
+    expect(new URL(proposalReplyLinks(proposal).approve).searchParams.get("text")).toContain("(total R$ 1.784,70)");
   });
 });
 

@@ -2,6 +2,7 @@ import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole, type BackofficeSession } from "@/lib/backoffice/access";
 import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
 import { InvalidQuoteTransitionError, isQuoteStatus, QUOTE_STATUSES, quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
+import { discountLine } from "@/lib/quotes/discount";
 import type { Quote } from "@/lib/quotes/repository";
 
 export type BackofficeQuoteSummary = {
@@ -15,8 +16,10 @@ export type BackofficeQuoteSummary = {
   billing: QuoteBilling | null;
   items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"]; gravacoes?: QuoteCartItem["gravacoes"]; costing?: QuoteCartItem["costing"] }>;
   itemCount: number;
-  /** null quando algum item está "sob consulta". */
+  /** null quando algum item está "sob consulta". Já com o desconto. */
   total: number | null;
+  /** Desconto no total (rótulo e valor), para o detalhe. */
+  discount: { label: string; amount: number } | null;
   /** Quem montou no painel (null = veio do site). */
   createdBy: string | null;
   internalNotes: string;
@@ -39,6 +42,7 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     items: quote.items.map(({ productName, quantity, selections, unitPrice, codes, gravacoes, costing }) => ({ productName, quantity, selections, unitPrice, codes, ...(gravacoes?.length ? { gravacoes } : {}), ...(costing ? { costing } : {}) })),
     itemCount: quote.items.length,
     total: quote.totalCents === null ? null : quote.totalCents / 100,
+    discount: discountLine(quote.discount, quote.totalCents),
     createdBy: quote.createdBy ?? null,
     internalNotes: quote.internalNotes ?? "",
     proposalSentAt: quote.proposalSentAt ?? null,

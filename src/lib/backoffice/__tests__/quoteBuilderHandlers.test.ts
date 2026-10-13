@@ -82,4 +82,40 @@ describe("editor de orçamentos do painel", () => {
     expect(findQuoteById(db, quote.id)?.items[0]).toMatchObject({ unitPrice: 6.44, gravacoes: [{ descricao: "Laser", local: "Corpo" }, { descricao: "Laser", local: "Clipe" }] });
     expect((await handlers.update(put(state.updatedAt), quote.id)).status).toBe(409);
   });
+
+  it("desconto no total: prévia mostra subtotal, desconto, total e margem; cria, reabre e edita", async () => {
+    const { db, handlers } = setup();
+    const items = [{ id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] }];
+
+    const preview = await (await handlers.preview(post({ items, discount: { type: "percent", value: "10" } }))).json() as { totals: Record<string, unknown> };
+    // 300 × R$ 1,78 = R$ 534,00; 10% = R$ 53,40; custo 0,72 × 300 + 100 = R$ 316,00
+    expect(preview.totals).toEqual({ subtotal: 534, discount: 53.4, total: 480.6, cost: 316, margin: 164.6, pending: 0 });
+
+    const tooMuch = await (await handlers.preview(post({ items, discount: { type: "value", value: "600" } }))).json() as { totals: Record<string, unknown>; discountError?: string };
+    expect(tooMuch.discountError).toBe("O desconto não pode ser maior que o subtotal.");
+    expect(tooMuch.totals).toMatchObject({ subtotal: 534, discount: 0, total: 534 });
+
+    const created = await handlers.create(post({ customerRef: "conta:u1", idempotencyKey: "orc-desc-1234", items, discount: { type: "value", value: "34" } }));
+    expect(created.status).toBe(201);
+    const { id } = await created.json() as { id: string };
+    expect(findQuoteById(db, id)).toMatchObject({ totalCents: 50000, discount: { type: "value", value: 34 } });
+
+    const state = await (await handlers.read(new Request("http://x"), id)).json() as { updatedAt: string; discount: unknown };
+    expect(state.discount).toEqual({ type: "value", value: 34 });
+
+    const put = new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ updatedAt: state.updatedAt, internalNotes: "", items, discount: null }) });
+    expect((await handlers.update(put, id)).status).toBe(200);
+    expect(findQuoteById(db, id)).toMatchObject({ totalCents: 53400, discount: null });
+  });
+
+  it("recusa criar com desconto inválido ou maior que o subtotal", async () => {
+    const { handlers } = setup();
+    const items = [{ id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] }];
+    const bad = await handlers.create(post({ customerRef: "conta:u1", idempotencyKey: "orc-desc-5678", items, discount: { type: "percent", value: "120" } }));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toMatchObject({ message: "Desconto em porcentagem vai de 0 a 100%." });
+    const over = await handlers.create(post({ customerRef: "conta:u1", idempotencyKey: "orc-desc-9999", items, discount: { type: "value", value: "999" } }));
+    expect(over.status).toBe(400);
+    expect(await over.json()).toMatchObject({ message: "O desconto não pode ser maior que o subtotal." });
+  });
 });

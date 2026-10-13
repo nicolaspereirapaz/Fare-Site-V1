@@ -26,6 +26,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     paymentMethod: "pix",
     status: "aguardando_pagamento",
     totalCents: 12500,
+    discount: null,
     createdAt: "2026-09-28T12:00:00.000Z",
     updatedAt: "2026-09-28T12:00:00.000Z",
     ...overrides,
@@ -186,6 +187,15 @@ describe("histórico do pedido no painel", () => {
     const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
     const payload = await (await createListBackofficeOrdersHandler(getSession, () => [buildOrder({ id: "order-1" })])(listRequest())).json();
     expect(payload.orders[0].history).toEqual([]);
+  });
+});
+
+describe("pedido vindo de orçamento com desconto", () => {
+  it("o total do quadro é o do pedido (com desconto), não a soma dos itens", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
+    const handler = createListBackofficeOrdersHandler(getSession, () => [buildOrder({ totalCents: 11250, discount: { type: "value", value: 12.5 } })]);
+    const payload = await (await handler(listRequest())).json();
+    expect(payload.orders[0]).toMatchObject({ total: 112.5, discount: { label: "Desconto", amount: 12.5 } });
   });
 });
 

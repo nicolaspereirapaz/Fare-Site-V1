@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
+import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import {
   ORDEM_STATUS_PEDIDO,
   STATUS_PEDIDO_LEGADO,
@@ -28,6 +29,8 @@ export type CreateOrderInput = {
   customer: QuoteCustomer;
   items: QuoteCartItem[];
   paymentMethod: PaymentMethod;
+  /** Desconto no total, vindo do orçamento (pedidos do site não têm). */
+  discount?: QuoteDiscount | null;
 };
 
 /** Pedido nascido de um orçamento já pago: começa direto em "Aguardando arte". */
@@ -35,10 +38,11 @@ export type CreateOrderOptions = {
   initialStatus?: StatusPedido;
 };
 
-export type Order = CreateOrderInput & {
+export type Order = Omit<CreateOrderInput, "discount"> & {
   id: string;
   status: StatusPedido;
   totalCents: number | null;
+  discount: QuoteDiscount | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +56,7 @@ type OrderRow = {
   payment_method: PaymentMethod;
   status: StatusPedido;
   total_cents: number | null;
+  discount_json?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -247,15 +252,28 @@ export function runOrderMigrations(database: DatabaseSync) {
     ${CREATE_ORDER_STATUS_HISTORY_TABLE_SQL.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS")};
   `);
   migrateOrderStatusHistory(database);
+  const orderColumns = new Set((database.prepare("PRAGMA table_info(fare_orders)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!orderColumns.has("discount_json")) database.exec("ALTER TABLE fare_orders ADD COLUMN discount_json TEXT");
   database.exec(`
     CREATE INDEX IF NOT EXISTS fare_order_status_history_order_idx
       ON fare_order_status_history (order_id, ordinal ASC);
   `);
 }
 
-function calculateOrderTotal(items: QuoteCartItem[]): number | null {
+function calculateOrderTotal(items: QuoteCartItem[], discount: QuoteDiscount | null = null): number | null {
   if (items.some((item) => item.unitPrice === null)) return null;
-  return Math.round(items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
+  const subtotal = Math.round(items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
+  return applyDiscount(subtotal, discount).totalCents;
+}
+
+function readDiscount(raw: string | null | undefined): QuoteDiscount | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as QuoteDiscount;
+    return (parsed.type === "percent" || parsed.type === "value") && parsed.value > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function deserializeOrder(row: OrderRow): Order {
@@ -268,6 +286,7 @@ function deserializeOrder(row: OrderRow): Order {
     paymentMethod: row.payment_method,
     status: row.status,
     totalCents: row.total_cents,
+    discount: readDiscount(row.discount_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -282,8 +301,8 @@ export function createOrder(database: DatabaseSync, input: CreateOrderInput, opt
   database.prepare(`
     INSERT INTO fare_orders (
       id, user_id, idempotency_key, customer_snapshot, items_snapshot,
-      payment_method, status, total_cents, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      payment_method, status, total_cents, discount_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
   `).run(
     id,
@@ -293,7 +312,8 @@ export function createOrder(database: DatabaseSync, input: CreateOrderInput, opt
     JSON.stringify(input.items),
     input.paymentMethod,
     initialStatus,
-    calculateOrderTotal(input.items),
+    calculateOrderTotal(input.items, input.discount ?? null),
+    input.discount ? JSON.stringify(input.discount) : null,
     now,
     now,
   );

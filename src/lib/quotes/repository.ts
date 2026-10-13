@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
 import { createOrder, runOrderMigrations, type Order } from "@/lib/orders/repository";
@@ -36,6 +37,8 @@ export type Quote = CreateQuoteInput & {
   internalNotes: string;
   /** Última vez que a proposta foi enviada ao cliente. */
   proposalSentAt: string | null;
+  /** Desconto no total dado pela equipe (totalCents já vem descontado). */
+  discount: QuoteDiscount | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +55,7 @@ type QuoteRow = {
   created_by?: string | null;
   internal_notes?: string | null;
   proposal_sent_at?: string | null;
+  discount_json?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -106,11 +110,24 @@ export function runQuoteMigrations(database: DatabaseSync) {
   if (!columns.has("created_by")) database.exec("ALTER TABLE fare_quotes ADD COLUMN created_by TEXT");
   if (!columns.has("internal_notes")) database.exec("ALTER TABLE fare_quotes ADD COLUMN internal_notes TEXT NOT NULL DEFAULT ''");
   if (!columns.has("proposal_sent_at")) database.exec("ALTER TABLE fare_quotes ADD COLUMN proposal_sent_at TEXT");
+  if (!columns.has("discount_json")) database.exec("ALTER TABLE fare_quotes ADD COLUMN discount_json TEXT");
 }
 
-function totalCents(items: QuoteCartItem[]): number | null {
+/** Soma dos itens em centavos (null se algum está "sob consulta"), já com o desconto. */
+function totalCents(items: QuoteCartItem[], discount: QuoteDiscount | null = null): number | null {
   if (items.some((item) => item.unitPrice === null)) return null;
-  return Math.round(items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
+  const subtotal = Math.round(items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
+  return applyDiscount(subtotal, discount).totalCents;
+}
+
+function readDiscount(raw: string | null | undefined): QuoteDiscount | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as QuoteDiscount;
+    return (parsed.type === "percent" || parsed.type === "value") && parsed.value > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function deserialize(row: QuoteRow): Quote {
@@ -126,6 +143,7 @@ function deserialize(row: QuoteRow): Quote {
     createdBy: row.created_by ?? null,
     internalNotes: row.internal_notes ?? "",
     proposalSentAt: row.proposal_sent_at ?? null,
+    discount: readDiscount(row.discount_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -165,15 +183,17 @@ export function listQuotesByOwners(database: DatabaseSync, ownerIds: string[]): 
 /** Orçamento montado pela equipe no painel (cliente do site ou cadastrado no painel). */
 export function createManualQuote(
   database: DatabaseSync,
-  input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string },
+  input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string; discount?: QuoteDiscount | null },
 ): Quote {
   runQuoteMigrations(database);
   const now = new Date().toISOString();
+  const discount = input.discount ?? null;
+  const total = totalCents(input.items, discount);
   database.prepare(`
-    INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?, ?, ?)
+    INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, discount_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
-  `).run(randomUUID(), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), totalCents(input.items), input.createdBy, input.internalNotes, now, now);
+  `).run(randomUUID(), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, now, now);
   const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")
     .get(input.ownerId, input.idempotencyKey) as QuoteRow | undefined;
   if (!row) throw new Error("Não foi possível salvar o orçamento.");
@@ -195,18 +215,20 @@ function nextVersion(previous: string): string {
 /** Equipe edita os itens (e gravações) de um orçamento aberto; recusa se alguém mudou antes. */
 export function replaceQuoteItems(
   database: DatabaseSync,
-  input: { quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string },
+  input: { quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string; discount?: QuoteDiscount | null },
 ): Quote {
   runQuoteMigrations(database);
   const current = findQuoteById(database, input.quoteId);
   if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
   if (!EDITABLE_STATUSES.includes(current.status)) throw new Error("Este orçamento não pode mais ser alterado.");
-  const total = totalCents(input.items);
+  // Sem o campo = mantém o desconto que já estava; null tira.
+  const discount = input.discount === undefined ? current.discount : input.discount;
+  const total = totalCents(input.items, discount);
   const now = nextVersion(current.updatedAt);
-  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
-    .run(JSON.stringify(input.items), total, input.internalNotes, now, current.id, input.expectedUpdatedAt);
+  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, discount_json = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+    .run(JSON.stringify(input.items), total, input.internalNotes, discount ? JSON.stringify(discount) : null, now, current.id, input.expectedUpdatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
-  return { ...current, items: input.items, totalCents: total, internalNotes: input.internalNotes, updatedAt: now };
+  return { ...current, items: input.items, totalCents: total, internalNotes: input.internalNotes, discount, updatedAt: now };
 }
 
 /** Proposta enviada: guarda a data e, se ainda aguardava orçamento, passa para "Em negociação". */
@@ -272,7 +294,7 @@ export function priceQuoteItem(
   const items = current.items.map((item, index) => (index === input.itemIndex
     ? { ...item, quantity: input.quantity, quantityRange: undefined, unitPrice: input.unitPrice, costing: input.costing }
     : item));
-  const total = totalCents(items);
+  const total = totalCents(items, current.discount);
   const now = nextVersion(current.updatedAt);
   const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
     .run(JSON.stringify(items), total, now, current.id, current.updatedAt);
@@ -301,6 +323,7 @@ export function convertQuoteToOrder(database: DatabaseSync, input: { quoteId: st
         customer: current.customer,
         items: current.items,
         paymentMethod: "pix",
+        discount: current.discount,
       },
       { initialStatus: "aguardando_arte" },
     );

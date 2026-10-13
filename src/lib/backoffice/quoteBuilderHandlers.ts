@@ -5,6 +5,7 @@ import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } 
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers } from "@/lib/customers/repository";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
+import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote } from "@/lib/quotes/repository";
 
 /** Rotas do editor de orçamentos do painel (clientes, produtos, prévia, criar e editar). */
@@ -70,6 +71,31 @@ export function toEditorProduct(product: BuilderProduct) {
   };
 }
 
+const reais = (centsValue: number) => centsValue / 100;
+
+/** Totais da prévia com o desconto: subtotal, desconto, total e margem (sobre o total descontado). */
+function totalsWithDiscount(totals: { total: number; cost: number; pending: number }, discount: QuoteDiscount | null) {
+  const subtotalCents = Math.round(totals.total * 100);
+  let applied = { subtotalCents, discountCents: 0, totalCents: subtotalCents };
+  let discountError: string | undefined;
+  try {
+    applied = applyDiscount(subtotalCents, discount);
+  } catch (error) {
+    discountError = error instanceof Error ? error.message : "Desconto inválido.";
+  }
+  return {
+    totals: {
+      subtotal: reais(applied.subtotalCents),
+      discount: reais(applied.discountCents),
+      total: reais(applied.totalCents),
+      cost: totals.cost,
+      margin: reais(applied.totalCents - Math.round(totals.cost * 100)),
+      pending: totals.pending,
+    },
+    discountError,
+  };
+}
+
 export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
   return {
     async searchCustomers(request: Request) {
@@ -111,9 +137,18 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       const body = await readJson(request);
       try {
         const drafts = parseDraftItems(body?.items);
+        let discount: QuoteDiscount | null = null;
+        let parseError: string | undefined;
+        try {
+          discount = parseDiscount(body?.discount);
+        } catch (error) {
+          parseError = error instanceof Error ? error.message : "Desconto inválido.";
+        }
         const catalog = await deps.catalog();
         const { preview, totals } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
-        return json({ preview, totals });
+        const withDiscount = totalsWithDiscount(totals, discount);
+        const discountError = parseError ?? withDiscount.discountError;
+        return json({ preview, totals: withDiscount.totals, ...(discountError ? { discountError } : {}) });
       } catch (error) {
         return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Rascunho inválido." }, 400);
       }
@@ -130,12 +165,13 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       if (!owner) return json({ error: "INVALID_REQUEST", message: "Escolha o cliente." }, 400);
       try {
         const drafts = parseDraftItems(body.items);
+        const discount = parseDiscount(body.discount);
         const catalog = await deps.catalog();
         const { items, preview } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
         if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
         const quote = createManualQuote(deps.database(), {
           ownerId: owner.ownerId, customer: owner.customer, items, createdBy: access.session.user.name,
-          internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), idempotencyKey,
+          internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), idempotencyKey, discount,
         });
         return json({ id: quote.id }, 201);
       } catch (error) {
@@ -168,6 +204,8 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       if (!quote) return json({ error: "QUOTE_NOT_FOUND" }, 404);
       try {
         const drafts = parseDraftItems(body.items);
+        // Campo ausente = mantém o desconto atual; null/vazio = sem desconto.
+        const discount = "discount" in body ? parseDiscount(body.discount) : undefined;
         const catalog = await deps.catalog();
         const { items, preview } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
         if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
@@ -180,7 +218,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
           return same && before.costing && item.costing ? { ...item, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : item;
         });
         const updated = replaceQuoteItems(deps.database(), {
-          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""),
+          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount,
         });
         return json({ id: updated.id, updatedAt: updated.updatedAt });
       } catch (error) {
@@ -199,6 +237,7 @@ export function editorState(quote: Quote) {
     updatedAt: quote.updatedAt,
     createdBy: quote.createdBy,
     internalNotes: quote.internalNotes,
+    discount: quote.discount,
     customer: { name: quote.customer.name, company: quote.customer.company ?? "", phone: quote.customer.phone ?? "", notes: quote.customer.notes ?? "" },
     items: quote.items.map(draftFromItem),
   };

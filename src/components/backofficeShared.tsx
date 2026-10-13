@@ -193,6 +193,7 @@ export function DetailsSections({
   billing,
   items,
   total,
+  discount,
   notes,
   internalNotes,
 }: {
@@ -203,6 +204,8 @@ export function DetailsSections({
   billing: QuoteBilling | null;
   items: BackofficeItem[];
   total: number | null;
+  /** Desconto no total (orçamento/pedido vindo de orçamento). */
+  discount?: { label: string; amount: number } | null;
   notes: string | null;
   /** Observação só da equipe (orçamentos). */
   internalNotes?: string;
@@ -257,6 +260,18 @@ export function DetailsSections({
             ))}
           </tbody>
           <tfoot>
+            {discount && total !== null ? (
+              <>
+                <tr className="kb-subtotal">
+                  <td>Subtotal</td>
+                  <td>{formatCurrency(total + discount.amount)}</td>
+                </tr>
+                <tr className="kb-discount">
+                  <td>{discount.label}</td>
+                  <td>− {formatCurrency(discount.amount)}</td>
+                </tr>
+              </>
+            ) : null}
             <tr>
               <td>Total</td>
               <td>{total === null ? "Sob consulta" : formatCurrency(total)}</td>

@@ -235,6 +235,8 @@ export type GravacaoCalculada = {
   /** Custo por peça (sem arredondar para o cálculo; exibido com 2 casas). */
   custoUnitario: number;
   custoTotal: number;
+  /** Custo digitado à mão pela equipe (substitui o calculado). */
+  manual?: true;
 };
 
 /**
@@ -245,7 +247,7 @@ export function calcularItemOrcamento(input: {
   custoProduto: number;
   categoria: string;
   quantidade: number;
-  gravacoes: Array<{ tecnica: Tecnica; local: string }>;
+  gravacoes: Array<{ tecnica: Tecnica; local: string; custoOverride?: number }>;
   freteFornecedor?: number;
 }) {
   const { custoProduto, categoria, quantidade } = input;
@@ -253,10 +255,10 @@ export function calcularItemOrcamento(input: {
   if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida.");
   if (!(custoProduto >= 0)) throw new Error("Custo do produto inválido.");
 
-  const gravacoes: GravacaoCalculada[] = input.gravacoes.map(({ tecnica, local }) => {
+  const gravacoes: GravacaoCalculada[] = input.gravacoes.map(({ tecnica, local, custoOverride }) => {
     if (tecnica.tipo === "nenhuma") throw new Error("Escolha a técnica da gravação.");
     const r = calcularPersonalizacao({ custoProduto: 0, categoria, quantidade, tecnica, freteFornecedor: 0 });
-    return {
+    const gravacao: GravacaoCalculada = {
       tecnica,
       local: local.trim().slice(0, 80),
       descricao: r.descricao,
@@ -264,6 +266,9 @@ export function calcularItemOrcamento(input: {
       custoUnitario: r.personalizacaoUnitaria,
       custoTotal: r.custoPersonalizacaoTotal,
     };
+    if (custoOverride === undefined) return gravacao;
+    if (!(custoOverride >= 0)) throw new Error("Custo da gravação inválido.");
+    return { ...gravacao, detalhe: "custo digitado", custoUnitario: custoOverride, custoTotal: centavos(custoOverride * quantidade), manual: true };
   });
   const gravacoesPorPeca = gravacoes.reduce((soma, gravacao) => soma + gravacao.custoTotal / quantidade, 0);
   const totalCentavos = Math.round((custoProduto + gravacoesPorPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);

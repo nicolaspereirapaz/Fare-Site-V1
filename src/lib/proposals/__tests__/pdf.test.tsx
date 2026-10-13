@@ -12,6 +12,8 @@ const PROPOSAL: Proposal = {
     { name: "Caneta Plástica Touch", url: "https://www.farefoto.com.br/brindes/7c669c153f261709", code: "X10107", color: "Azul", imageUrl: null, engravings: ["Laser · Corpo"], quantity: 300, unitPrice: 5.77, total: 1731 },
     { name: "Banner lona", url: null, code: null, color: null, imageUrl: null, engravings: [], quantity: 2, unitPrice: 126, total: 252 },
   ],
+  subtotal: 1983,
+  discount: null,
   total: 1983,
   terms: [{ title: "Prazo de produção", text: "7 dias." }],
   notice: "Início da produção mediante sinal de 50%.",
@@ -27,5 +29,10 @@ describe("PDF da proposta", () => {
     const raw = pdf.toString("latin1");
     expect(raw).toContain("https://www.farefoto.com.br/brindes/7c669c153f261709");
     expect(raw).toContain("https://wa.me/5511953147703");
+  }, 30_000);
+
+  it("com desconto, gera normalmente", async () => {
+    const pdf = await renderProposalPdf({ ...PROPOSAL, discount: { label: "Desconto (10%)", amount: 198.3 }, total: 1784.7 });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
   }, 30_000);
 });

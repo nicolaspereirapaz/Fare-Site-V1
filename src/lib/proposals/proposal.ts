@@ -1,5 +1,6 @@
 import type { QuoteCartItem } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import { applyDiscount, discountLabel } from "@/lib/quotes/discount";
 import { quoteCode } from "@/lib/quotes/quoteCode";
 import type { Quote } from "@/lib/quotes/repository";
 
@@ -44,6 +45,11 @@ export type Proposal = {
   customer: { name: string; company: string | null; document: string | null; phone: string; city: string | null };
   seller: string;
   items: ProposalItem[];
+  /** Soma dos itens, antes do desconto. */
+  subtotal: number;
+  /** Desconto no total (null = sem desconto). */
+  discount: { label: string; amount: number } | null;
+  /** Total a pagar (já com desconto). */
   total: number;
   terms: Array<{ title: string; text: string }>;
   notice: string;
@@ -85,6 +91,8 @@ export function buildProposal(
     };
   });
 
+  const subtotalCents = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100);
+  const applied = applyDiscount(subtotalCents, quote.discount ?? null);
   const billing = quote.customer.billing;
   const company = billing?.personType === "pj" ? billing.companyName || billing.tradeName : quote.customer.company;
   return {
@@ -100,7 +108,9 @@ export function buildProposal(
     },
     seller: options.seller,
     items,
-    total: cents(items.reduce((sum, item) => sum + item.total, 0)),
+    subtotal: applied.subtotalCents / 100,
+    discount: quote.discount && applied.discountCents > 0 ? { label: discountLabel(quote.discount), amount: applied.discountCents / 100 } : null,
+    total: applied.totalCents / 100,
     terms: [
       { title: "Prazo de produção", text: PROPOSAL_TERMS.production },
       { title: "Pagamento", text: PROPOSAL_TERMS.payment },
@@ -130,6 +140,7 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     "",
     ...lines,
     "",
+    ...(proposal.discount ? [`Subtotal: ${brl(proposal.subtotal)} · ${proposal.discount.label}: − ${brl(proposal.discount.amount)}`] : []),
     `*Total: ${brl(proposal.total)}* (frete a combinar)`,
     `Produção: ${PROPOSAL_TERMS.production} Início mediante sinal de 50%.`,
     `Válida até ${proposal.validUntil}.`,

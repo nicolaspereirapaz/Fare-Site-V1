@@ -74,6 +74,7 @@ const s = StyleSheet.create({
   notice: { marginBottom: 10, alignSelf: "stretch", textAlign: "center", backgroundColor: "#fdeee8", color: "#a93c1a", fontSize: 8.5, fontWeight: 700, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8 },
   totals: { width: 210 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  discountValue: { color: "#167b55", fontWeight: 700 },
   grand: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: C.navy },
   grandValue: { fontFamily: "Outfit", fontWeight: 700, fontSize: 17, color: C.ink },
   hint: { marginTop: 6, fontSize: 7.5, color: C.muted },
@@ -171,7 +172,10 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           <View style={s.totals}>
             {/* Sinal de 50% no alto da coluna do total (espaço que ficava vazio). */}
             <Text style={s.notice}>{proposal.notice}</Text>
-            <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.total)}</Text></View>
+            <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.subtotal)}</Text></View>
+            {proposal.discount ? (
+              <View style={s.totalRow}><Text>{proposal.discount.label}</Text><Text style={s.discountValue}>− {brl(proposal.discount.amount)}</Text></View>
+            ) : null}
             <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View>
             <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
           </View>

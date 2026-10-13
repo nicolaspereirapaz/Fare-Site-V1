@@ -259,6 +259,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
             internalNotes={openQuote.internalNotes}
             notes={openQuote.notes}
             total={openQuote.total}
+            discount={openQuote.discount}
           />
         </DetailsDialog>
       ) : null}

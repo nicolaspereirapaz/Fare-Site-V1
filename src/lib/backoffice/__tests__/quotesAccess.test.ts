@@ -22,6 +22,7 @@ function buildQuote(overrides: Partial<Quote> = {}): Quote {
     createdBy: null,
     internalNotes: "",
     proposalSentAt: null,
+    discount: null,
     createdAt: "2026-10-08T12:00:00.000Z",
     updatedAt: "2026-10-08T12:00:00.000Z",
     ...overrides,
@@ -59,6 +60,7 @@ describe("lista de orçamentos do painel", () => {
       items: [{ productName: "Caneta Plástica", quantity: 100, selections: { "Variação": "Azul" }, unitPrice: 2.64 }],
       itemCount: 1,
       total: 264,
+      discount: null,
       createdBy: null,
       internalNotes: "",
       proposalSentAt: null,
@@ -67,6 +69,15 @@ describe("lista de orçamentos do painel", () => {
     });
     expect(payload.quotes[1].total).toBeNull();
     expect(payload.counts).toEqual({ aguardando_orcamento: 1, em_negociacao: 1, aguardando_pagamento: 0, virou_pedido: 0, encerrado: 0 });
+  });
+});
+
+describe("desconto no quadro", () => {
+  it("total do cartão já descontado; detalhe recebe a linha do desconto", async () => {
+    const payload = await (await createListBackofficeQuotesHandler(as("admin"), () => [
+      buildQuote({ totalCents: 23760, discount: { type: "percent", value: 10 } }),
+    ])(listRequest())).json();
+    expect(payload.quotes[0]).toMatchObject({ total: 237.6, discount: { label: "Desconto (10%)", amount: 26.4 } });
   });
 });
 

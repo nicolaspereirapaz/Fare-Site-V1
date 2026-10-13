@@ -8,6 +8,7 @@ export type AccountQuote = {
   id: string;
   status: QuoteStatus;
   totalCents: number | null;
+  discount?: { label: string; amount: number } | null;
   createdAt: string;
   items: Array<{ productName: string; quantity: number; color: string | null; unitPrice: number | null; gravacoes?: string[] }>;
 };
@@ -74,6 +75,12 @@ export function AccountQuotes({ quotes }: { quotes: AccountQuote[] }) {
             </ul>
 
             <footer className="account-order-footer">
+              {quote.discount ? (
+                <p className="account-quote-discount">
+                  <span>{quote.discount.label}</span>{" "}
+                  <strong>− {brl(quote.discount.amount)}</strong>
+                </p>
+              ) : null}
               <p>
                 <span>Total estimado</span>{" "}
                 <strong>{quote.totalCents === null ? "sob consulta" : brl(quote.totalCents / 100)}</strong>

@@ -15,21 +15,40 @@ type Product = {
   spotOptions: SpotOption[];
 };
 type Tecnica = Record<string, unknown> & { tipo: string };
-type Gravacao = { tecnica: Tecnica; local: string };
+/* Valores digitados à mão ficam como texto ("1,25"); vazio = calculado pelo sistema. */
+type Gravacao = { tecnica: Tecnica; local: string; custoOverride?: string };
+type Manual = { costOverride?: string; priceOverride?: string };
 type Item =
-  | { id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: Gravacao[] }
-  | { id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: Gravacao[] };
-type PreviewGravacao = { descricao: string; local: string; detalhe: string; custoUnitario: number; custoTotal: number };
+  | ({ id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: Gravacao[] } & Manual)
+  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: Gravacao[] } & Manual);
+type PreviewGravacao = { descricao: string; local: string; detalhe: string; custoUnitario: number; custoTotal: number; manual?: true };
 type Preview =
-  | { id: string; ok: true; unitPrice: number; total: number; cost: number; productCost: number; gravacoes: PreviewGravacao[]; stockWarning?: string }
+  | { id: string; ok: true; unitPrice: number; total: number; cost: number; productCost: number; gravacoes: PreviewGravacao[]; stockWarning?: string; manual: { cost: boolean; price: boolean }; suggestedPrice: number }
   | { id: string; ok: false; error: string };
-type Totals = { total: number; cost: number; margin: number; pending: number };
+type Totals = { subtotal: number; discount: number; total: number; cost: number; margin: number; pending: number };
+type DiscountForm = { type: "percent" | "value"; value: string };
+const EMPTY_TOTALS: Totals = { subtotal: 0, discount: 0, total: 0, cost: 0, margin: 0, pending: 0 };
 type EngravingForm = { itemId: string; index: number | null; tipo: string; local: string; largura: string; altura: string; spotId: string; nome: string; custo: string };
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const brl = (value: number) => money.format(value).replace(/\u00a0/g, " ");
 const parseNumber = (value: string) => (value.trim() ? Number(value.replace(/\./g, (dot, _o, all: string) => (all.includes(",") ? "" : dot)).replace(",", ".")) : NaN);
 const newId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+/** 1.5 → "1,50" (campo de dinheiro); só dígitos, vírgula e ponto ao digitar. */
+const moneyInput = (value: number) => value.toFixed(2).replace(".", ",");
+const cleanMoney = (value: string) => value.replace(/[^\d.,]/g, "").slice(0, 12);
+type ServerGravacao = Omit<Gravacao, "custoOverride"> & { custoOverride?: number };
+type ServerItem = Omit<Item, "costOverride" | "priceOverride" | "gravacoes"> & { costOverride?: number; priceOverride?: number; gravacoes: ServerGravacao[] };
+/** Item salvo (números) → item do editor (texto nos campos digitados à mão). */
+function fromServerItem(item: ServerItem): Item {
+  const { costOverride, priceOverride, gravacoes, ...rest } = item;
+  return {
+    ...rest,
+    ...(costOverride === undefined ? {} : { costOverride: moneyInput(costOverride) }),
+    ...(priceOverride === undefined ? {} : { priceOverride: moneyInput(priceOverride) }),
+    gravacoes: gravacoes.map(({ custoOverride, ...g }) => (custoOverride === undefined ? g : { ...g, custoOverride: moneyInput(custoOverride) })),
+  } as Item;
+}
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
 
 const TECNICAS = [
@@ -204,7 +223,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [notes, setNotes] = useState("");
   const [preview, setPreview] = useState<Record<string, Preview>>({});
-  const [totals, setTotals] = useState<Totals>({ total: 0, cost: 0, margin: 0, pending: 0 });
+  const [totals, setTotals] = useState<Totals>(EMPTY_TOTALS);
+  const [discount, setDiscount] = useState<DiscountForm>({ type: "percent", value: "" });
+  const [discountError, setDiscountError] = useState<string | null>(null);
   const [engraving, setEngraving] = useState<EngravingForm | null>(null);
   const [engravingCalc, setEngravingCalc] = useState<{ text: string; error?: boolean } | null>(null);
   const [productQuery, setProductQuery] = useState("");
@@ -228,9 +249,10 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error === "QUOTE_NOT_FOUND" ? "Orçamento não encontrado." : "Não foi possível abrir o orçamento.");
         if (!active) return;
-        setItems(payload.items);
+        setItems((payload.items as ServerItem[]).map(fromServerItem));
         setProducts(payload.products ?? {});
         setNotes(payload.internalNotes ?? "");
+        if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
         setFixedCustomer(payload.customer);
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
       })
@@ -241,18 +263,20 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     };
   }, [quoteId]);
 
-  // Prévia do preço no servidor a cada mudança dos itens.
-  const itemsKey = useDebounced(JSON.stringify(items), 300);
+  // Prévia do preço no servidor a cada mudança dos itens ou do desconto.
+  const discountBody = discount.value.trim() ? discount : null;
+  const itemsKey = useDebounced(JSON.stringify({ items, discount: discountBody }), 300);
   useEffect(() => {
-    const list = JSON.parse(itemsKey) as Item[];
+    const { items: list, discount: sentDiscount } = JSON.parse(itemsKey) as { items: Item[]; discount: DiscountForm | null };
     let active = true;
     const run = list.length
-      ? postJson<{ preview?: Preview[]; totals?: Totals }>("/api/backoffice/orcamento-editor/previa", { items: list })
-      : Promise.resolve({ ok: true, status: 200, data: { preview: [] as Preview[], totals: { total: 0, cost: 0, margin: 0, pending: 0 } } });
+      ? postJson<{ preview?: Preview[]; totals?: Totals; discountError?: string }>("/api/backoffice/orcamento-editor/previa", { items: list, discount: sentDiscount })
+      : Promise.resolve({ ok: true, status: 200, data: { preview: [] as Preview[], totals: EMPTY_TOTALS, discountError: undefined } });
     run.then(({ data }) => {
       if (!active || !data.preview || !data.totals) return;
       setPreview(Object.fromEntries(data.preview.map((entry) => [entry.id, entry])));
       setTotals(data.totals);
+      setDiscountError(data.discountError ?? null);
     }).catch(() => undefined);
     return () => {
       active = false;
@@ -349,8 +373,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     setSaving(true);
     setSaveError(null);
     const body = quoteId
-      ? { updatedAt: state?.updatedAt, internalNotes: notes, items }
-      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items };
+      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody }
+      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody };
     const { ok, status, data } = await postJson<{ id?: string; message?: string; preview?: Preview[] }>(
       quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
       body,
@@ -371,7 +395,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   }
 
   const productLabel = (item: Item) => (item.source === "catalogo" ? products[item.publicId]?.name ?? "Produto" : item.name);
-  const canSubmit = editable && items.length > 0 && totals.pending === 0 && (quoteId ? true : Boolean(customer)) && !saving;
+  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && (quoteId ? true : Boolean(customer)) && !saving;
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
   const engravingItem = engraving ? items.find((item) => item.id === engraving.itemId) : undefined;
   const engravingProduct = engravingItem?.source === "catalogo" ? products[engravingItem.publicId] : undefined;
@@ -442,10 +466,20 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
                       ) : <span className="qe-thumb qe-thumb-blank">avulso</span>}
                       <div>
                         <b>{productLabel(item)}</b>
-                        <small>
-                          {product ? `${product.fareCode} · ${product.supplierCode}` : "Fora do catálogo"}
-                          {" · custo "}{brl(ok ? ok.productCost : item.source === "avulso" ? item.cost : variant?.cost ?? 0)}
-                        </small>
+                        <small>{product ? `${product.fareCode} · ${product.supplierCode}` : "Fora do catálogo"}</small>
+                        <label className="qe-cost">
+                          <span>Custo/peça R$</span>
+                          <input
+                            aria-label={`Custo por peça de ${productLabel(item)}`}
+                            className={item.costOverride ? "is-manual" : undefined}
+                            disabled={!editable}
+                            inputMode="decimal"
+                            onChange={(event) => updateItem(item.id, { costOverride: cleanMoney(event.target.value) || undefined })}
+                            placeholder={moneyInput(item.source === "avulso" ? item.cost : variant?.cost ?? 0)}
+                            title={item.costOverride ? "Custo digitado. Apague para voltar ao do catálogo." : "Custo do catálogo. Digite para alterar."}
+                            value={item.costOverride ?? ""}
+                          />
+                        </label>
                       </div>
                     </div>
                     {product ? (
@@ -461,7 +495,23 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
                       onChange={(event) => updateItem(item.id, { quantity: Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0 })}
                       value={item.quantity || ""}
                     />
-                    <span className="qe-r qe-unit">{ok ? brl(ok.unitPrice) : "—"}</span>
+                    <div className="qe-price">
+                      <input
+                        aria-label={`Preço por peça de ${productLabel(item)}`}
+                        className={item.priceOverride ? "qe-money is-manual" : "qe-money"}
+                        disabled={!editable}
+                        inputMode="decimal"
+                        onChange={(event) => updateItem(item.id, { priceOverride: cleanMoney(event.target.value) || undefined })}
+                        placeholder={ok ? moneyInput(ok.suggestedPrice) : "—"}
+                        title={item.priceOverride ? "Preço digitado. Apague para voltar ao calculado." : "Preço calculado. Digite para alterar."}
+                        value={item.priceOverride ?? ""}
+                      />
+                      {item.priceOverride && ok && editable ? (
+                        <button className="qe-reset" onClick={() => updateItem(item.id, { priceOverride: undefined })} title="Voltar ao preço calculado" type="button">
+                          calculado {brl(ok.suggestedPrice)}
+                        </button>
+                      ) : null}
+                    </div>
                     <span className="qe-r">{ok ? brl(ok.total) : "—"}</span>
                     {editable ? (
                       <button aria-label={`Remover ${productLabel(item)}`} className="qe-rm" onClick={() => setItems((list) => list.filter((entry) => entry.id !== item.id))} type="button"><X size={14} /></button>
@@ -476,7 +526,21 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
                       return (
                         <div className="qe-eline" key={index}>
                           <span><b>{calc?.descricao ?? "Gravação"}</b>{gravacao.local ? <span className="qe-muted"> · {gravacao.local}</span> : null}</span>
-                          <span className="qe-muted qe-small">{calc ? `custo ${brl(calc.custoUnitario)}/un.` : ""}</span>
+                          <label className="qe-cost qe-ecost">
+                            <span>Custo/peça R$</span>
+                            <input
+                              aria-label={`Custo por peça da gravação ${calc?.descricao ?? ""}`}
+                              className={gravacao.custoOverride ? "is-manual" : undefined}
+                              disabled={!editable}
+                              inputMode="decimal"
+                              onChange={(event) => updateItem(item.id, {
+                                gravacoes: item.gravacoes.map((g, i) => (i === index ? { ...g, custoOverride: cleanMoney(event.target.value) || undefined } : g)),
+                              })}
+                              placeholder={calc && !calc.manual ? moneyInput(calc.custoUnitario) : ""}
+                              title={gravacao.custoOverride ? "Custo digitado. Apague para voltar ao calculado." : "Custo calculado. Digite para alterar."}
+                              value={gravacao.custoOverride ?? ""}
+                            />
+                          </label>
                           {editable ? (
                             <span className="qe-eacts">
                               <button onClick={() => openEngraving(item, index)} type="button">Editar</button>
@@ -597,6 +661,45 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
               </div>
             );
           })}
+          <div className="qe-discount">
+            <span className="qe-discount-label" id="qe-discount-label">Desconto no total</span>
+            <div className="qe-discount-row">
+              <div aria-labelledby="qe-discount-label" className="qe-seg" role="radiogroup">
+                {([["percent", "%"], ["value", "R$"]] as const).map(([type, label]) => (
+                  <button
+                    aria-checked={discount.type === type}
+                    className={discount.type === type ? "on" : undefined}
+                    disabled={!editable}
+                    key={type}
+                    onClick={() => setDiscount({ type, value: "" })}
+                    role="radio"
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input
+                aria-label={discount.type === "percent" ? "Desconto em porcentagem" : "Desconto em reais"}
+                disabled={!editable}
+                inputMode="decimal"
+                onChange={(event) => setDiscount({ ...discount, value: event.target.value.replace(/[^\d.,]/g, "") })}
+                placeholder={discount.type === "percent" ? "0" : "0,00"}
+                value={discount.value}
+              />
+            </div>
+            {discountError ? <p className="qe-error">{discountError}</p> : null}
+          </div>
+
+          {totals.discount > 0 ? (
+            <>
+              <div className="qe-sum-row"><span>Subtotal</span><span>{brl(totals.subtotal)}</span></div>
+              <div className="qe-sum-row qe-sum-discount">
+                <span>Desconto{discount.type === "percent" ? ` (${discount.value.replace(".", ",")}%)` : ""}</span>
+                <span>− {brl(totals.discount)}</span>
+              </div>
+            </>
+          ) : null}
           <div className="qe-sum-row"><span>Frete</span><span>A combinar</span></div>
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
           {totals.pending ? <p className="qe-error">{totals.pending === 1 ? "1 item precisa de correção." : `${totals.pending} itens precisam de correção.`}</p> : null}
@@ -607,6 +710,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
             <div className="qe-sum-row"><span>Margem</span><span className="qe-margin">{brl(totals.margin)} · {marginPercent}%</span></div>
           </div>
 
+          {items.some((item) => item.costOverride || item.priceOverride || item.gravacoes.some((g) => g.custoOverride)) ? (
+            <p className="qe-manual-note"><span aria-hidden="true" className="qe-manual-dot" /> Valores com fundo laranja foram digitados à mão.</p>
+          ) : null}
           <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p>
           {saveError ? <p className="qe-error">{saveError}</p> : null}
           {editable ? (

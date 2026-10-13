@@ -1,4 +1,5 @@
 import type { SessionReader } from "@/lib/auth/session";
+import { discountLine } from "@/lib/quotes/discount";
 import { DEFAULT_USER_ROLE, isUserRole, type UserRole } from "@/lib/auth/roles";
 import { ORDEM_STATUS_PEDIDO, TransicaoStatusPedidoInvalidaError, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
@@ -33,6 +34,8 @@ export type BackofficeOrderSummary = {
   items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"] }>;
   itemCount: number;
   total: number;
+  /** Desconto vindo do orçamento (rótulo e valor). */
+  discount: { label: string; amount: number } | null;
   createdAt: string;
   history: OrderHistoryEntry[];
 };
@@ -77,7 +80,9 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     billing: order.customer.billing ?? null,
     items: order.items.map(({ productName, quantity, selections, unitPrice, codes }) => ({ productName, quantity, selections, unitPrice, codes })),
     itemCount: order.items.length,
-    total: calculateOrderSummaryTotal(order.items),
+    // Pedido vindo de orçamento com desconto: o total gravado já está descontado.
+    total: order.discount && order.totalCents !== null ? order.totalCents / 100 : calculateOrderSummaryTotal(order.items),
+    discount: discountLine(order.discount, order.totalCents),
     createdAt: order.createdAt,
     history,
   };

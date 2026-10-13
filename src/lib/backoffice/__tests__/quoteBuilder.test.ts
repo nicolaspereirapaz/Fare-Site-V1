@@ -135,3 +135,51 @@ describe("abrir de novo um orçamento para editar", () => {
     expect(draft.gravacoes).toEqual([{ tecnica: { tipo: "laser" }, local: "" }]);
   });
 });
+
+describe("valores digitados à mão pela equipe", () => {
+  const base = { id: "a", source: "catalogo" as const, publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] };
+
+  it("custo do produto à mão substitui o do catálogo e recalcula o preço", () => {
+    const { preview, items } = buildQuoteItems([{ ...base, costOverride: 1 }], lookup, actor, NOW);
+    // (1 × 2 × 300 + 100) / 300 = 2,3333 -> 2,34
+    expect(preview[0]).toMatchObject({ ok: true, productCost: 1, unitPrice: 2.34, total: 702, cost: 400, manual: { cost: true, price: false } });
+    expect(items[0].costing).toMatchObject({ custoProduto: 1, manual: { custoProduto: true } });
+  });
+
+  it("preço de venda à mão vale no lugar do calculado; a margem usa o custo real", () => {
+    const { preview, items, totals } = buildQuoteItems([{ ...base, priceOverride: 2.5 }], lookup, actor, NOW);
+    expect(preview[0]).toMatchObject({ ok: true, unitPrice: 2.5, total: 750, cost: 316, manual: { cost: false, price: true }, suggestedPrice: 1.78 });
+    expect(items[0]).toMatchObject({ unitPrice: 2.5 });
+    expect(items[0].costing).toMatchObject({ manual: { precoVenda: true } });
+    expect(totals).toMatchObject({ total: 750, cost: 316, margin: 434 });
+  });
+
+  it("custo da gravação à mão substitui o calculado", () => {
+    const { preview, items } = buildQuoteItems([{
+      ...base, gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo", custoOverride: 0.5 }],
+    }], lookup, actor, NOW);
+    expect(preview[0]).toMatchObject({ ok: true, gravacoes: [{ descricao: "Laser", custoUnitario: 0.5, custoTotal: 150, manual: true }] });
+    // (0,72 + 0,50) × 2 × 300 + 100 = 832 / 300 = 2,7733 -> 2,78
+    expect(preview[0]).toMatchObject({ unitPrice: 2.78 });
+    expect(items[0].costing?.gravacoes?.[0]).toMatchObject({ custoUnitario: 0.5, custoTotal: 150, manual: true });
+  });
+
+  it("valores à mão inválidos viram erro no item", () => {
+    const negative = buildQuoteItems([{ ...base, priceOverride: -1 }], lookup, actor, NOW);
+    expect(negative.preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
+    const zero = buildQuoteItems([{ ...base, priceOverride: 0 }], lookup, actor, NOW);
+    expect(zero.preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
+  });
+
+  it("lê os valores do navegador com vírgula; vazio = automático", () => {
+    const [item] = parseDraftItems([{ ...base, costOverride: "1,25", priceOverride: "", gravacoes: [{ tecnica: { tipo: "laser" }, local: "", custoOverride: "0,4" }] }]);
+    expect(item).toMatchObject({ costOverride: 1.25, gravacoes: [{ custoOverride: 0.4 }] });
+    expect(item).not.toHaveProperty("priceOverride");
+    expect(() => parseDraftItems([{ ...base, costOverride: "abc" }])).toThrow("Item 1: custo inválido.");
+  });
+
+  it("reabrir o orçamento traz os valores digitados de volta", () => {
+    const { items } = buildQuoteItems([{ ...base, costOverride: 1, priceOverride: 2.5, gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo", custoOverride: 0.5 }] }], lookup, actor, NOW);
+    expect(draftFromItem(items[0])).toEqual({ ...base, costOverride: 1, priceOverride: 2.5, gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo", custoOverride: 0.5 }] });
+  });
+});

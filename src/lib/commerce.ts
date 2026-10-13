@@ -29,7 +29,9 @@ export type ItemCosting = {
   freteFornecedor: number;
   tecnica: Record<string, unknown> & { tipo: string };
   /** Todas as gravações do item (painel): técnica como foi escolhida, local e custo calculado. */
-  gravacoes?: Array<{ tecnica: Record<string, unknown> & { tipo: string }; local: string; descricao: string; detalhe: string; custoUnitario: number; custoTotal: number }>;
+  gravacoes?: Array<{ tecnica: Record<string, unknown> & { tipo: string }; local: string; descricao: string; detalhe: string; custoUnitario: number; custoTotal: number; manual?: true }>;
+  /** O que a equipe digitou à mão neste item (custo do produto e/ou preço de venda). */
+  manual?: { custoProduto?: true; precoVenda?: true };
   por: string;
   em: string;
 };

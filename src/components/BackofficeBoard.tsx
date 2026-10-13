@@ -34,6 +34,7 @@ export type BackofficeOrder = {
   items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null }>;
   itemCount: number;
   total: number;
+  discount?: { label: string; amount: number } | null;
   createdAt: string;
   history?: OrderHistoryEntry[];
 };
@@ -266,6 +267,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
             notes={open.notes}
             paymentLabel={PAYMENT_LABELS[open.paymentMethod]}
             total={open.total}
+            discount={open.discount}
           />
           <section>
             <h3>Histórico</h3>

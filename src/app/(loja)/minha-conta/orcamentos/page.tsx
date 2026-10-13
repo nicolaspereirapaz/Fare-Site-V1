@@ -1,3 +1,4 @@
+import { discountLine } from "@/lib/quotes/discount";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountQuotes } from "@/components/account/AccountQuotes";
@@ -17,6 +18,7 @@ export default async function AccountQuotesPage() {
     id: quote.id,
     status: quote.status,
     totalCents: quote.totalCents,
+    discount: discountLine(quote.discount, quote.totalCents),
     createdAt: quote.createdAt,
     items: quote.items.map((item) => ({
       productName: item.productName,

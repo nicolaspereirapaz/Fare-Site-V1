@@ -6385,3 +6385,7 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-proposal-send:hover:not(:disabled) { background: #d4532a; }
 .kb-proposal-send:disabled { opacity: .6; cursor: wait; }
 .kb-proposal-hint { margin: 8px 0 0; font-size: 12.5px; color: #7a7f91; }
+/* Desconto no detalhe do orçamento (painel) e na Minha conta */
+.kb-items tfoot tr.kb-subtotal td, .kb-items tfoot tr.kb-discount td { font-weight: 500; color: var(--muted); border-top: 0; padding-top: 4px; padding-bottom: 4px; }
+.kb-items tfoot tr.kb-discount td:last-child { color: #167b55; font-weight: 700; }
+.account-quote-discount strong { color: #167b55; }
