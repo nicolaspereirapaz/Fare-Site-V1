@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Document, Font, Image, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { Style } from "@react-pdf/types";
 import { brl, proposalReplyLinks, type Proposal } from "@/lib/proposals/proposal";
 
 /** PDF A4 da proposta. Nome do produto é link para a página dele no site. */
@@ -48,9 +49,12 @@ const s = StyleSheet.create({
   th: { flexDirection: "row", paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: C.line, fontSize: 8, color: C.muted, fontWeight: 700 },
   row: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: 0.75, borderBottomColor: C.line },
   colProd: { flex: 1, flexDirection: "row", paddingRight: 10 },
-  colQty: { width: 48, textAlign: "right" },
-  colUnit: { width: 68, textAlign: "right" },
-  colTotal: { width: 78, textAlign: "right" },
+  colQty: { width: 50, textAlign: "right" },
+  /** Colunas de valor: "R$" alinhado à esquerda e o número à direita (formato contábil). */
+  colUnit: { width: 70, marginLeft: 26, textAlign: "right" },
+  colTotal: { width: 86, marginLeft: 26, textAlign: "right" },
+  money: { flexDirection: "row", justifyContent: "space-between" },
+  num: { fontFeatureSettings: ["tnum"] },
   thumb: { width: 44, height: 44, objectFit: "contain", borderWidth: 0.75, borderColor: C.line, borderRadius: 5, marginRight: 10 },
   /** Item sem foto: espaço vazio do tamanho da foto, para os nomes ficarem alinhados. */
   thumbSpace: { width: 44, marginRight: 10 },
@@ -83,6 +87,18 @@ const s = StyleSheet.create({
   btnText: { color: "#fff", fontSize: 10, fontWeight: 700 },
   foot: { marginTop: 14, flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: C.muted, borderTopWidth: 0.75, borderTopColor: C.line, paddingTop: 6 },
 });
+
+/** Valor em coluna: "R$" encostado à esquerda, número à direita, dígitos de mesma largura. */
+function Money({ value, style }: { value: number; style: Style | Style[] }) {
+  const number = brl(value).replace(/^R\$\s*/, "");
+  const flat = (Array.isArray(style) ? style : [style]).reduce<Style>((acc, entry) => ({ ...acc, ...entry }), {});
+  return (
+    <View style={[s.money, { width: flat.width, marginLeft: flat.marginLeft }]}>
+      <Text style={[flat, { width: undefined, marginLeft: 0 }]}>R$</Text>
+      <Text style={[flat, s.num, { width: undefined, marginLeft: 0 }]}>{number}</Text>
+    </View>
+  );
+}
 
 function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string }) {
   const { customer } = proposal;
@@ -133,9 +149,9 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
                 {item.engravings.map((engraving, i) => <Text key={i} style={s.engraving}>Gravação: {engraving}</Text>)}
               </View>
             </View>
-            <Text style={s.colQty}>{item.quantity.toLocaleString("pt-BR")}</Text>
-            <Text style={[s.colUnit, s.unit]}>{brl(item.unitPrice)}</Text>
-            <Text style={s.colTotal}>{brl(item.total)}</Text>
+            <Text style={[s.colQty, s.num]}>{item.quantity.toLocaleString("pt-BR")}</Text>
+            <Money style={[s.colUnit, s.unit]} value={item.unitPrice} />
+            <Money style={s.colTotal} value={item.total} />
           </View>
         ))}
 
