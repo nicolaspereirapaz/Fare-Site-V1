@@ -118,4 +118,32 @@ describe("editor de orçamentos do painel", () => {
     expect(over.status).toBe(400);
     expect(await over.json()).toMatchObject({ message: "O desconto não pode ser maior que o subtotal." });
   });
+
+  it("cliente é opcional: cria sem cliente e escolhe depois, ao editar", async () => {
+    const { db, handlers } = setup();
+    const items = [{ id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] }];
+    const created = await handlers.create(post({ idempotencyKey: "orc-sem-cliente", items }));
+    expect(created.status).toBe(201);
+    const { id } = await created.json() as { id: string };
+    expect(findQuoteById(db, id)).toMatchObject({ userId: "sem-cliente", customer: { name: "Cliente a definir" }, createdBy: "Bia" });
+
+    const state = await (await handlers.read(new Request("http://x"), id)).json() as { updatedAt: string; hasCustomer: boolean };
+    expect(state.hasCustomer).toBe(false);
+
+    const put = (body: Record<string, unknown>) => new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ internalNotes: "", items, ...body }) });
+    expect((await handlers.update(put({ updatedAt: state.updatedAt, customerRef: "conta:u1" }), id)).status).toBe(200);
+    expect(findQuoteById(db, id)).toMatchObject({ userId: "u1", customer: { name: "Ana Souza", company: "Padaria Boa Vista" } });
+
+    // Depois de ter cliente, não troca mais pelo editor (evita mover orçamento de um cliente para outro).
+    const again = findQuoteById(db, id)!;
+    expect((await handlers.update(put({ updatedAt: again.updatedAt, customerRef: "painel:outro" }), id)).status).toBe(200);
+    expect(findQuoteById(db, id)).toMatchObject({ userId: "u1" });
+  });
+
+  it("cliente informado mas inexistente continua sendo erro", async () => {
+    const { handlers } = setup();
+    const items = [{ id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] }];
+    const response = await handlers.create(post({ customerRef: "painel:nao-existe", idempotencyKey: "orc-cliente-x", items }));
+    expect(response.status).toBe(400);
+  });
 });

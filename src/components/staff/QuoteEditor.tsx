@@ -219,6 +219,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const router = useRouter();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
+  /** Orçamento já salvo sem cliente: dá para escolher agora. */
+  const [needsCustomer, setNeedsCustomer] = useState(false);
   const [changingCustomer, setChangingCustomer] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [products, setProducts] = useState<Record<string, Product>>({});
@@ -254,7 +256,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
         setProducts(payload.products ?? {});
         setNotes(payload.internalNotes ?? "");
         if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
-        setFixedCustomer(payload.customer);
+        if (payload.hasCustomer === false) setNeedsCustomer(true);
+        else setFixedCustomer(payload.customer);
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
       })
       .catch((error: unknown) => active && setLoadError(error instanceof Error ? error.message : "Erro inesperado."))
@@ -374,7 +377,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     setSaving(true);
     setSaveError(null);
     const body = quoteId
-      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody }
+      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
       : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody };
     const { ok, status, data } = await postJson<{ id?: string; message?: string; preview?: Preview[] }>(
       quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
@@ -396,7 +399,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   }
 
   const productLabel = (item: Item) => (item.source === "catalogo" ? products[item.publicId]?.name ?? "Produto" : item.name);
-  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && (quoteId ? true : Boolean(customer)) && !saving;
+  // Cliente é opcional: sem ele o orçamento fica "Cliente a definir".
+  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving;
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
   const engravingItem = engraving ? items.find((item) => item.id === engraving.itemId) : undefined;
   const engravingProduct = engravingItem?.source === "catalogo" ? products[engravingItem.publicId] : undefined;
@@ -417,7 +421,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
       <div className="qe-layout">
         <div>
           <section className="qe-card">
-            <h2>Cliente</h2>
+            <h2>Cliente{!fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
             {fixedCustomer ? (
               <div className="qe-client">
                 <div className="qe-initials">{initials(fixedCustomer.name)}</div>
@@ -735,7 +739,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
               {saving ? "Salvando…" : quoteId ? "Salvar alterações" : "Criar orçamento"}
             </button>
           ) : null}
-          {!quoteId && !customer ? <p className="qe-hint qe-center">Escolha o cliente para criar.</p> : null}
+          {!fixedCustomer && !customer ? <p className="qe-hint qe-center">Sem cliente, fica como “Cliente a definir”. Dá para escolher depois.</p> : null}
         </aside>
       </div>
     </main>

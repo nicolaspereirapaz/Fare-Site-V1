@@ -1,7 +1,7 @@
 import type { QuoteCartItem } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { applyDiscount, discountLabel } from "@/lib/quotes/discount";
-import { quoteCode } from "@/lib/quotes/quoteCode";
+import { NO_CUSTOMER_OWNER, quoteCode } from "@/lib/quotes/quoteCode";
 import type { Quote } from "@/lib/quotes/repository";
 
 /**
@@ -93,17 +93,18 @@ export function buildProposal(
 
   const subtotalCents = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100);
   const applied = applyDiscount(subtotalCents, quote.discount ?? null);
-  const billing = quote.customer.billing;
-  const company = billing?.personType === "pj" ? billing.companyName || billing.tradeName : quote.customer.company;
+  const noCustomer = quote.userId === NO_CUSTOMER_OWNER;
+  const billing = noCustomer ? undefined : quote.customer.billing;
+  const company = noCustomer ? null : billing?.personType === "pj" ? billing.companyName || billing.tradeName : quote.customer.company;
   return {
     code: quoteCode(quote.id),
     issuedAt: formatDate(now),
     validUntil: formatDate(new Date(now.getTime() + PROPOSAL_VALIDITY_DAYS * 86_400_000)),
     customer: {
-      name: quote.customer.name,
+      name: noCustomer ? "" : quote.customer.name,
       company: company || null,
       document: billing ? `${billing.personType === "pj" ? "CNPJ" : "CPF"} ${billing.document}` : null,
-      phone: quote.customer.phone ?? "",
+      phone: noCustomer ? "" : quote.customer.phone ?? "",
       city: billing?.address.city ? `${billing.address.city} · ${billing.address.state}` : null,
     },
     seller: options.seller,
@@ -134,7 +135,7 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     return parts.join(" — ");
   });
   return [
-    `Olá, ${first}! Aqui é a ${proposal.seller}, da Fare Foto.`,
+    `${first ? `Olá, ${first}!` : "Olá!"} Aqui é a ${proposal.seller}, da Fare Foto.`,
     "",
     `Segue a proposta do seu orçamento ${proposal.code}:`,
     "",

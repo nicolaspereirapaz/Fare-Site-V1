@@ -31,6 +31,11 @@ describe("PDF da proposta", () => {
     expect(raw).toContain("https://wa.me/5511953147703");
   }, 30_000);
 
+  it("sem cliente, gera normalmente", async () => {
+    const pdf = await renderProposalPdf({ ...PROPOSAL, customer: { name: "", company: null, document: null, phone: "", city: null } });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  }, 30_000);
+
   it("com desconto, gera normalmente", async () => {
     const pdf = await renderProposalPdf({ ...PROPOSAL, discount: { label: "Desconto (10%)", amount: 198.3 }, total: 1784.7 });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");

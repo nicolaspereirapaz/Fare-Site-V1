@@ -119,7 +119,7 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
 
         <View style={s.meta}>
           <View style={s.metaCol}>
-            <Text style={s.label}>Para</Text>
+            {customer.name || customer.company ? <Text style={s.label}>Para</Text> : null}
             <Text style={s.customerName}>{customer.company ?? customer.name}</Text>
             {customer.document ? <Text>{customer.document}</Text> : null}
             <Text>{[customer.company ? customer.name : null, customer.phone].filter(Boolean).join(" · ")}</Text>

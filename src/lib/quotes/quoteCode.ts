@@ -17,6 +17,10 @@ export const LEGACY_QUOTE_STATUSES: Record<string, QuoteStatus> = {
   respondido: "em_negociacao",
 };
 
+/** Dono dos orçamentos criados no painel sem cliente (não aparece na "Minha conta" de ninguém). */
+export const NO_CUSTOMER_OWNER = "sem-cliente";
+export const NO_CUSTOMER_NAME = "Cliente a definir";
+
 /** Número curto do orçamento para o cliente citar (ex.: #ORC-3F7A2C). */
 export function quoteCode(id: string): string {
   return `ORC-${id.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase()}`;

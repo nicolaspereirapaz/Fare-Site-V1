@@ -6,6 +6,7 @@ import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers } from "@/lib/customers/repository";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
+import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
 import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote } from "@/lib/quotes/repository";
 
 /** Rotas do editor de orçamentos do painel (clientes, produtos, prévia, criar e editar). */
@@ -161,8 +162,10 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       if (!body) return json({ error: "INVALID_REQUEST" }, 400);
       const idempotencyKey = String(body.idempotencyKey ?? "").slice(0, 80);
       if (idempotencyKey.length < 8) return json({ error: "INVALID_REQUEST", message: "Chave do envio inválida." }, 400);
-      const owner = customerSnapshot(deps, String(body.customerRef ?? ""));
-      if (!owner) return json({ error: "INVALID_REQUEST", message: "Escolha o cliente." }, 400);
+      // Cliente é opcional: sem ele, o orçamento fica "Cliente a definir" e pode ser escolhido depois.
+      const ref = String(body.customerRef ?? "").trim();
+      const owner = ref ? customerSnapshot(deps, ref) : { ownerId: NO_CUSTOMER_OWNER, customer: { name: NO_CUSTOMER_NAME } };
+      if (!owner) return json({ error: "INVALID_REQUEST", message: "Cliente não encontrado. Escolha de novo." }, 400);
       try {
         const drafts = parseDraftItems(body.items);
         const discount = parseDiscount(body.discount);
@@ -206,6 +209,9 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         const drafts = parseDraftItems(body.items);
         // Campo ausente = mantém o desconto atual; null/vazio = sem desconto.
         const discount = "discount" in body ? parseDiscount(body.discount) : undefined;
+        const ref = String(body.customerRef ?? "").trim();
+        const owner = ref && quote.userId === NO_CUSTOMER_OWNER ? customerSnapshot(deps, ref) : null;
+        if (ref && quote.userId === NO_CUSTOMER_OWNER && !owner) return json({ error: "INVALID_REQUEST", message: "Cliente não encontrado. Escolha de novo." }, 400);
         const catalog = await deps.catalog();
         const { items, preview } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
         if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
@@ -218,7 +224,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
           return same && before.costing && item.costing ? { ...item, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : item;
         });
         const updated = replaceQuoteItems(deps.database(), {
-          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount,
+          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount, owner,
         });
         return json({ id: updated.id, updatedAt: updated.updatedAt });
       } catch (error) {
@@ -238,6 +244,7 @@ export function editorState(quote: Quote) {
     createdBy: quote.createdBy,
     internalNotes: quote.internalNotes,
     discount: quote.discount,
+    hasCustomer: quote.userId !== NO_CUSTOMER_OWNER,
     customer: { name: quote.customer.name, company: quote.customer.company ?? "", phone: quote.customer.phone ?? "", notes: quote.customer.notes ?? "" },
     items: quote.items.map(draftFromItem),
   };

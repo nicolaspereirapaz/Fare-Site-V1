@@ -76,6 +76,17 @@ describe("proposta para o cliente", () => {
   });
 });
 
+describe("orçamento sem cliente", () => {
+  const SEM_CLIENTE: Quote = { ...QUOTE, userId: "sem-cliente", customer: { name: "Cliente a definir" } };
+
+  it("a proposta sai sem o bloco do cliente e sem WhatsApp do cliente", () => {
+    const proposal = buildProposal(SEM_CLIENTE, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal.customer).toEqual({ name: "", company: null, document: null, phone: "", city: null });
+    expect(proposalWhatsAppUrl(proposal)).toBeNull();
+    expect(proposalWhatsAppText(proposal).split("\n")[0]).toBe("Olá! Aqui é a Bia, da Fare Foto.");
+  });
+});
+
 describe("desconto no total", () => {
   const COM_DESCONTO: Quote = { ...QUOTE, discount: { type: "percent", value: 10 }, totalCents: 178470 };
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
+import { NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
 import { createOrder, runOrderMigrations, type Order } from "@/lib/orders/repository";
@@ -215,7 +216,11 @@ function nextVersion(previous: string): string {
 /** Equipe edita os itens (e gravações) de um orçamento aberto; recusa se alguém mudou antes. */
 export function replaceQuoteItems(
   database: DatabaseSync,
-  input: { quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string; discount?: QuoteDiscount | null },
+  input: {
+    quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string; discount?: QuoteDiscount | null;
+    /** Cliente escolhido depois: só vale para orçamento ainda sem cliente. */
+    owner?: { ownerId: string; customer: QuoteCustomer } | null;
+  },
 ): Quote {
   runQuoteMigrations(database);
   const current = findQuoteById(database, input.quoteId);
@@ -225,10 +230,13 @@ export function replaceQuoteItems(
   const discount = input.discount === undefined ? current.discount : input.discount;
   const total = totalCents(input.items, discount);
   const now = nextVersion(current.updatedAt);
-  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, discount_json = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
-    .run(JSON.stringify(input.items), total, input.internalNotes, discount ? JSON.stringify(discount) : null, now, current.id, input.expectedUpdatedAt);
+  const owner = input.owner && current.userId === NO_CUSTOMER_OWNER ? input.owner : null;
+  const userId = owner?.ownerId ?? current.userId;
+  const customer = owner?.customer ?? current.customer;
+  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, discount_json = ?, user_id = ?, customer_snapshot = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+    .run(JSON.stringify(input.items), total, input.internalNotes, discount ? JSON.stringify(discount) : null, userId, JSON.stringify(customer), now, current.id, input.expectedUpdatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
-  return { ...current, items: input.items, totalCents: total, internalNotes: input.internalNotes, discount, updatedAt: now };
+  return { ...current, userId, customer, items: input.items, totalCents: total, internalNotes: input.internalNotes, discount, updatedAt: now };
 }
 
 /** Proposta enviada: guarda a data e, se ainda aguardava orçamento, passa para "Em negociação". */
