@@ -14,6 +14,8 @@ export type QuoteCartItem = {
   pricing?: { unitSaleCents: number; freightCents: number } | null;
   /** Gravado pelo servidor no pedido: código Fare Foto, código real do fornecedor e SKU (painel da equipe). */
   codes?: { fare: string; supplier: "xbz" | "spot" | "asia"; supplierCode: string; sku: string } | null;
+  /** Gravações do item (o que o cliente vê na proposta): técnica e local, sem custo. */
+  gravacoes?: Array<{ descricao: string; local: string }>;
   /** Composição do preço feita pela equipe no painel (custo, personalização). Nunca vai para o cliente. */
   costing?: ItemCosting | null;
 };
@@ -26,6 +28,8 @@ export type ItemCosting = {
   custoPersonalizacaoTotal: number;
   freteFornecedor: number;
   tecnica: Record<string, unknown> & { tipo: string };
+  /** Todas as gravações do item (painel): técnica como foi escolhida, local e custo calculado. */
+  gravacoes?: Array<{ tecnica: Record<string, unknown> & { tipo: string }; local: string; descricao: string; detalhe: string; custoUnitario: number; custoTotal: number }>;
   por: string;
   em: string;
 };

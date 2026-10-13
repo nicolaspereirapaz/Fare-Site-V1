@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, FileText, LayoutGrid, MessageCircle, RefreshCw, TriangleAlert, XCircle } from "lucide-react";
 import { COLUNAS_QUADRO_PEDIDOS, ORDEM_STATUS_PEDIDO, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
@@ -289,8 +290,8 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
 
 type BackofficeTab = "pedidos" | "orcamentos";
 
-export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
-  const [tab, setTab] = useState<BackofficeTab>("pedidos");
+export function BackofficeBoard({ canCancel, initialTab = "pedidos" }: BackofficeBoardProps & { initialTab?: BackofficeTab }) {
+  const [tab, setTab] = useState<BackofficeTab>(initialTab);
   const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "pedidos", label: "Pedidos", icon: ClipboardList },
     { id: "orcamentos", label: "Orçamentos", icon: FileText },
@@ -298,13 +299,16 @@ export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
 
   return (
     <div className="kb-page container-shell">
-      <header className="kb-heading">
+      <header className="kb-heading kb-heading-actions">
+        <div>
         <h1>{tab === "pedidos" ? "Quadro de pedidos" : "Quadro de orçamentos"}</h1>
         <p>
           {tab === "pedidos"
             ? "Pedidos pagos, da arte à entrega. Ao concluir, o pedido sai do quadro."
             : "Orçamentos e pedidos esperando pagamento. Quando o pagamento entra, vira pedido em “Aguardando arte”."}
         </p>
+        </div>
+        {tab === "orcamentos" ? <Link className="kb-new-quote" href="/equipe/orcamentos/novo">Novo orçamento</Link> : null}
       </header>
 
       <div aria-label="Seções do painel" className="kb-tabs" role="tablist">
@@ -315,7 +319,10 @@ export function BackofficeBoard({ canCancel }: BackofficeBoardProps) {
             className={tab === id ? "active" : undefined}
             id={`backoffice-tab-${id}`}
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              window.history.replaceState(null, "", id === "orcamentos" ? "/equipe?aba=orcamentos" : "/equipe");
+            }}
             role="tab"
             type="button"
           >

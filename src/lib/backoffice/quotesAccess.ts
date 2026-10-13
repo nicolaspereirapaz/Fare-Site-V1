@@ -13,11 +13,16 @@ export type BackofficeQuoteSummary = {
   customerCompany: string | null;
   notes: string | null;
   billing: QuoteBilling | null;
-  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"]; costing?: QuoteCartItem["costing"] }>;
+  items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"]; gravacoes?: QuoteCartItem["gravacoes"]; costing?: QuoteCartItem["costing"] }>;
   itemCount: number;
   /** null quando algum item está "sob consulta". */
   total: number | null;
+  /** Quem montou no painel (null = veio do site). */
+  createdBy: string | null;
+  internalNotes: string;
   createdAt: string;
+  /** Para editar sem sobrescrever a mudança de outra pessoa. */
+  updatedAt: string;
 };
 
 function toSummary(quote: Quote): BackofficeQuoteSummary {
@@ -30,10 +35,13 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     customerCompany: quote.customer.company ?? null,
     notes: quote.customer.notes || null,
     billing: quote.customer.billing ?? null,
-    items: quote.items.map(({ productName, quantity, selections, unitPrice, codes, costing }) => ({ productName, quantity, selections, unitPrice, codes, ...(costing ? { costing } : {}) })),
+    items: quote.items.map(({ productName, quantity, selections, unitPrice, codes, gravacoes, costing }) => ({ productName, quantity, selections, unitPrice, codes, ...(gravacoes?.length ? { gravacoes } : {}), ...(costing ? { costing } : {}) })),
     itemCount: quote.items.length,
     total: quote.totalCents === null ? null : quote.totalCents / 100,
+    createdBy: quote.createdBy ?? null,
+    internalNotes: quote.internalNotes ?? "",
     createdAt: quote.createdAt,
+    updatedAt: quote.updatedAt,
   };
 }
 

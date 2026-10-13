@@ -127,3 +127,41 @@ describe("preço final ao cliente = (custo do produto + personalização) × 2 +
     expect(calcularPersonalizacao({ custoProduto: 0.82, categoria: "Canetas e Lápis", quantidade: 100, tecnica: { tipo: "nenhuma" } }).precoUnitarioFinal).toBe(2.64);
   });
 });
+
+describe("item com várias gravações", () => {
+  it("soma as gravações por peça: (custo + gravações) × 2 + frete rateado", async () => {
+    const { calcularItemOrcamento } = await import("@/lib/backoffice/customization");
+    const r = calcularItemOrcamento({
+      custoProduto: 0.72, categoria: "Canetas e Lápis", quantidade: 300,
+      gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo" }, { tecnica: { tipo: "laser" }, local: "Clipe" }],
+    });
+    expect(r.gravacoes.map((g) => [g.descricao, g.local, g.custoUnitario])).toEqual([["Laser", "Corpo", 1], ["Laser", "Clipe", 1]]);
+    expect(r.gravacoesPorPeca).toBe(2);
+    expect(r.precoUnitario).toBe(5.77); // (0,72 + 2) × 2 + 100/300 = 5,7733
+    expect(r.total).toBe(1731);
+    expect(r.custoTotal).toBe(Math.round((0.72 * 300 + 600 + 100) * 100) / 100);
+  });
+
+  it("sem gravação é o preço do site (custo × 2 + frete rateado)", async () => {
+    const { calcularItemOrcamento } = await import("@/lib/backoffice/customization");
+    const r = calcularItemOrcamento({ custoProduto: 38, categoria: "", quantidade: 2, gravacoes: [] });
+    expect(r.precoUnitario).toBe(126);
+    expect(r.gravacoes).toEqual([]);
+  });
+
+  it("cada gravação é calculada na quantidade do item (DTF UV escolhe as folhas)", async () => {
+    const { calcularItemOrcamento } = await import("@/lib/backoffice/customization");
+    const r = calcularItemOrcamento({
+      custoProduto: 9.48, categoria: "Garrafas e Squeezes", quantidade: 50,
+      gravacoes: [{ tecnica: { tipo: "laser" }, local: "Frente" }, { tecnica: { tipo: "dtf-uv", larguraCm: 6, alturaCm: 6 }, local: "Verso" }],
+    });
+    expect(r.gravacoes[0].custoUnitario).toBe(2.5);
+    expect(r.gravacoes[1]).toMatchObject({ descricao: "DTF UV 6×6 cm", local: "Verso", custoTotal: 103.97 });
+    expect(r.precoUnitario).toBe(Math.round(((9.48 + 2.5 + 103.97 / 50) * 2 * 50 * 100 + 10000) / 50) / 100);
+  });
+
+  it("gravação sem técnica válida é recusada", async () => {
+    const { calcularItemOrcamento } = await import("@/lib/backoffice/customization");
+    expect(() => calcularItemOrcamento({ custoProduto: 1, categoria: "", quantidade: 10, gravacoes: [{ tecnica: { tipo: "nenhuma" }, local: "" }] })).toThrow(/técnica/i);
+  });
+});

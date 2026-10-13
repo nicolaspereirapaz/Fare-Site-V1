@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Novo orçamento — prévia</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #2B3854; --navy-dark: #1d2447; --lilac: #656FA4; --orange: #F65C2D; --orange-dark: #d4532a;
+    --page: #f2f2f3; --card: #fff; --line: #e6e7ec; --line-soft: #f0f1f4; --ink: #1d2447; --text: #343a4d; --muted: #7a7f91; --faint: #a3a7b5;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); font: 14px/1.45 "DM Sans", system-ui, sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .topbar { background: var(--navy-dark); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 36px; color: #fff; }
+  .brand { display: flex; align-items: center; gap: 12px; font: 600 15px Outfit; }
+  .brand img { height: 30px; }
+  .brand span { padding-left: 12px; border-left: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.8); font-weight: 500; }
+  .who { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,.85); }
+  .who i { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; font: 600 12px Outfit; font-style: normal; }
+
+  .page { max-width: 1240px; margin: 0 auto; padding: 26px 36px 48px; }
+  .crumb { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .crumb a { color: var(--lilac); text-decoration: none; }
+  h1 { margin: 0 0 22px; font: 600 28px/1.1 Outfit; color: var(--ink); letter-spacing: -.01em; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; align-items: start; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(29,36,71,.05), 0 0 0 1px rgba(29,36,71,.04); }
+  .card + .card { margin-top: 18px; }
+  .card-h { padding: 18px 22px 0; }
+  .card-h h2 { margin: 0; font: 600 16px Outfit; color: var(--ink); }
+  .card-b { padding: 16px 22px 22px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid transparent; font: 600 13.5px "DM Sans"; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: var(--orange); color: #fff; box-shadow: 0 1px 2px rgba(212,83,42,.35); }
+  .btn-secondary { background: #fff; color: var(--ink); border-color: #d5d8e1; }
+  .btn-text { height: auto; padding: 0; border: 0; background: none; color: var(--lilac); font-weight: 600; }
+  .field { display: grid; gap: 6px; }
+  .field > span { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  input, select, textarea { width: 100%; height: 38px; border: 1px solid #d5d8e1; border-radius: 8px; padding: 0 11px; background: #fff; font: 14px "DM Sans"; color: var(--ink); }
+  select { appearance: none; padding-right: 30px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a7f91' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center; }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  .is-focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(43,56,84,.1); }
+  textarea { height: 76px; padding: 10px 11px; resize: vertical; line-height: 1.5; }
+
+  .client { display: flex; align-items: center; gap: 14px; }
+  .initials { width: 42px; height: 42px; border-radius: 50%; background: #e9ebf4; color: var(--navy); display: grid; place-items: center; font: 600 15px Outfit; flex: none; }
+  .client b { display: block; color: var(--ink); font-weight: 600; font-size: 15px; }
+  .client small { display: block; color: var(--muted); font-size: 13px; margin-top: 1px; }
+  .client .btn-text, .client .btn { margin-left: auto; }
+
+  .cols, .line { display: grid; grid-template-columns: minmax(0, 1fr) 124px 84px 96px 108px 22px; gap: 14px; align-items: center; }
+  .cols { padding: 0 0 10px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted); }
+  .r { text-align: right; justify-self: end; }
+  .item { padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .prod { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .thumb { width: 52px; height: 52px; border-radius: 9px; background: #fff; border: 1px solid var(--line-soft); display: grid; place-items: center; flex: none; overflow: hidden; }
+  .thumb img { width: 46px; height: 46px; object-fit: contain; }
+  .thumb.blank { background: var(--page); border-color: transparent; color: var(--faint); font: 600 11px Outfit; }
+  .prod b { display: block; color: var(--ink); font-weight: 600; line-height: 1.3; }
+  .prod small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .qty { text-align: right; }
+  .unit { font-weight: 700; color: var(--ink); }
+  .rm { width: 22px; height: 22px; display: grid; place-items: center; color: var(--faint); }
+  .rm svg { width: 14px; height: 14px; }
+
+  .engr { margin: 10px 0 0 65px; }
+  .eline { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 18px; align-items: baseline; padding: 6px 0; font-size: 13.5px; }
+  .eline + .eline { border-top: 1px dashed var(--line); }
+  .eline b { font-weight: 600; color: var(--ink); }
+  .eline .where { color: var(--muted); }
+  .eline .cost { color: var(--muted); font-size: 13px; }
+  .eline .acts { display: flex; gap: 14px; font-size: 13px; }
+  .eline .acts span { color: var(--faint); font-weight: 600; }
+  .eline .acts span:first-child { color: var(--lilac); }
+  .add-g { display: inline-block; margin-top: 6px; font-size: 13.5px; }
+  .none { color: var(--faint); font-size: 13.5px; margin-right: 14px; }
+
+  .gform { margin: 10px 0 2px 65px; padding: 16px; border-radius: 10px; background: #f7f7f9; }
+  .gform-grid { display: grid; grid-template-columns: 150px minmax(0, 1fr) 84px 84px; gap: 12px; }
+  .gcalc { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; gap: 16px; }
+  .gcalc p { margin: 0; font-size: 13px; color: var(--muted); }
+  .gcalc p b { color: var(--ink); }
+  .gcalc div { display: flex; gap: 8px; }
+
+  .addbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 18px; }
+  .search { position: relative; }
+  .search svg { position: absolute; left: 12px; top: 11px; width: 16px; height: 16px; color: var(--faint); }
+  .search input { padding-left: 36px; }
+
+  .aside { position: sticky; top: 20px; }
+  .sum-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 5px 0; }
+  .sum-row span:first-child { color: var(--muted); }
+  .sum-total { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 0 2px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .sum-total span { font-weight: 600; color: var(--ink); }
+  .sum-total b { font: 600 26px Outfit; color: var(--ink); letter-spacing: -.01em; }
+  .internal { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #f6f7fa; }
+  .internal p { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .internal .sum-row { padding: 3px 0; }
+  .margin { color: #1f7a4d; font-weight: 600; }
+  .terms { margin-top: 16px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .aside .btn-primary { width: 100%; height: 44px; margin-top: 18px; font-size: 14.5px; }
+
+  .states-title { margin: 44px 0 4px; font: 600 18px Outfit; color: var(--ink); }
+  .states-sub { margin: 0 0 16px; color: var(--muted); }
+  .states { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  .states .card + .card { margin-top: 0; }
+  .state-cap { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 0 0 10px; }
+  .hint { margin: 8px 0 0; font-size: 13px; color: var(--faint); }
+  .menu { margin-top: 6px; border-radius: 10px; background: #fff; box-shadow: 0 10px 30px rgba(29,36,71,.12), 0 0 0 1px rgba(29,36,71,.06); overflow: hidden; }
+  .opt { display: flex; gap: 11px; align-items: center; padding: 10px 12px; }
+  .opt + .opt { border-top: 1px solid var(--line-soft); }
+  .opt .initials { width: 32px; height: 32px; font-size: 12px; }
+  .opt b { display: block; font-weight: 600; color: var(--ink); font-size: 13.5px; }
+  .opt small { display: block; color: var(--muted); font-size: 12px; }
+  .opt mark { background: #fde3d8; color: inherit; border-radius: 2px; padding: 0 1px; }
+  .opt.active { background: #f6f7fa; }
+  .opt.new { color: var(--orange-dark); font-weight: 600; font-size: 13.5px; }
+  .opt.new .plus { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #f2a88f; display: grid; place-items: center; font-size: 17px; }
+  .new-grid { display: grid; gap: 10px; }
+  .dup { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: #fff6f2; box-shadow: inset 0 0 0 1px #f8d3c4; font-size: 13px; color: #7a3519; }
+  .dup b { color: #5e2610; }
+  .dup .client { margin-top: 10px; gap: 10px; }
+  .dup .initials { width: 32px; height: 32px; font-size: 12px; background: #fff; }
+  .dup .client b { font-size: 13.5px; }
+  .dup .btn { height: 32px; padding: 0 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="../../public/images/fare-foto-logo-escuro.svg" alt="Fare Foto"><span>Equipe</span></div>
+  <div class="who">Bia · vendedora <i>BS</i></div>
+</header>
+
+<main class="page">
+  <div class="crumb"><a href="#">Orçamentos</a> / Novo</div>
+  <h1>Novo orçamento</h1>
+
+  <div class="layout">
+    <div>
+      <section class="card">
+        <div class="card-h"><h2>Cliente</h2></div>
+        <div class="card-b">
+          <div class="client">
+            <div class="initials">AS</div>
+            <div><b>Ana Souza · Padaria Boa Vista Ltda</b><small class="num">CNPJ 11.222.333/0001-81 · (11) 98888-7777 · ana@padariaboavista.com.br</small></div>
+            <button class="btn btn-text">Trocar</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>Produtos</h2></div>
+        <div class="card-b">
+          <div class="cols"><span>Produto</span><span>Cor</span><span class="r">Qtd.</span><span class="r">Unitário</span><span class="r">Total</span><span></span></div>
+
+          <div class="item">
+            <div class="line">
+              <div class="prod"><div class="thumb"><img src="https://cdn.xbzbrindes.com.br/img/produtos/3/518-AZU-Caneta-Plastica-292.jpg" alt=""></div><div><b>Caneta Plástica c/ Detalhe Emborrachado</b><small class="num">X10304 · XBZ 00518 · custo R$ 0,72</small></div></div>
+              <select><option>Azul</option></select>
+              <input class="qty num" value="300">
+              <span class="r unit num">R$ 5,77</span>
+              <span class="r num">R$ 1.731,00</span>
+              <span class="rm"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            </div>
+            <div class="engr">
+              <div class="eline"><span><b>Laser</b> <span class="where">· corpo, logo 4 × 1 cm</span></span><span class="cost num">custo R$ 1,00/un.</span><span class="acts"><span>Editar</span><span>Remover</span></span></div>
+              <div class="eline"><span><b>Laser</b> <span class="where">· clipe, nome do evento</span></span><span class="cost num">custo R$ 1,00/un.</span><span class="acts"><span>Editar</span><span>Remover</span></span></div>
+              <button class="btn btn-text add-g">+ Adicionar gravação</button>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="line">
+              <div class="prod"><div class="thumb"><img src="https://cdn.xbzbrindes.com.br/img/produtos/3/Squeeze-600ml-Aluminio-AZUL-163-1563375236.jpg" alt=""></div><div><b>Squeeze Alumínio 650 ml</b><small class="num">X11846 · XBZ 00163 · custo R$ 9,48</small></div></div>
+              <select><option>Azul</option></select>
+              <input class="qty num" value="50">
+              <span class="r unit num">R$ 30,12</span>
+              <span class="r num">R$ 1.506,00</span>
+              <span class="rm"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            </div>
+            <div class="engr">
+              <div class="eline"><span><b>Laser</b> <span class="where">· frente, logo 5 × 3 cm</span></span><span class="cost num">custo R$ 2,50/un.</span><span class="acts"><span>Editar</span><span>Remover</span></span></div>
+            </div>
+            <div class="gform">
+              <div class="gform-grid">
+                <label class="field"><span>Técnica</span><select><option>DTF UV</option></select></label>
+                <label class="field"><span>Local</span><input value="Verso"></label>
+                <label class="field"><span>Largura (cm)</span><input class="num is-focus" value="6"></label>
+                <label class="field"><span>Altura (cm)</span><input class="num" value="6"></label>
+              </div>
+              <div class="gcalc">
+                <p class="num">1 folha 20 × 28 + 2 folhas 28 × 40 + frete R$ 10,00 = <b>R$ 103,97</b> · R$ 2,08 por peça</p>
+                <div><button class="btn btn-secondary">Cancelar</button><button class="btn btn-primary">Salvar gravação</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="line">
+              <div class="prod"><div class="thumb blank">avulso</div><div><b>Banner lona 90 × 120 cm</b><small class="num">Fora do catálogo · custo R$ 38,00</small></div></div>
+              <span></span>
+              <input class="qty num" value="2">
+              <span class="r unit num">R$ 126,00</span>
+              <span class="r num">R$ 252,00</span>
+              <span class="rm"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            </div>
+            <div class="engr"><span class="none">Sem gravação</span><button class="btn btn-text add-g">+ Adicionar gravação</button></div>
+          </div>
+
+          <div class="addbar">
+            <div class="search"><svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input placeholder="Adicionar produto — código Fare, código do fornecedor ou nome"></div>
+            <button class="btn btn-secondary">Item fora do catálogo</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><h2>Observações internas</h2></div>
+        <div class="card-b"><textarea>Cliente quer entrega até 30/10. Arte do logo enviada pelo WhatsApp.</textarea></div>
+      </section>
+    </div>
+
+    <aside class="aside card">
+      <div class="card-h"><h2>Resumo</h2></div>
+      <div class="card-b">
+        <div class="sum-row num"><span>Caneta Plástica · 300 un.</span><span>R$ 1.731,00</span></div>
+        <div class="sum-row num"><span>Squeeze Alumínio · 50 un.</span><span>R$ 1.506,00</span></div>
+        <div class="sum-row num"><span>Banner lona · 2 un.</span><span>R$ 252,00</span></div>
+        <div class="sum-row"><span>Frete</span><span>A combinar</span></div>
+        <div class="sum-total num"><span>Total</span><b>R$ 3.489,00</b></div>
+
+        <div class="internal">
+          <p>Só a equipe vê</p>
+          <div class="sum-row num"><span>Custo estimado</span><span>R$ 1.895,00</span></div>
+          <div class="sum-row num"><span>Margem</span><span class="margin">R$ 1.594,00 · 46%</span></div>
+        </div>
+
+        <div class="terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</div>
+        <button class="btn btn-primary">Criar orçamento</button>
+      </div>
+    </aside>
+  </div>
+
+  <h2 class="states-title">Escolher o cliente</h2>
+  <p class="states-sub">O que aparece ao clicar em "Trocar" (ou ao abrir um orçamento novo).</p>
+  <div class="states">
+    <div class="card card-b">
+      <p class="state-cap">Antes de digitar</p>
+      <input placeholder="Nome, empresa, WhatsApp ou CPF/CNPJ">
+      <p class="hint">Digite para buscar.</p>
+    </div>
+
+    <div class="card card-b">
+      <p class="state-cap">Digitando</p>
+      <input class="is-focus" value="pad">
+      <div class="menu">
+        <div class="opt active"><div class="initials">AS</div><div><b>Ana Souza · <mark>Pad</mark>aria Boa Vista</b><small class="num">11.222.333/0001-81 · (11) 98888-7777</small></div></div>
+        <div class="opt"><div class="initials">CM</div><div><b>Carlos Mendes · <mark>Pad</mark>aria Pão Nobre</b><small class="num">22.333.444/0001-90 · (11) 97777-1234</small></div></div>
+        <div class="opt new"><span class="plus">+</span>Cadastrar novo cliente</div>
+      </div>
+    </div>
+
+    <div class="card card-b">
+      <p class="state-cap">Cadastrar novo — cliente que já existe</p>
+      <div class="new-grid">
+        <label class="field"><span>Nome</span><input value="Ana"></label>
+        <label class="field"><span>WhatsApp</span><input class="num is-focus" value="(11) 98888-7777"></label>
+      </div>
+      <div class="dup">
+        <b>Este WhatsApp já está cadastrado.</b> Use o cadastro existente para não duplicar o cliente.
+        <div class="client"><div class="initials">AS</div><div><b>Ana Souza</b><small>Padaria Boa Vista · conta no site</small></div><button class="btn btn-secondary">Usar este</button></div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

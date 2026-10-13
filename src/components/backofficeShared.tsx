@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { Calculator, ArrowLeft, ArrowRight, CheckCircle2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, X } from "lucide-react";
 import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 
@@ -194,7 +194,7 @@ export function DetailsSections({
   items,
   total,
   notes,
-  onPriceItem,
+  internalNotes,
 }: {
   customerName: string;
   customerPhone: string;
@@ -204,8 +204,8 @@ export function DetailsSections({
   items: BackofficeItem[];
   total: number | null;
   notes: string | null;
-  /** Orçamentos: abre "Formar preço" do item. */
-  onPriceItem?: (index: number) => void;
+  /** Observação só da equipe (orçamentos). */
+  internalNotes?: string;
 }) {
   return (
     <>
@@ -248,13 +248,8 @@ export function DetailsSections({
                   {itemCodeLine(item) ? <small className="kb-item-codes">{itemCodeLine(item)}</small> : null}
                   {item.costing ? (
                     <small className="kb-item-costing">
-                      {item.costing.personalizacao ?? "Sem personalização"} · custo {formatCurrency(item.costing.custoProduto + item.costing.personalizacaoUnitaria)}/un. · venda {item.unitPrice === null ? "—" : `${formatCurrency(item.unitPrice)}/un.`}
+                      {item.costing.personalizacao ?? "Sem gravação"} · custo {formatCurrency(item.costing.custoProduto + item.costing.personalizacaoUnitaria)}/un. · venda {item.unitPrice === null ? "—" : `${formatCurrency(item.unitPrice)}/un.`}
                     </small>
-                  ) : null}
-                  {onPriceItem ? (
-                    <button className="kb-price-item" onClick={() => onPriceItem(index)} type="button">
-                      <Calculator aria-hidden="true" size={13} /> {item.costing ? "Refazer preço" : "Formar preço"}
-                    </button>
                   ) : null}
                 </td>
                 <td>{item.unitPrice === null ? "Sob consulta" : formatCurrency(item.unitPrice * item.quantity)}</td>
@@ -274,6 +269,13 @@ export function DetailsSections({
         <section>
           <h3>Observações</h3>
           <p className="kb-note">{notes}</p>
+        </section>
+      ) : null}
+
+      {internalNotes ? (
+        <section>
+          <h3>Observações internas</h3>
+          <p className="kb-note">{internalNotes}</p>
         </section>
       ) : null}
     </>

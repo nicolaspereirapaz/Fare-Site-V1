@@ -224,3 +224,54 @@ export function calcularPersonalizacao(input: {
     totalCliente: centavos(precoUnitarioFinal * quantidade),
   };
 }
+
+export type GravacaoCalculada = {
+  tecnica: Tecnica;
+  local: string;
+  descricao: string;
+  detalhe: string;
+  /** Custo por peça (sem arredondar para o cálculo; exibido com 2 casas). */
+  custoUnitario: number;
+  custoTotal: number;
+};
+
+/**
+ * Item do orçamento com N gravações (cada uma calculada na quantidade do item):
+ * preço = (custo do produto + soma das gravações por peça) × 2 + frete do fornecedor rateado.
+ */
+export function calcularItemOrcamento(input: {
+  custoProduto: number;
+  categoria: string;
+  quantidade: number;
+  gravacoes: Array<{ tecnica: Tecnica; local: string }>;
+  freteFornecedor?: number;
+}) {
+  const { custoProduto, categoria, quantidade } = input;
+  const freteFornecedor = input.freteFornecedor ?? FRETE_FORNECEDOR_PRODUTO;
+  if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida.");
+  if (!(custoProduto >= 0)) throw new Error("Custo do produto inválido.");
+
+  const gravacoes: GravacaoCalculada[] = input.gravacoes.map(({ tecnica, local }) => {
+    if (tecnica.tipo === "nenhuma") throw new Error("Escolha a técnica da gravação.");
+    const r = calcularPersonalizacao({ custoProduto: 0, categoria, quantidade, tecnica, freteFornecedor: 0 });
+    return {
+      tecnica,
+      local: local.trim().slice(0, 80),
+      descricao: r.descricao,
+      detalhe: r.detalhe,
+      custoUnitario: r.personalizacaoUnitaria,
+      custoTotal: r.custoPersonalizacaoTotal,
+    };
+  });
+  const gravacoesPorPeca = gravacoes.reduce((soma, gravacao) => soma + gravacao.custoTotal / quantidade, 0);
+  const totalCentavos = Math.round((custoProduto + gravacoesPorPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);
+  const precoUnitario = Math.round(totalCentavos / quantidade) / 100;
+  return {
+    gravacoes,
+    gravacoesPorPeca: Math.round(gravacoesPorPeca * 10_000) / 10_000,
+    precoUnitario,
+    total: centavos(precoUnitario * quantidade),
+    custoTotal: centavos(custoProduto * quantidade + gravacoes.reduce((soma, gravacao) => soma + gravacao.custoTotal, 0) + freteFornecedor),
+  };
+}
+

@@ -9,7 +9,7 @@ export type AccountQuote = {
   status: QuoteStatus;
   totalCents: number | null;
   createdAt: string;
-  items: Array<{ productName: string; quantity: number; color: string | null; unitPrice: number | null }>;
+  items: Array<{ productName: string; quantity: number; color: string | null; unitPrice: number | null; gravacoes?: string[] }>;
 };
 
 
@@ -65,6 +65,7 @@ export function AccountQuotes({ quotes }: { quotes: AccountQuote[] }) {
                   <span>
                     <strong>{item.productName}</strong>
                     {item.color ? <small> · {item.color}</small> : null}
+                    {item.gravacoes?.length ? <small className="account-quote-engraving">Gravação: {item.gravacoes.join(" + ")}</small> : null}
                   </span>
                   <span>{item.quantity} un.</span>
                   <span>{item.unitPrice === null ? "sob consulta" : `${brl(item.unitPrice)}/un.`}</span>

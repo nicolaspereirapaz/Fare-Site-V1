@@ -19,6 +19,8 @@ function buildQuote(overrides: Partial<Quote> = {}): Quote {
     status: "aguardando_orcamento",
     orderId: null,
     totalCents: 26400,
+    createdBy: null,
+    internalNotes: "",
     createdAt: "2026-10-08T12:00:00.000Z",
     updatedAt: "2026-10-08T12:00:00.000Z",
     ...overrides,
@@ -56,7 +58,10 @@ describe("lista de orçamentos do painel", () => {
       items: [{ productName: "Caneta Plástica", quantity: 100, selections: { "Variação": "Azul" }, unitPrice: 2.64 }],
       itemCount: 1,
       total: 264,
+      createdBy: null,
+      internalNotes: "",
       createdAt: "2026-10-08T12:00:00.000Z",
+      updatedAt: "2026-10-08T12:00:00.000Z",
     });
     expect(payload.quotes[1].total).toBeNull();
     expect(payload.counts).toEqual({ aguardando_orcamento: 1, em_negociacao: 1, aguardando_pagamento: 0, virou_pedido: 0, encerrado: 0 });
@@ -87,3 +92,17 @@ describe("mudar situação do orçamento no painel", () => {
     expect((await handler(() => buildQuote(), invalid)(patch({ status: "virou_pedido" }), "q")).status).toBe(409);
   });
 });
+
+describe("origem do orçamento no quadro", () => {
+  it("mostra se veio do site ou quem montou no painel, e a observação interna", async () => {
+    const quotes = [buildQuote(), buildQuote({ id: "91b0d400-0000-4000-8000-000000000000", userId: "painel:p1", createdBy: "Bia", internalNotes: "Arte pelo WhatsApp" })];
+    const response = await createListBackofficeQuotesHandler(as("vendedor"), () => quotes)(listRequest());
+    const body = await response.json() as { quotes: Array<{ createdBy: string | null; internalNotes: string; updatedAt: string }> };
+    expect(body.quotes.map(({ createdBy, internalNotes }) => ({ createdBy, internalNotes }))).toEqual([
+      { createdBy: null, internalNotes: "" },
+      { createdBy: "Bia", internalNotes: "Arte pelo WhatsApp" },
+    ]);
+    expect(body.quotes[0].updatedAt).toBe("2026-10-08T12:00:00.000Z");
+  });
+});
+

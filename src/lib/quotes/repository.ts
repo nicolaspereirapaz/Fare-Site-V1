@@ -30,6 +30,10 @@ export type Quote = CreateQuoteInput & {
   /** Pedido gerado quando o orçamento foi pago (situação virou_pedido). */
   orderId: string | null;
   totalCents: number | null;
+  /** Nome de quem montou o orçamento no painel (null = pedido pelo site). */
+  createdBy: string | null;
+  /** Observação só da equipe. */
+  internalNotes: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -43,6 +47,8 @@ type QuoteRow = {
   status: QuoteStatus;
   total_cents: number | null;
   order_id?: string | null;
+  created_by?: string | null;
+  internal_notes?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -91,6 +97,11 @@ export function runQuoteMigrations(database: DatabaseSync) {
     }
   }
   database.exec("CREATE INDEX IF NOT EXISTS fare_quotes_user ON fare_quotes (user_id, created_at);");
+
+  // Orçamento feito no painel: autor e observação interna (colunas novas, opcionais).
+  const columns = new Set((database.prepare("PRAGMA table_info(fare_quotes)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!columns.has("created_by")) database.exec("ALTER TABLE fare_quotes ADD COLUMN created_by TEXT");
+  if (!columns.has("internal_notes")) database.exec("ALTER TABLE fare_quotes ADD COLUMN internal_notes TEXT NOT NULL DEFAULT ''");
 }
 
 function totalCents(items: QuoteCartItem[]): number | null {
@@ -108,6 +119,8 @@ function deserialize(row: QuoteRow): Quote {
     status: row.status,
     orderId: row.order_id ?? null,
     totalCents: row.total_cents,
+    createdBy: row.created_by ?? null,
+    internalNotes: row.internal_notes ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -133,6 +146,52 @@ export function listQuotesByUser(database: DatabaseSync, userId: string): Quote[
   const rows = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? ORDER BY created_at DESC, rowid DESC")
     .all(userId) as unknown as QuoteRow[];
   return rows.map(deserialize);
+}
+
+/** Orçamentos de vários donos (conta do site + clientes do painel ligados a ela). */
+export function listQuotesByOwners(database: DatabaseSync, ownerIds: string[]): Quote[] {
+  runQuoteMigrations(database);
+  if (!ownerIds.length) return [];
+  const rows = database.prepare(`SELECT * FROM fare_quotes WHERE user_id IN (${ownerIds.map(() => "?").join(", ")}) ORDER BY created_at DESC, rowid DESC`)
+    .all(...ownerIds) as unknown as QuoteRow[];
+  return rows.map(deserialize);
+}
+
+/** Orçamento montado pela equipe no painel (cliente do site ou cadastrado no painel). */
+export function createManualQuote(
+  database: DatabaseSync,
+  input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string },
+): Quote {
+  runQuoteMigrations(database);
+  const now = new Date().toISOString();
+  database.prepare(`
+    INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, idempotency_key) DO NOTHING
+  `).run(randomUUID(), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), totalCents(input.items), input.createdBy, input.internalNotes, now, now);
+  const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")
+    .get(input.ownerId, input.idempotencyKey) as QuoteRow | undefined;
+  if (!row) throw new Error("Não foi possível salvar o orçamento.");
+  return deserialize(row);
+}
+
+const EDITABLE_STATUSES = ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"];
+
+/** Equipe edita os itens (e gravações) de um orçamento aberto; recusa se alguém mudou antes. */
+export function replaceQuoteItems(
+  database: DatabaseSync,
+  input: { quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string },
+): Quote {
+  runQuoteMigrations(database);
+  const current = findQuoteById(database, input.quoteId);
+  if (!current) throw new Error(`Orçamento "${input.quoteId}" não encontrado.`);
+  if (!EDITABLE_STATUSES.includes(current.status)) throw new Error("Este orçamento não pode mais ser alterado.");
+  const total = totalCents(input.items);
+  const now = new Date().toISOString();
+  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+    .run(JSON.stringify(input.items), total, input.internalNotes, now, current.id, input.expectedUpdatedAt);
+  if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
+  return { ...current, items: input.items, totalCents: total, internalNotes: input.internalNotes, updatedAt: now };
 }
 
 export function listAllQuotes(database: DatabaseSync): Quote[] {
