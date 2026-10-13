@@ -55,9 +55,9 @@ const s = StyleSheet.create({
   colTotal: { width: 86, marginLeft: 26, textAlign: "right" },
   money: { flexDirection: "row", justifyContent: "space-between" },
   num: { fontFeatureSettings: ["tnum"] },
-  thumb: { width: 44, height: 44, objectFit: "contain", borderWidth: 0.75, borderColor: C.line, borderRadius: 5, marginRight: 10 },
+  thumb: { width: 72, height: 72, objectFit: "contain", borderWidth: 0.75, borderColor: C.line, borderRadius: 6, marginRight: 12 },
   /** Item sem foto: espaço vazio do tamanho da foto, para os nomes ficarem alinhados. */
-  thumbSpace: { width: 44, marginRight: 10 },
+  thumbSpace: { width: 72, marginRight: 12 },
   /** Empurra condições + WhatsApp para o pé da página. */
   spacer: { flexGrow: 1 },
   prodName: { fontSize: 10.5, fontWeight: 700, color: C.ink, textDecoration: "none" },
