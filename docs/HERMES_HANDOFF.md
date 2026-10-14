@@ -226,3 +226,20 @@ Já feito em 13/10 (não refazer): campos de valor da janela do produto (`MoneyF
 
 Também pendente: teste no navegador do desconto + PDF na tela nova (`scratch/fornecedores/desconto_check.js` ainda usa a tela antiga do editor — adaptar para a janela; `modal_check.js` já usa a janela e serve de modelo). Testes automáticos de desconto/PDF passam (549 no total).
 Revisão GPT 6.1 de 13/10: 7 achados, todos corrigidos (commit a74cb6f).
+
+## Como rodar o projeto local (ler antes de testar)
+- Servidor: `FARE_FULL_SITE=1 PORT=3000 npx next dev -H 0.0.0.0 -p 3000` (background) → http://192.168.15.234:3000.
+  - Sem `FARE_FULL_SITE=1` o `src/proxy.ts` deixa só a campanha Outubro Rosa: `/equipe` redireciona e as APIs dão 404.
+  - Só um `next dev` por vez. Se travar ("Jest worker encountered child process exceptions" ou requisições sem resposta): `taskkill -F -T -PID <pid>` do processo da porta 3000 e subir de novo.
+- Chrome headless para QA: `chrome.exe --headless=new --remote-debugging-port=9223 --user-data-dir=C:/tmp/chrome-cdp`.
+- QA da equipe: `npm run -s equipe -- convidar "Nome" <email>@exemplo.com vendedor` (token na saída) e no fim `npm run -s equipe -- remover <email>`.
+- Revisor GPT: `codex exec -s read-only -o <saida.md> - < prompt.md` (Codex ≥ 0.161, `gpt-6.1-sol` high). No Windows o sandbox dele não roda comandos (lê o código só pelo node_repl); conferir cada achado no código.
+
+## 2026-10-14 — Janela "Escolha o produto" CONCLUÍDA
+Busca de produto do editor no estilo brinde.me: botão "Adicionar produto" → janela com filtros (fornecedor, grupo de cor, categoria, custo, estoque mínimo por cor), ordenação, páginas, detalhes e Confirmar → janela de configuração.
+- Arquivos: `src/lib/colorGroups.ts`, `src/lib/backoffice/productSearch.ts`, `quoteBuilderServer.ts` (`catalog.browse`), `quoteBuilderHandlers.ts` (GET `/api/backoffice/orcamento-editor/produtos` → `{ products+match, total, page, pages, colorCounts }`), `components/staff/ProductPickerModal.tsx`, `QuoteEditor.tsx`, `ProductConfigModal.tsx` (`ModalStart.variant`), CSS `.qe-pk-*`.
+- Regras: custo e estoque mínimo valem POR COR; card mostra menor custo e estoque só das cores que atendem; `colorCounts` ignora o próprio filtro de cor. Custo/estoque só equipe (rota exige sessão da equipe: 401 sem login).
+- 14/10, corrigido nesta sessão: chave de carregamento ("atualizando…" não sumia); rodapé no celular (contagem alargava a janela para 528 px); achados da revisão GPT 6.1 — seleção sumida ainda confirmável ao trocar de página, cor sugerida fora da faixa de custo, custo digitado arredondado (R$ 0,50 virava R$ 1), Tab saindo das janelas (agora o foco gira dentro; detalhes recebem o foco e devolvem ao fechar).
+- Não corrigido (baixo): cada busca converte o catálogo inteiro antes de paginar (0,25–0,7 s no `next dev`); cachear se ficar lento.
+- Evidência: `npm test` 77 arquivos / 566 testes; ESLint ok; tsc só com o erro antigo de `RouteContext`. Navegador (`dev-profile/cache/scratch/fornecedores/picker_check.js` 32/32 e `picker_mobile_check.js` 6/6): busca, filtros, ordem, páginas, detalhes, cor levada à configuração, Confirmar, Esc, celular 390 px.
+- Decisão pendente do usuário: no celular os filtros ocupam a tela e os produtos só aparecem rolando; proposta = mostrar só a busca + botão "Filtros".

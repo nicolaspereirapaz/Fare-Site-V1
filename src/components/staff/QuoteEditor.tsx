@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PencilLine, Search, X } from "lucide-react";
 import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductConfigModal";
+import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
 import {
   brl,
   EMPTY_TOTALS,
@@ -157,15 +158,15 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const [discount, setDiscount] = useState<DiscountForm>({ type: "percent", value: "" });
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalStart | null>(null);
-  const [productQuery, setProductQuery] = useState("");
-  const [productResults, setProductResults] = useState<Product[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Busca e filtros da janela "Escolha o produto" continuam ao reabrir (vários produtos seguidos). */
+  const [pickerState, setPickerState] = useState<PickerState>(EMPTY_PICKER);
   const [loading, setLoading] = useState(Boolean(quoteId));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [state, setState] = useState<{ updatedAt: string; status: string; createdBy: string | null } | null>(null);
   const idempotencyKey = useRef(`painel-${newId()}`);
-  const productQueryDebounced = useDebounced(productQuery.trim(), 250);
   const editable = !state || ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"].includes(state.status);
 
   // Abrir orçamento existente.
@@ -212,28 +213,13 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     };
   }, [itemsKey]);
 
-  // Busca de produto.
-  useEffect(() => {
-    let active = true;
-    const run = productQueryDebounced.length >= 2
-      ? fetch(`/api/backoffice/orcamento-editor/produtos?q=${encodeURIComponent(productQueryDebounced)}`, { cache: "no-store" })
-        .then((response) => response.json() as Promise<{ products?: Product[] }>)
-        .then((payload) => payload.products ?? [])
-        .catch(() => [] as Product[])
-      : Promise.resolve([] as Product[]);
-    run.then((list) => active && setProductResults(list));
-    return () => {
-      active = false;
-    };
-  }, [productQueryDebounced]);
-
-  /** Escolheu o produto na busca: abre a configuração (só entra na lista ao clicar em Adicionar). */
-  function chooseProduct(product: Product) {
+  /** Escolheu o produto na janela de busca: abre a configuração (só entra na lista ao clicar em Adicionar). */
+  const chooseProduct = useCallback(({ product, variant }: PickedProduct) => {
     setProducts((map) => ({ ...map, [product.publicId]: product }));
-    setModal({ kind: "catalogo", product });
-    setProductQuery("");
-    setProductResults([]);
-  }
+    setPickerOpen(false);
+    setModal({ kind: "catalogo", product, variant });
+  }, []);
+  const closePicker = useCallback(() => setPickerOpen(false), []);
 
   function editItem(item: Item) {
     if (item.source === "avulso") return setModal({ kind: "avulso", item });
@@ -382,31 +368,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
 
             {editable ? (
               <div className="qe-addbar">
-                <div className="qe-picker">
-                  <div className="qe-search">
-                    <Search aria-hidden="true" size={16} />
-                    <input aria-label="Adicionar produto" onChange={(event) => setProductQuery(event.target.value)} placeholder="Adicionar produto — código Fare, código do fornecedor ou nome" value={productQuery} />
-                  </div>
-                  {productQuery.trim().length >= 2 ? (
-                    <div className="qe-menu">
-                      {productResults.map((product) => {
-                        const cost = Math.min(...product.variants.map((variant) => variant.cost));
-                        const stock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
-                        return (
-                          <button className="qe-opt" key={product.publicId} onClick={() => chooseProduct(product)} type="button">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <span className="qe-thumb qe-thumb-sm"><img alt="" src={product.imageUrl} /></span>
-                            <span>
-                              <b>{product.name}</b>
-                              <small>{product.fareCode} · {product.supplierCode} · custo {brl(cost)} · {product.variants.length} {product.variants.length === 1 ? "cor" : "cores"} · {stock.toLocaleString("pt-BR")} em estoque</small>
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {!productResults.length ? <p className="qe-menu-empty">{productQueryDebounced === productQuery.trim() ? "Nenhum produto encontrado." : "Buscando…"}</p> : null}
-                    </div>
-                  ) : null}
-                </div>
+                <button className="qe-btn qe-btn-primary qe-addprod" onClick={() => setPickerOpen(true)} type="button">
+                  <Search aria-hidden="true" size={16} /> Adicionar produto
+                </button>
                 <button className="qe-btn qe-btn-secondary" onClick={() => setModal({ kind: "avulso" })} type="button">Item fora do catálogo</button>
               </div>
             ) : null}
@@ -489,6 +453,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
         </aside>
       </div>
 
+      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProduct} onStateChange={setPickerState} /> : null}
       {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} start={modal} /> : null}
     </main>
   );

@@ -9,6 +9,8 @@ export type Duplicate = Customer & { by: string[] };
 export type SpotOption = { id: string; tecnica: string; local: string; componente: string; area: string; cores: number; padrao: boolean };
 export type Product = {
   publicId: string; name: string; category: string; imageUrl: string; fareCode: string; supplierCode: string; supplier: string;
+  /** Descrição do fornecedor (só vem na busca; orçamento salvo pode não ter). */
+  description?: string;
   variants: Array<{ label: string; cost: number; stock: number; imageUrl: string }>;
   spotOptions: SpotOption[];
 };

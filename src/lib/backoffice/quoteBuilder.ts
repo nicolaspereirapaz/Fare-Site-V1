@@ -15,6 +15,8 @@ export type BuilderProduct = {
   name: string;
   category: string;
   imageUrl: string;
+  /** Descrição do fornecedor (janela de detalhes da busca da equipe). */
+  description?: string;
   fareCode: string;
   supplier: SupplierId;
   supplierCode: string;

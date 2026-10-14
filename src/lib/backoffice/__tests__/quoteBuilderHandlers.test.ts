@@ -18,7 +18,10 @@ function setup(role = "vendedor") {
   const handlers = createQuoteBuilderHandlers({
     getSession: vi.fn().mockResolvedValue(role ? { user: { id: "s1", name: "Bia", role } } : null),
     database: () => db,
-    catalog: async () => ({ lookup: (id) => (id === "cf93" ? CANETA : null), search: () => [CANETA] }),
+    catalog: async () => ({
+      lookup: (id) => (id === "cf93" ? CANETA : null),
+      browse: () => ({ items: [{ product: CANETA, match: { cost: 0.72, stock: 5000, colors: 1 } }], total: 1, page: 1, pages: 1, colorCounts: { Azul: 1 } }),
+    }),
   });
   return { db, handlers };
 }
@@ -44,6 +47,13 @@ describe("editor de orçamentos do painel", () => {
     const { handlers } = setup();
     const body = await (await handlers.searchProducts(new Request("http://x/api?q=caneta"))).json() as { products: Array<{ variants: Array<Record<string, unknown>> }> };
     expect(body.products[0].variants[0]).toEqual({ label: "Azul", cost: 0.72, stock: 5000, imageUrl: "" });
+  });
+
+  it("busca de produto devolve páginas, contagem por cor e o que bate com o filtro", async () => {
+    const { handlers } = setup();
+    const body = await (await handlers.searchProducts(new Request("http://x/api?cor=Azul&pagina=1"))).json();
+    expect(body).toMatchObject({ total: 1, page: 1, pages: 1, colorCounts: { Azul: 1 }, products: [{ publicId: "cf93", match: { cost: 0.72, stock: 5000, colors: 1 } }] });
+    expect((await setup("cliente").handlers.searchProducts(new Request("http://x/api?q=a"))).status).toBe(403);
   });
 
   it("cria o orçamento com preço do servidor (ignora preço vindo do navegador)", async () => {

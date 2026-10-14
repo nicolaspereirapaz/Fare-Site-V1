@@ -1,6 +1,7 @@
 import { database } from "@/lib/auth";
 import type { BuilderProduct } from "@/lib/backoffice/quoteBuilder";
 import { createQuoteBuilderHandlers } from "@/lib/backoffice/quoteBuilderHandlers";
+import { browseStaffCatalog, type StaffFilters } from "@/lib/backoffice/productSearch";
 import { isProfileComplete } from "@/lib/account/profile";
 import { getCustomerProfile } from "@/lib/account/profileRepository";
 import { queryCatalog } from "@/lib/catalogQuery";
@@ -27,6 +28,7 @@ function toBuilderProduct(product: CatalogProduct, fareCodes: Map<string, string
     name: product.name,
     category: product.category,
     imageUrl: product.imageUrl,
+    description: product.description,
     fareCode: fareCodes.get(familyKey(first)) ?? "",
     supplier,
     supplierCode: supplierCodeOf(product.variants),
@@ -54,11 +56,23 @@ async function catalog() {
       const product = byId.get(publicId);
       return product ? toBuilderProduct(product, fareCodes) : null;
     },
-    search: (query: string, limit: number) => {
-      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const exact = grouped.filter((product) => codeOf(product).toLowerCase().split(/\s+/).some((code) => words.includes(code)));
-      const found = exact.length ? exact : queryCatalog(grouped, { query, category: "", quantity: null, minPrice: null, maxPrice: null, sort: "relevancia", pricesVisible: true }, codeOf);
-      return found.slice(0, limit).map((product) => toBuilderProduct(product, fareCodes));
+    browse: (filters: StaffFilters) => {
+      const words = filters.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const exact = words.length ? grouped.filter((product) => codeOf(product).toLowerCase().split(/\s+/).some((code) => words.includes(code))) : [];
+      // Ordem de relevância (busca) ou destaque por categoria (sem busca); filtros e ordem da equipe vêm depois.
+      const ranked = exact.length ? exact : queryCatalog(grouped, { query: filters.query, category: "", quantity: null, minPrice: null, maxPrice: null, sort: "relevancia", pricesVisible: true }, codeOf);
+      const entries = ranked.map((product) => {
+        const labels = toPublicCatalogProduct(product).variants.map((variant) => variant.label);
+        return {
+          ref: product,
+          name: product.name,
+          supplier: supplierOf(product.variants[0]),
+          category: product.category,
+          variants: product.variants.map((variant, index) => ({ label: labels[index], cost: variant.price ?? 0, stock: variant.stockAvailable })),
+        };
+      });
+      const result = browseStaffCatalog(entries, filters);
+      return { ...result, items: result.items.map(({ ref, match }) => ({ product: toBuilderProduct(ref, fareCodes), match })) };
     },
   };
 }

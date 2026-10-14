@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
+import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type StaffMatch } from "@/lib/backoffice/productSearch";
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers } from "@/lib/customers/repository";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
@@ -16,10 +17,12 @@ export type StaffUser = { user: { id: string; name: string; role?: unknown } };
 export type QuoteBuilderDeps = {
   getSession: SessionReader<StaffUser>;
   database: () => DatabaseSync;
-  /** Catálogo do servidor: produto pelo id público e busca para o painel. */
-  catalog: () => Promise<{ lookup: (publicId: string) => BuilderProduct | null; search: (query: string, limit: number) => BuilderProduct[] }>;
+  /** Catálogo do servidor: produto pelo id público e busca filtrada/paginada para o painel. */
+  catalog: () => Promise<{ lookup: (publicId: string) => BuilderProduct | null; browse: (filters: StaffFilters) => StaffBrowsePage }>;
   readBilling?: (userId: string) => QuoteBilling | null;
 };
+
+export type StaffBrowsePage = Omit<StaffBrowseResult<unknown>, "items"> & { items: Array<{ product: BuilderProduct; match: StaffMatch }> };
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -63,6 +66,7 @@ export function toEditorProduct(product: BuilderProduct) {
     name: product.name,
     category: product.category,
     imageUrl: product.imageUrl,
+    description: product.description ?? "",
     fareCode: product.fareCode,
     /** Código do fornecedor com o nome (só a equipe vê). */
     supplierCode: `${SUPPLIER_LABELS[product.supplier]} ${product.supplierCode}`,
@@ -123,13 +127,20 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       }
     },
 
+    /** Janela "Escolha o produto": busca + filtros (fornecedor, grupo de cor, categoria, custo, estoque mínimo) e páginas. */
     async searchProducts(request: Request) {
       const access = await staff(deps, request);
       if (access.error) return access.error;
-      const query = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 80);
-      if (!query) return json({ products: [] });
+      const filters = parseStaffFilters(new URL(request.url).searchParams);
       const catalog = await deps.catalog();
-      return json({ products: catalog.search(query, 12).map(toEditorProduct) });
+      const result = catalog.browse(filters);
+      return json({
+        products: result.items.map(({ product, match }) => ({ ...toEditorProduct(product), match })),
+        total: result.total,
+        page: result.page,
+        pages: result.pages,
+        colorCounts: result.colorCounts,
+      });
     },
 
     async preview(request: Request) {

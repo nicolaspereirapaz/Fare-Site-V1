@@ -24,7 +24,8 @@ import {
  * O preço é sempre calculado no servidor (prévia); aqui só se monta o rascunho.
  */
 
-export type ModalStart = { kind: "catalogo"; product: Product; item?: Item } | { kind: "avulso"; item?: Item };
+/** variant: cor já escolhida na busca (filtro de cor ou "Usar este produto" nos detalhes). */
+export type ModalStart = { kind: "catalogo"; product: Product; item?: Item; variant?: string } | { kind: "avulso"; item?: Item };
 
 type EngForm = {
   key: string;
@@ -137,9 +138,12 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
   const firstField = useRef<HTMLSelectElement & HTMLInputElement>(null);
 
   const [id] = useState(() => editing?.id ?? newId());
-  const [variant, setVariant] = useState(() => (editing?.source === "catalogo"
-    ? editing.variant
-    : (product?.variants.find((entry) => entry.stock >= 100) ?? product?.variants[0])?.label ?? ""));
+  const [variant, setVariant] = useState(() => {
+    if (editing?.source === "catalogo") return editing.variant;
+    const chosen = start.kind === "catalogo" ? start.variant : undefined;
+    if (chosen && product?.variants.some((entry) => entry.label === chosen)) return chosen;
+    return (product?.variants.find((entry) => entry.stock >= 100) ?? product?.variants[0])?.label ?? "";
+  });
   const [quantity, setQuantity] = useState(String(editing?.quantity ?? 100));
   const [name, setName] = useState(editing?.source === "avulso" ? editing.name : "");
   const [looseCost, setLooseCost] = useState(editing?.source === "avulso" ? moneyInput(editing.cost) : "");
