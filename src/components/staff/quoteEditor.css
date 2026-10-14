@@ -363,25 +363,26 @@
 
 /* detalhes do produto (sobre a janela de busca) */
 .qe-pk-scrim-top { z-index: 210; background: rgba(23, 27, 45, .35); }
-.qe-pk-det { width: min(980px, 100%); }
-.qe-pk-det-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 0; flex: 1; overflow: hidden; }
-.qe-pk-det-photo { display: grid; place-items: center; padding: 20px; background: #f2f2f3; min-height: 360px; overflow: hidden; }
+/* Detalhes grandes: quase a janela toda, foto ocupando a metade esquerda inteira. */
+.qe-pk-det { width: min(1360px, 100%); height: min(900px, calc(100vh - 48px)); }
+.qe-pk-det-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); min-height: 0; flex: 1; overflow: hidden; }
+.qe-pk-det-photo { position: relative; display: grid; place-items: center; background: #f2f2f3; min-height: 360px; overflow: hidden; }
 /* min-height 0 + max-height 100%: foto alta (lápis, caneta) não sai da caixa. */
-.qe-pk-det-photo img { width: 100%; height: 100%; min-height: 0; max-height: 62vh; object-fit: contain; mix-blend-mode: multiply; }
-.qe-pk-det-info { padding: 18px 22px; overflow-y: auto; }
-.qe-pk-det-info h3 { margin: 0 0 12px; font: 600 19px/1.25 var(--font-outfit), sans-serif; color: var(--qe-ink); }
+.qe-pk-det-photo img { position: absolute; inset: 28px; width: calc(100% - 56px); height: calc(100% - 56px); object-fit: contain; mix-blend-mode: multiply; }
+.qe-pk-det-info { padding: 22px 28px; overflow-y: auto; }
+.qe-pk-det-info h3 { margin: 0 0 14px; font: 600 22px/1.25 var(--font-outfit), sans-serif; color: var(--qe-ink); }
 .qe-pk-det-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0 0 14px; }
 .qe-pk-det-codes dt { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--qe-faint); }
 .qe-pk-det-codes dd { margin: 1px 0 0; color: var(--qe-ink); font-size: 13.5px; font-weight: 600; }
 .qe-pk-det-label { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--qe-muted); }
 .qe-pk-det-colors { margin: 0 0 14px; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.qe-pk-det-colors button { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 9px; align-items: center; width: 100%; padding: 5px 7px; border: 1px solid var(--qe-line-soft); border-radius: 8px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
+.qe-pk-det-colors button { display: grid; grid-template-columns: 42px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; align-items: center; width: 100%; padding: 6px 8px; border: 1px solid var(--qe-line-soft); border-radius: 8px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
 .qe-pk-det-colors button:hover { background: #f6f7fa; }
 .qe-pk-det-colors button.on { border-color: var(--qe-navy); background: #f2f3f8; }
-.qe-pk-det-colors img, .qe-pk-det-colors i { grid-row: 1 / 3; width: 34px; height: 34px; border-radius: 6px; object-fit: contain; background: #f2f2f3; }
+.qe-pk-det-colors img, .qe-pk-det-colors i { grid-row: 1 / 3; width: 42px; height: 42px; border-radius: 6px; object-fit: contain; background: #f2f2f3; }
 .qe-pk-det-colors span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--qe-ink); font-weight: 600; }
 .qe-pk-det-colors small { color: var(--qe-muted); font-size: 11.5px; }
-.qe-pk-det-desc { margin: 0; white-space: pre-line; font-size: 13px; color: var(--qe-text); }
+.qe-pk-det-desc { margin: 0; white-space: pre-line; font-size: 14px; line-height: 1.5; color: var(--qe-text); }
 .qe-pk-det .qe-modal-foot .qe-btn-secondary { margin-left: auto; }
 
 @media (max-width: 900px) {
@@ -398,8 +399,10 @@
   .qe-pk-chosen { grid-column: 1 / -1; justify-content: center; }
   .qe-pk-det-body { grid-template-columns: 1fr; overflow-y: auto; }
   /* Foto dos detalhes com altura fixa no celular; a imagem cabe inteira dentro dela. */
-  .qe-pk-det-photo { min-height: 0; height: min(280px, 36vh); padding: 12px; }
-  .qe-pk-det-photo img { max-height: 100%; }
+  .qe-pk-det { height: auto; }
+  .qe-pk-det-photo { min-height: 0; height: min(300px, 38vh); }
+  .qe-pk-det-photo img { inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); }
+  .qe-pk-det-info { padding: 16px 18px; }
   /* Filtros recolhidos: só a busca e o botão "Filtros"; os produtos aparecem logo abaixo. */
   .qe-pk-side { gap: 10px; padding: 12px 14px; }
   .qe-pk-filters-title { display: none; }
