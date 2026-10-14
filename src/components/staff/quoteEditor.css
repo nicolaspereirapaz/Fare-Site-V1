@@ -283,3 +283,7 @@
   .qe-mfig b { font-size: 16px; white-space: nowrap; }
   .qe-modal-foot .qe-btn-secondary, .qe-madd { width: 100%; min-width: 0; }
 }
+/* Custo da gravação: campo maior, com cara de campo editável */
+.qe-ebox-foot .qe-cost { font-size: 12.5px; }
+.qe-ebox-foot .qe-cost input { width: 110px; height: 34px; padding: 0 10px; border-color: #d5d8e1; border-radius: 8px; font-size: 14px; cursor: text; }
+.qe-ebox-foot .qe-cost input:hover { border-color: var(--qe-navy); }

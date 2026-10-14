@@ -87,6 +87,41 @@ function tecnicaOf(form: EngForm): Tecnica | null {
   return null;
 }
 
+/**
+ * Campo de valor editável. Vazio = valor calculado (aparece apagado). Ao clicar, o calculado vira texto no campo
+ * para editar; sair sem mudar volta a ser automático. Valor digitado fica com fundo laranja.
+ */
+export function MoneyField({ value, calculated, onChange, ariaLabel, className = "" }: {
+  value: string;
+  calculated: number | null;
+  onChange: (next: string) => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  const base = useRef<number | null>(null);
+  return (
+    <input
+      aria-label={ariaLabel}
+      className={`${className}${value ? " is-manual" : ""}`.trim()}
+      inputMode="decimal"
+      onBlur={() => {
+        if (value && base.current !== null && Math.abs(parseNumber(value) - base.current) < 1e-9) onChange("");
+        base.current = null;
+      }}
+      onChange={(event) => onChange(cleanMoney(event.target.value))}
+      onFocus={(event) => {
+        if (value || calculated === null) return;
+        base.current = calculated;
+        onChange(moneyInput(calculated));
+        const input = event.currentTarget;
+        requestAnimationFrame(() => input.select());
+      }}
+      placeholder={calculated !== null ? moneyInput(calculated) : ""}
+      value={value}
+    />
+  );
+}
+
 /** Na gravação "Outra", o custo já é digitado no próprio formulário. */
 const allowsCostOverride = (form: EngForm) => !(form.mode === "propria" && form.tipo === "manual");
 
@@ -205,15 +240,9 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
                   {product ? (
                     <label className="qe-field">
                       <span>Custo por peça (R$)</span>
-                      <input
-                        className={costOverride ? "qe-num is-manual" : "qe-num"}
-                        inputMode="decimal"
-                        onChange={(event) => setCostOverride(cleanMoney(event.target.value))}
-                        placeholder={moneyInput(current?.cost ?? 0)}
-                        value={costOverride}
-                      />
+                      <MoneyField ariaLabel="Custo por peça do produto" calculated={current?.cost ?? null} className="qe-num" onChange={setCostOverride} value={costOverride} />
                       <small className="qe-fhint">
-                        {costOverride ? <button className="qe-reset" onClick={() => setCostOverride("")} type="button">usar o do catálogo ({brl(current?.cost ?? 0)})</button> : "do catálogo · digite para trocar"}
+                        {costOverride ? <button className="qe-reset" onClick={() => setCostOverride("")} type="button">usar o do catálogo ({brl(current?.cost ?? 0)})</button> : "do catálogo · clique para alterar"}
                       </small>
                     </label>
                   ) : (
@@ -306,12 +335,10 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
                       {allowsCostOverride(form) ? (
                         <label className="qe-cost">
                           <span>Custo/peça R$</span>
-                          <input
-                            aria-label={`Custo por peça da gravação ${index + 1}`}
-                            className={form.custoOverride ? "is-manual" : undefined}
-                            inputMode="decimal"
-                            onChange={(event) => setEng(form.key, { custoOverride: cleanMoney(event.target.value) })}
-                            placeholder={calc && !calc.manual ? moneyInput(calc.custoUnitario) : ""}
+                          <MoneyField
+                            ariaLabel={`Custo por peça da gravação ${index + 1}`}
+                            calculated={calc && !calc.manual ? calc.custoUnitario : null}
+                            onChange={(next) => setEng(form.key, { custoOverride: next })}
                             value={form.custoOverride}
                           />
                         </label>
@@ -329,15 +356,9 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
                 <div className="qe-mgrid">
                   <label className="qe-field">
                     <span>Preço por peça (R$)</span>
-                    <input
-                      className={priceOverride ? "qe-num qe-strong is-manual" : "qe-num qe-strong"}
-                      inputMode="decimal"
-                      onChange={(event) => setPriceOverride(cleanMoney(event.target.value))}
-                      placeholder={suggested !== null ? moneyInput(suggested) : ""}
-                      value={priceOverride}
-                    />
+                    <MoneyField ariaLabel="Preço por peça" calculated={suggested} className="qe-num qe-strong" onChange={setPriceOverride} value={priceOverride} />
                     <small className="qe-fhint">
-                      {priceOverride && suggested !== null ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(suggested)})</button> : "calculado · digite para trocar"}
+                      {priceOverride && suggested !== null ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(suggested)})</button> : "calculado · clique para alterar"}
                     </small>
                   </label>
                   <div className="qe-field">
