@@ -60,16 +60,52 @@ describe("janela de busca", () => {
     render(<ProductPickerModal initial={EMPTY_PICKER} onClose={vi.fn()} onPick={onPick} onStateChange={vi.fn()} />);
     return { onPick };
   };
-  const confirmButton = () => screen.getByRole("button", { name: "Confirmar" });
+  const confirmButton = () => screen.getByRole("button", { name: /^Confirmar/ });
 
-  it("trocar de página desfaz a seleção (Confirmar não abre produto que sumiu da tela)", async () => {
+  it("vários produtos: clicar marca e desmarca, Confirmar (n) manda todos na ordem do clique", async () => {
+    const user = userEvent.setup();
+    const { onPick } = renderPicker();
+    await user.click(await screen.findByRole("option", { name: "Produto 2" }));
+    await user.click(screen.getByRole("option", { name: "Produto 1" }));
+    expect(screen.getByRole("button", { name: "Confirmar (2)" })).toBeEnabled();
+    expect(screen.getByText("2 selecionados")).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Produto 2" }));
+    expect(screen.getByRole("button", { name: "Confirmar (1)" })).toBeEnabled();
+    await user.click(screen.getByRole("option", { name: "Produto 2" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar (2)" }));
+    expect(onPick).toHaveBeenCalledWith([
+      expect.objectContaining({ product: expect.objectContaining({ publicId: "1" }), variant: "Azul" }),
+      expect.objectContaining({ product: expect.objectContaining({ publicId: "2" }), variant: "Preto" }),
+    ]);
+  });
+
+  it("a seleção continua ao trocar de página (junta produtos de buscas diferentes)", async () => {
+    const user = userEvent.setup();
+    const { onPick } = renderPicker();
+    await user.click(await screen.findByRole("option", { name: "Produto 1" }));
+    await user.click(screen.getByRole("button", { name: "Próxima página" }));
+    await user.click(await screen.findByRole("option", { name: "Produto 3" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar (2)" }));
+    expect(onPick.mock.calls[0][0].map((entry: { product: Product }) => entry.product.publicId)).toEqual(["1", "3"]);
+  });
+
+  it("Limpar desfaz a seleção", async () => {
     const user = userEvent.setup();
     renderPicker();
     await user.click(await screen.findByRole("option", { name: "Produto 1" }));
-    expect(confirmButton()).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Próxima página" }));
-    await screen.findByRole("option", { name: "Produto 3" });
+    await user.click(screen.getByRole("button", { name: "Limpar seleção" }));
     expect(confirmButton()).toBeDisabled();
+  });
+
+  it("Selecionar nos detalhes leva a cor escolhida; duplo clique confirma na hora", async () => {
+    const user = userEvent.setup();
+    const { onPick } = renderPicker();
+    await user.click(await screen.findByRole("button", { name: "Detalhes de Produto 1" }));
+    await user.click(screen.getByRole("button", { name: "Selecionar" }));
+    expect(screen.queryByRole("dialog", { name: "Detalhes do produto" })).not.toBeInTheDocument();
+    await user.dblClick(screen.getByRole("option", { name: "Produto 2" }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick.mock.calls[0][0].map((entry: { product: Product }) => entry.product.publicId)).toEqual(["1", "2"]);
   });
 
   it("Tab no último botão volta para o começo da janela (foco não vai para a página de trás)", async () => {
@@ -92,7 +128,7 @@ describe("janela de busca", () => {
     await user.click(await screen.findByRole("button", { name: "Detalhes de Produto 1" }));
     const details = screen.getByRole("dialog", { name: "Detalhes do produto" });
     await waitFor(() => expect(details.contains(document.activeElement)).toBe(true));
-    const use = screen.getByRole("button", { name: "Usar este produto" });
+    const use = screen.getByRole("button", { name: "Selecionar" });
     act(() => use.focus());
     fireEvent.keyDown(use, { key: "Tab" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Fechar detalhes" }));

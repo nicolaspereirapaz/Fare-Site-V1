@@ -159,6 +159,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalStart | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** Produtos marcados na busca que ainda vão ser configurados (o atual está em `modal`). */
+  const [queue, setQueue] = useState<{ rest: PickedProduct[]; total: number } | null>(null);
   /** Busca e filtros da janela "Escolha o produto" continuam ao reabrir (vários produtos seguidos). */
   const [pickerState, setPickerState] = useState<PickerState>(EMPTY_PICKER);
   const [loading, setLoading] = useState(Boolean(quoteId));
@@ -213,12 +215,20 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     };
   }, [itemsKey]);
 
-  /** Escolheu o produto na janela de busca: abre a configuração (só entra na lista ao clicar em Adicionar). */
-  const chooseProduct = useCallback(({ product, variant }: PickedProduct) => {
-    setProducts((map) => ({ ...map, [product.publicId]: product }));
-    setPickerOpen(false);
-    setModal({ kind: "catalogo", product, variant });
+  /** Abre a configuração do próximo produto da fila (ou fecha, se acabou). */
+  const openNext = useCallback((pending: PickedProduct[], total: number) => {
+    const [next, ...rest] = pending;
+    setQueue(next ? { rest, total } : null);
+    setModal(next ? { kind: "catalogo", product: next.product, variant: next.variant } : null);
   }, []);
+
+  /** Escolheu produtos na janela de busca: configura um por vez, na ordem do clique (só entram na lista ao clicar em Adicionar). */
+  const chooseProducts = useCallback((picked: PickedProduct[]) => {
+    if (!picked.length) return;
+    setProducts((map) => ({ ...map, ...Object.fromEntries(picked.map(({ product }) => [product.publicId, product])) }));
+    setPickerOpen(false);
+    openNext(picked, picked.length);
+  }, [openNext]);
   const closePicker = useCallback(() => setPickerOpen(false), []);
 
   function editItem(item: Item) {
@@ -227,11 +237,17 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     if (product) setModal({ kind: "catalogo", product, item });
   }
 
-  const closeModal = useCallback(() => setModal(null), []);
+  /** Cancelar/Esc encerra a fila; o que já foi adicionado fica. */
+  const closeModal = useCallback(() => {
+    setModal(null);
+    setQueue(null);
+  }, []);
   const saveFromModal = useCallback((item: Item) => {
     setItems((list) => (list.some((entry) => entry.id === item.id) ? list.map((entry) => (entry.id === item.id ? item : entry)) : [...list, item]));
-    setModal(null);
-  }, []);
+    if (queue) openNext(queue.rest, queue.total);
+    else setModal(null);
+  }, [queue, openNext]);
+  const skipQueued = useCallback(() => queue && openNext(queue.rest, queue.total), [queue, openNext]);
 
   async function submit() {
     setSaving(true);
@@ -453,8 +469,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
         </aside>
       </div>
 
-      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProduct} onStateChange={setPickerState} /> : null}
-      {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} start={modal} /> : null}
+      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onStateChange={setPickerState} /> : null}
+      {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} queue={queue && queue.total > 1 ? { position: queue.total - queue.rest.length, total: queue.total, onSkip: skipQueued } : undefined} start={modal} /> : null}
     </main>
   );
 }

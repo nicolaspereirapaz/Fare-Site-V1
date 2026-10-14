@@ -132,7 +132,10 @@ export function MoneyField({ value, calculated, onChange, ariaLabel, className =
 /** Na gravação "Outra", o custo já é digitado no próprio formulário. */
 const allowsCostOverride = (form: EngForm) => !(form.mode === "propria" && form.tipo === "manual");
 
-export function ProductConfigModal({ start, onSave, onClose }: { start: ModalStart; onSave: (item: Item) => void; onClose: () => void }) {
+/** Fila de produtos marcados na busca: posição atual, total e "Pular" (descarta este e vai ao próximo). */
+export type ConfigQueue = { position: number; total: number; onSkip: () => void };
+
+export function ProductConfigModal({ start, onSave, onClose, queue }: { start: ModalStart; onSave: (item: Item) => void; onClose: () => void; queue?: ConfigQueue }) {
   const editing = start.item;
   const product = start.kind === "catalogo" ? start.product : undefined;
   const firstField = useRef<HTMLSelectElement & HTMLInputElement>(null);
@@ -213,7 +216,7 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
     <div className="qe-scrim" role="presentation">
       <div aria-labelledby="qe-modal-title" aria-modal="true" className="qe-modal" role="dialog">
         <header className="qe-modal-head">
-          <h2 id="qe-modal-title">Configuração do produto</h2>
+          <h2 id="qe-modal-title">Configuração do produto{queue ? <span className="qe-queue-pos"> {queue.position} de {queue.total}</span> : null}</h2>
           <button aria-label="Fechar" className="qe-modal-x" onClick={onClose} type="button"><X size={18} /></button>
         </header>
 
@@ -419,8 +422,9 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
           <div className="qe-mfig"><span>Preço unit.</span><b>{ok ? brl(ok.unitPrice) : "—"}</b></div>
           <div className="qe-mfig"><span>Total</span><b>{ok ? brl(ok.total) : "—"}</b></div>
           <button className="qe-btn qe-btn-secondary" onClick={onClose} type="button">Cancelar</button>
+          {queue ? <button className="qe-btn qe-btn-secondary qe-skip" onClick={queue.onSkip} type="button">Pular</button> : null}
           <button className="qe-btn qe-btn-primary qe-madd" disabled={!canSave} onClick={() => onSave(draft)} type="button">
-            <Plus aria-hidden="true" size={16} /> {editing ? "Salvar produto" : "Adicionar"}
+            <Plus aria-hidden="true" size={16} /> {editing ? "Salvar produto" : queue && queue.position < queue.total ? "Adicionar e próximo" : "Adicionar"}
           </button>
         </footer>
       </div>

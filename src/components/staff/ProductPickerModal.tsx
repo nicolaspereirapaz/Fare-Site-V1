@@ -8,7 +8,8 @@ import { brl, useDebounced, type Product } from "@/components/staff/quoteEditorS
 
 /**
  * Janela "Escolha o produto" (referência: brinde.me): busca + filtros à esquerda, grade de cards,
- * páginas no rodapé. Clique seleciona; Confirmar (ou duplo clique) abre a configuração do produto.
+ * páginas no rodapé. Clique marca/desmarca (vários produtos, mesmo de páginas e buscas diferentes);
+ * Confirmar abre a configuração de cada um, em fila. Duplo clique inclui o card e confirma na hora.
  * "Detalhes" abre foto grande, cores com estoque e descrição. Custo e estoque: só a equipe vê.
  */
 
@@ -143,7 +144,7 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
         </div>
         <footer className="qe-modal-foot">
           <button className="qe-btn qe-btn-secondary" onClick={onClose} type="button">Voltar</button>
-          <button className="qe-btn qe-btn-primary" onClick={() => onUse(variant)} type="button">Usar este produto</button>
+          <button className="qe-btn qe-btn-primary" onClick={() => onUse(variant)} type="button">Selecionar</button>
         </footer>
       </div>
     </div>
@@ -155,7 +156,8 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
 export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: {
   initial: PickerState;
   onClose: () => void;
-  onPick: (picked: PickedProduct) => void;
+  /** Produtos marcados, na ordem do clique (a configuração abre em fila). */
+  onPick: (picked: PickedProduct[]) => void;
   /** Guarda busca e filtros para a próxima vez que a janela abrir (adicionar vários produtos). */
   onStateChange: (state: PickerState) => void;
 }) {
@@ -165,7 +167,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
   /** Busca já respondida; diferente da atual = carregando (sem setState síncrono no efeito). */
   const [loadedKey, setLoadedKey] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<PickerProduct | null>(null);
+  const [chosen, setChosen] = useState<PickedProduct[]>([]);
   const [details, setDetails] = useState<Product | null>(null);
   /** Celular: filtros recolhidos atrás do botão "Filtros" (no computador ficam sempre abertos). */
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -224,8 +226,6 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
         if (!active) return;
         setData(payload);
         setError(null);
-        // Trocou página ou filtro: a seleção só continua se o produto ainda está na tela.
-        setSelected((current) => (current && payload.products.some((entry) => entry.publicId === current.publicId) ? current : null));
         gridRef.current?.scrollTo({ top: 0 });
       })
       .catch((caught: unknown) => active && setError(caught instanceof Error ? caught.message : "Erro inesperado."))
@@ -250,7 +250,17 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
     setCostText({ min: costLabel(minCost), max: costLabel(maxCost) });
   }
 
-  const confirm = (product: Product, variant?: string) => onPick({ product, variant: variant ?? suggestedVariant(product, state) });
+  const isChosen = (product: Product) => chosen.some((entry) => entry.product.publicId === product.publicId);
+  /** Marca/desmarca; a cor sugerida segue os filtros do momento em que o produto foi marcado. */
+  const toggle = (product: Product) => setChosen((list) => (list.some((entry) => entry.product.publicId === product.publicId)
+    ? list.filter((entry) => entry.product.publicId !== product.publicId)
+    : [...list, { product, variant: suggestedVariant(product, state) }]));
+  /** Detalhes: marca com a cor escolhida (ou troca a cor, se já estava marcado). */
+  const choose = (product: Product, variant: string) => setChosen((list) => (list.some((entry) => entry.product.publicId === product.publicId)
+    ? list.map((entry) => (entry.product.publicId === product.publicId ? { product, variant } : entry))
+    : [...list, { product, variant }]));
+  /** Duplo clique / Enter: inclui o card (se ainda não estava) e confirma todos. */
+  const confirmWith = (product: Product) => onPick(isChosen(product) ? chosen : [...chosen, { product, variant: suggestedVariant(product, state) }]);
   const requestKey = `${query}|${supplier}|${colorGroup}|${category}|${sort}|${page}|${costs}|${stock}`;
   const loading = loadedKey !== requestKey;
   const activeFilters = [state.supplier, state.colorGroup, state.category, state.minCost > 0 || state.maxCost < COST_MAX, state.minStock].filter(Boolean).length;
@@ -368,24 +378,24 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
               </label>
             </div>
 
-            <div className={`qe-pk-grid${loading ? " is-loading" : ""}`} ref={gridRef}>
+            <div aria-label="Produtos" aria-multiselectable="true" className={`qe-pk-grid${loading ? " is-loading" : ""}`} ref={gridRef} role="listbox">
               {error ? <p className="qe-error">{error}</p> : null}
               {!error && data && !data.products.length ? <p className="qe-pk-empty">Nenhum produto com esses filtros.</p> : null}
               {!data && !error ? <p className="qe-pk-empty">Carregando catálogo… (a 1ª busca pode levar alguns segundos)</p> : null}
               {data?.products.map((product) => {
-                const isSelected = selected?.publicId === product.publicId;
+                const isSelected = isChosen(product);
                 return (
                   <div
                     aria-label={product.name}
                     aria-selected={isSelected}
                     className={`qe-pk-card${isSelected ? " selected" : ""}`}
                     key={product.publicId}
-                    onClick={() => setSelected(product)}
-                    onDoubleClick={() => confirm(product)}
+                    onClick={(event) => event.detail < 2 && toggle(product)}
+                    onDoubleClick={() => confirmWith(product)}
                     onKeyDown={(event) => {
                       if (event.target !== event.currentTarget) return;
-                      if (event.key === "Enter") confirm(product);
-                      if (event.key === " ") { event.preventDefault(); setSelected(product); }
+                      if (event.key === "Enter") confirmWith(product);
+                      if (event.key === " ") { event.preventDefault(); toggle(product); }
                     }}
                     role="option"
                     tabIndex={0}
@@ -424,12 +434,20 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
             <button aria-label="Próxima página" disabled={current >= pages} onClick={() => goto(current + 1)} type="button"><ChevronRight size={15} /></button>
             <button aria-label="Última página" disabled={current >= pages} onClick={() => goto(pages)} type="button"><ChevronsRight size={15} /></button>
           </nav>
+          {chosen.length ? (
+            <span className="qe-pk-chosen">
+              {chosen.length} {chosen.length === 1 ? "selecionado" : "selecionados"}
+              <button aria-label="Limpar seleção" className="qe-btn-text" onClick={() => setChosen([])} type="button">Limpar</button>
+            </span>
+          ) : null}
           <button className="qe-btn qe-btn-secondary" onClick={onClose} type="button">Voltar</button>
-          <button className="qe-btn qe-btn-primary" disabled={!selected} onClick={() => selected && confirm(selected)} type="button">Confirmar</button>
+          <button className="qe-btn qe-btn-primary" disabled={!chosen.length} onClick={() => onPick(chosen)} type="button">
+            {chosen.length ? `Confirmar (${chosen.length})` : "Confirmar"}
+          </button>
         </footer>
       </div>
 
-      {details ? <ProductDetails onClose={() => setDetails(null)} onUse={(variant) => confirm(details, variant)} product={details} /> : null}
+      {details ? <ProductDetails onClose={() => setDetails(null)} onUse={(variant) => { choose(details, variant); setDetails(null); }} product={details} /> : null}
     </div>
   );
 }
