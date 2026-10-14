@@ -42,14 +42,22 @@ export function applyDiscount(subtotalCents: number, discount: QuoteDiscount | n
   return { subtotalCents, discountCents, totalCents: subtotalCents - discountCents };
 }
 
-/** Linha do desconto para telas: rótulo e valor em reais (null = sem desconto). */
-export function discountLine(discount: QuoteDiscount | null | undefined, totalCents: number | null): { label: string; amount: number } | null {
-  if (!discount || totalCents === null) return null;
-  // totalCents já está descontado: refaz o subtotal a partir dele.
-  const amountCents = discount.type === "value"
-    ? Math.round(discount.value * 100)
-    : Math.round(totalCents / (1 - discount.value / 100)) - totalCents;
-  return amountCents > 0 ? { label: discountLabel(discount), amount: amountCents / 100 } : null;
+/**
+ * Linha do desconto para telas: rótulo e valor em reais (null = sem desconto).
+ * Calculada pelo SUBTOTAL dos itens, igual ao que foi gravado (reconstruir pelo total perde centavos e some com 100%).
+ */
+export function discountLine(
+  discount: QuoteDiscount | null | undefined,
+  items: Array<{ unitPrice: number | null; quantity: number }>,
+): { label: string; amount: number } | null {
+  if (!discount || items.some((item) => item.unitPrice === null)) return null;
+  const subtotalCents = Math.round(items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
+  try {
+    const { discountCents } = applyDiscount(subtotalCents, discount);
+    return discountCents > 0 ? { label: discountLabel(discount), amount: discountCents / 100 } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** "Desconto (7,5%)" ou "Desconto". */

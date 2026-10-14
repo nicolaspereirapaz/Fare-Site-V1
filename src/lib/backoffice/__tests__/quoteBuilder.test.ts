@@ -183,3 +183,17 @@ describe("valores digitados à mão pela equipe", () => {
     expect(draftFromItem(items[0])).toEqual({ ...base, costOverride: 1, priceOverride: 2.5, gravacoes: [{ tecnica: { tipo: "laser" }, local: "Corpo", custoOverride: 0.5 }] });
   });
 });
+
+describe("precisão dos valores digitados (revisão)", () => {
+  const base = { id: "a", source: "catalogo" as const, publicId: "cf93", variant: "Azul", quantity: 1, gravacoes: [] };
+
+  it("custo com 3 casas não perde o centavo: 1,001 × 2 + 100 = 102,002 → R$ 102,01", () => {
+    const { preview } = buildQuoteItems([{ ...base, costOverride: 1.001 }], lookup, actor, NOW);
+    expect(preview[0]).toMatchObject({ ok: true, unitPrice: 102.01 });
+  });
+
+  it("preço digitado que arredonda para R$ 0,00 é recusado", () => {
+    const { preview } = buildQuoteItems([{ ...base, priceOverride: 0.004 }], lookup, actor, NOW);
+    expect(preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
+  });
+});

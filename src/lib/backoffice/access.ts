@@ -82,7 +82,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     itemCount: order.items.length,
     // Pedido vindo de orçamento com desconto: o total gravado já está descontado.
     total: order.discount && order.totalCents !== null ? order.totalCents / 100 : calculateOrderSummaryTotal(order.items),
-    discount: discountLine(order.discount, order.totalCents),
+    discount: discountLine(order.discount, order.items),
     createdAt: order.createdAt,
     history,
   };

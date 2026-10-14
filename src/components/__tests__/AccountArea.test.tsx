@@ -82,6 +82,12 @@ describe("página de pedidos", () => {
     expect(screen.getByRole("article", { name: "Pedido #FF-3F7A2C" })).toHaveTextContent("Pagamento: Pix");
   });
 
+  it("pedido vindo de orçamento com desconto mostra a linha do desconto antes do total", () => {
+    render(<AccountOrders orders={[{ ...ORDER, discount: { label: "Desconto (10%)", amount: 25 } }]} />);
+    expect(screen.getByText("Desconto (10%)")).toBeInTheDocument();
+    expect(screen.getByText(/− R\$\s?25,00/)).toBeInTheDocument();
+  });
+
   it("tem um atalho para falar sobre o pedido no WhatsApp da loja", () => {
     render(<AccountOrders orders={[ORDER]} />);
     const link = screen.getByRole("link", { name: /Falar sobre este pedido/ });

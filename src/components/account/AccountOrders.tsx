@@ -12,6 +12,8 @@ export type AccountOrder = {
   status: StatusPedido;
   paymentMethod: PaymentMethod;
   totalCents: number | null;
+  /** Desconto vindo do orçamento (rótulo e valor), sem nada interno. */
+  discount?: { label: string; amount: number } | null;
   createdAt: string;
   items: Array<{
     productName: string;
@@ -78,6 +80,12 @@ export function AccountOrders({ orders }: { orders: AccountOrder[] }) {
             </ul>
 
             <footer className="account-order-footer">
+              {order.discount ? (
+                <p className="account-quote-discount">
+                  <span>{order.discount.label}</span>{" "}
+                  <strong>− {brl(order.discount.amount)}</strong>
+                </p>
+              ) : null}
               <p>
                 <span>Total estimado</span>{" "}
                 <strong>{order.totalCents === null ? "sob consulta" : brl(order.totalCents / 100)}</strong>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardList, FileText, LayoutGrid, MessageCircle, Plus, RefreshCw, TriangleAlert, XCircle } from "lucide-react";
 import { COLUNAS_QUADRO_PEDIDOS, ORDEM_STATUS_PEDIDO, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { OrderHistoryEntry } from "@/lib/backoffice/access";
@@ -108,7 +108,14 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  /** Cartões salvando agora (cada um com a sua trava; vários podem andar ao mesmo tempo). */
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const busyRef = useRef<Set<string>>(new Set());
+  const setBusy = (id: string, on: boolean) => {
+    if (on) busyRef.current.add(id);
+    else busyRef.current.delete(id);
+    setBusyIds(new Set(busyRef.current));
+  };
   const [openId, setOpenId] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
@@ -144,7 +151,8 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
       return;
     }
     const target = steps[steps.length - 1];
-    setUpdatingId(order.id);
+    if (busyRef.current.has(order.id)) return;
+    setBusy(order.id, true);
     setOrders((list) => list.map((entry) => (entry.id === order.id ? { ...entry, status: target } : entry)));
     let transitionError: string | null = null;
     try {
@@ -167,7 +175,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Erro inesperado.");
     }
-    setUpdatingId(null);
+    setBusy(order.id, false);
   }
 
   const move = (order: BackofficeOrder, next: StatusPedido) => moveThrough(order, [next]);
@@ -233,7 +241,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
                 total={column.reduce((sum, order) => sum + order.total, 0)}
               >
                 {column.map((order) => (
-                  <KanbanCard {...cardProps(order)} busy={updatingId === order.id} id={order.id} key={order.id} onDetails={() => setOpenId(order.id)} />
+                  <KanbanCard {...cardProps(order)} busy={busyIds.has(order.id)} id={order.id} key={order.id} onDetails={() => setOpenId(order.id)} />
                 ))}
               </KanbanColumn>
             );
@@ -248,7 +256,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
             <>
               {isBoardColumn(open.status) ? (
                 <StageSelect
-                  busy={updatingId === open.id}
+                  busy={busyIds.has(open.id)}
                   labels={STATUS_LABELS}
                   onChange={(next) => moveToColumn(open, next)}
                   options={reachableColumns(COLUNAS_QUADRO_PEDIDOS, open.status, podeTransicionarStatusPedido)}
@@ -256,7 +264,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
                 />
               ) : null}
               {podeTransicionarStatusPedido(open.status, "concluido") ? (
-                <FinalAction busy={updatingId === open.id} label="Concluir pedido" onClick={() => move(open, "concluido")} />
+                <FinalAction busy={busyIds.has(open.id)} label="Concluir pedido" onClick={() => move(open, "concluido")} />
               ) : null}
               {open.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(open.customerName, open.customerPhone, open.code, "pedido")} rel="noopener noreferrer" target="_blank">
@@ -264,7 +272,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
                 </a>
               ) : null}
               {canCancel && podeTransicionarStatusPedido(open.status, "cancelado") ? (
-                <button className="kb-danger" disabled={updatingId === open.id} onClick={() => move(open, "cancelado")} type="button">
+                <button className="kb-danger" disabled={busyIds.has(open.id)} onClick={() => move(open, "cancelado")} type="button">
                   <XCircle aria-hidden="true" size={15} /> Cancelar pedido
                 </button>
               ) : null}

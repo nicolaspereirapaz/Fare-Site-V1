@@ -29,13 +29,19 @@ const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL
 export const brl = (value: number) => money.format(value).replace(/\u00a0/g, " ");
 export const parseNumber = (value: string) => (value.trim() ? Number(value.replace(/\./g, (dot, _o, all: string) => (all.includes(",") ? "" : dot)).replace(",", ".")) : NaN);
 export const newId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-/** 1.5 → "1,50" (campo de dinheiro); só dígitos, vírgula e ponto ao digitar. */
-export const moneyInput = (value: number) => value.toFixed(2).replace(".", ",");
+/** 1.5 → "1,50"; 1.234 → "1,234" (não corta casas digitadas: reabrir e salvar não pode mudar o preço). */
+export const moneyInput = (value: number) => {
+  const text = String(Math.round(value * 1e6) / 1e6);
+  const [whole, decimals = ""] = text.split(".");
+  return `${whole},${decimals.padEnd(2, "0")}`;
+};
 export const cleanMoney = (value: string) => value.replace(/[^\d.,]/g, "").slice(0, 12);
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
 
 type ServerGravacao = Omit<Gravacao, "custoOverride"> & { custoOverride?: number };
-export type ServerItem = Omit<Item, "costOverride" | "priceOverride" | "gravacoes"> & { costOverride?: number; priceOverride?: number; gravacoes: ServerGravacao[] };
+/** Omit que preserva cada variação da união (catálogo / avulso). */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+export type ServerItem = DistributiveOmit<Item, "costOverride" | "priceOverride" | "gravacoes"> & { costOverride?: number; priceOverride?: number; gravacoes: ServerGravacao[] };
 /** Item salvo (números) → item do editor (texto nos campos digitados à mão). */
 export function fromServerItem(item: ServerItem): Item {
   const { costOverride, priceOverride, gravacoes, ...rest } = item;

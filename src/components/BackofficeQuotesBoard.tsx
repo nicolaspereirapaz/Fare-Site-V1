@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MessageCircle, PencilLine, RefreshCw, ShoppingCart, TriangleAlert, XCircle } from "lucide-react";
 import {
@@ -48,7 +48,14 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  /** Cartões salvando agora (cada um com a sua trava). */
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const busyRef = useRef<Set<string>>(new Set());
+  const setBusy = (id: string, on: boolean) => {
+    if (on) busyRef.current.add(id);
+    else busyRef.current.delete(id);
+    setBusyIds(new Set(busyRef.current));
+  };
   const [selected, setSelected] = useState<Selected>(null);
 
   const load = useCallback(async () => {
@@ -84,7 +91,8 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   }, [load]);
 
   async function send(id: string, url: string, statuses: string[]) {
-    setUpdatingId(id);
+    if (busyRef.current.has(id)) return;
+    setBusy(id, true);
     let changeError: string | null = null;
     try {
       for (const status of statuses) {
@@ -108,7 +116,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Erro inesperado.");
     }
-    setUpdatingId(null);
+    setBusy(id, false);
   }
 
   function changeQuote(quote: BackofficeQuoteSummary, next: QuoteStatus) {
@@ -120,7 +128,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
   function moveQuote(quote: BackofficeQuoteSummary & { status: Column }, column: Column) {
     const path = movePath(QUOTE_BOARD_COLUMNS, quote.status, column, canTransitionQuote);
     if (path === null) return setError("Essa transição de status não é permitida.");
-    if (!path.length) return;
+    if (!path.length || busyRef.current.has(quote.id)) return;
     setQuotes((list) => list.map((entry) => (entry.id === quote.id ? { ...entry, status: column } : entry)));
     void send(quote.id, `/api/backoffice/quotes/${quote.id}`, path);
   }
@@ -212,7 +220,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
                 total={[...columnQuotes, ...columnOrders].reduce((sum, entry) => sum + (entry.total ?? 0), 0)}
               >
                 {columnQuotes.map((quote) => (
-                  <KanbanCard {...quoteCard(quote)} busy={updatingId === quote.id} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
+                  <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
                 ))}
                 {columnOrders.map((order) => (
                   <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} onDetails={() => setSelected({ kind: "order", id: order.id })} />
@@ -229,19 +237,19 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           footer={
             <>
               <StageSelect
-                busy={updatingId === openQuote.id}
+                busy={busyIds.has(openQuote.id)}
                 labels={QUOTE_STATUS_LABELS}
                 onChange={(next) => isColumn(next) && moveQuote(openQuote, next)}
                 options={reachableColumns(QUOTE_BOARD_COLUMNS, openQuote.status, canTransitionQuote)}
                 value={openQuote.status}
               />
               {openQuote.status === "aguardando_pagamento" ? (
-                <FinalAction busy={updatingId === openQuote.id} label="Pagamento recebido" onClick={() => changeQuote(openQuote, "virou_pedido")} />
+                <FinalAction busy={busyIds.has(openQuote.id)} label="Pagamento recebido" onClick={() => changeQuote(openQuote, "virou_pedido")} />
               ) : null}
               <Link className="kb-edit-quote" href={`/equipe/orcamentos/${openQuote.id}`}>
                 <PencilLine aria-hidden="true" size={15} /> Editar itens e gravações
               </Link>
-              <button className="kb-danger" disabled={updatingId === openQuote.id} onClick={() => changeQuote(openQuote, "encerrado")} type="button">
+              <button className="kb-danger" disabled={busyIds.has(openQuote.id)} onClick={() => changeQuote(openQuote, "encerrado")} type="button">
                 <XCircle aria-hidden="true" size={15} /> Encerrar orçamento
               </button>
             </>
@@ -277,14 +285,14 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
           code={openOrder.code}
           footer={
             <>
-              <FinalAction busy={updatingId === openOrder.id} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} />
+              <FinalAction busy={busyIds.has(openOrder.id)} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} />
               {openOrder.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(openOrder.customerName, openOrder.customerPhone, openOrder.code, "pedido")} rel="noopener noreferrer" target="_blank">
                   <MessageCircle aria-hidden="true" size={15} /> WhatsApp
                 </a>
               ) : null}
               {canCancel ? (
-                <button className="kb-danger" disabled={updatingId === openOrder.id} onClick={() => changeOrder(openOrder, "cancelado")} type="button">
+                <button className="kb-danger" disabled={busyIds.has(openOrder.id)} onClick={() => changeOrder(openOrder, "cancelado")} type="button">
                   <XCircle aria-hidden="true" size={15} /> Cancelar pedido
                 </button>
               ) : null}

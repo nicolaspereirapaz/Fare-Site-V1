@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDiscount, discountLabel, parseDiscount } from "@/lib/quotes/discount";
+import { applyDiscount, discountLabel, discountLine, parseDiscount } from "@/lib/quotes/discount";
 
 describe("desconto no total do orçamento", () => {
   it("por porcentagem: arredonda o desconto para baixo no centavo (a loja nunca dá mais que o combinado)", () => {
@@ -42,5 +42,28 @@ describe("desconto no total do orçamento", () => {
     expect(discountLabel({ type: "percent", value: 7.5 })).toBe("Desconto (7,5%)");
     expect(discountLabel({ type: "percent", value: 10 })).toBe("Desconto (10%)");
     expect(discountLabel({ type: "value", value: 150 })).toBe("Desconto");
+  });
+});
+
+describe("linha do desconto nas telas (calculada pelo subtotal dos itens)", () => {
+  const items = (cents: number) => [{ unitPrice: cents / 100, quantity: 1 }];
+
+  it("centavos fracionados: 50% de R$ 0,99 mostra os R$ 0,49 que foram descontados", () => {
+    expect(discountLine({ type: "percent", value: 50 }, items(99))).toEqual({ label: "Desconto (50%)", amount: 0.49 });
+  });
+
+  it("100% continua aparecendo (o total fica zero)", () => {
+    expect(discountLine({ type: "percent", value: 100 }, items(24000))).toEqual({ label: "Desconto (100%)", amount: 240 });
+  });
+
+  it("99,99% e valor em reais", () => {
+    expect(discountLine({ type: "percent", value: 99.99 }, items(10000))).toEqual({ label: "Desconto (99,99%)", amount: 99.99 });
+    expect(discountLine({ type: "value", value: 150 }, items(240000))).toEqual({ label: "Desconto", amount: 150 });
+  });
+
+  it("sem desconto, item sob consulta ou desconto maior que o subtotal: sem linha", () => {
+    expect(discountLine(null, items(100))).toBeNull();
+    expect(discountLine({ type: "percent", value: 10 }, [{ unitPrice: null, quantity: 1 }])).toBeNull();
+    expect(discountLine({ type: "value", value: 5 }, items(100))).toBeNull();
   });
 });

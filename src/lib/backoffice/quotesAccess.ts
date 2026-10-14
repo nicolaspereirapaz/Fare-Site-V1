@@ -42,7 +42,7 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     items: quote.items.map(({ productName, quantity, selections, unitPrice, codes, gravacoes, costing }) => ({ productName, quantity, selections, unitPrice, codes, ...(gravacoes?.length ? { gravacoes } : {}), ...(costing ? { costing } : {}) })),
     itemCount: quote.items.length,
     total: quote.totalCents === null ? null : quote.totalCents / 100,
-    discount: discountLine(quote.discount, quote.totalCents),
+    discount: discountLine(quote.discount, quote.items),
     createdBy: quote.createdBy ?? null,
     internalNotes: quote.internalNotes ?? "",
     proposalSentAt: quote.proposalSentAt ?? null,

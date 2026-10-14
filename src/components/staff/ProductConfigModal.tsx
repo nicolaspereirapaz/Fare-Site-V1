@@ -105,7 +105,8 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
   const [costOverride, setCostOverride] = useState(editing?.costOverride ?? "");
   const [priceOverride, setPriceOverride] = useState(editing?.priceOverride ?? "");
   const [engs, setEngs] = useState<EngForm[]>(() => editing?.gravacoes.map((gravacao) => engFromGravacao(gravacao, product)) ?? []);
-  const [result, setResult] = useState<Preview | null>(null);
+  /** Prévia do servidor e o rascunho exato que a gerou (rede lenta não pode liberar preço antigo). */
+  const [result, setResult] = useState<{ key: string; preview: Preview } | null>(null);
 
   // Esc fecha; a página de trás não rola com a janela aberta.
   useEffect(() => {
@@ -143,13 +144,15 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
     const run = valid
       ? postJson<{ preview?: Preview[] }>("/api/backoffice/orcamento-editor/previa", { items: [item] }).then(({ data }) => data.preview?.[0] ?? null)
       : Promise.resolve(null);
-    run.then((preview) => active && setResult(preview)).catch(() => undefined);
+    run.then((preview) => active && setResult(preview ? { key: debouncedKey, preview } : null)).catch(() => undefined);
     return () => {
       active = false;
     };
   }, [debouncedKey]);
 
-  const ok = result?.ok && debouncedKey === draftKey ? result : null;
+  const fresh = result && result.key === draftKey ? result.preview : null;
+  const ok = fresh?.ok ? fresh : null;
+  const suggested = result?.preview.ok ? result.preview.suggestedPrice : null;
   const calcOf = (key: string) => {
     const index = filled.findIndex((entry) => entry.form.key === key);
     return index >= 0 ? ok?.gravacoes[index] : undefined;
@@ -330,11 +333,11 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
                       className={priceOverride ? "qe-num qe-strong is-manual" : "qe-num qe-strong"}
                       inputMode="decimal"
                       onChange={(event) => setPriceOverride(cleanMoney(event.target.value))}
-                      placeholder={result?.ok ? moneyInput(result.suggestedPrice) : ""}
+                      placeholder={suggested !== null ? moneyInput(suggested) : ""}
                       value={priceOverride}
                     />
                     <small className="qe-fhint">
-                      {priceOverride && result?.ok ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(result.suggestedPrice)})</button> : "calculado · digite para trocar"}
+                      {priceOverride && suggested !== null ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(suggested)})</button> : "calculado · digite para trocar"}
                     </small>
                   </label>
                   <div className="qe-field">
@@ -348,7 +351,7 @@ export function ProductConfigModal({ start, onSave, onClose }: { start: ModalSta
                 </div>
               </div>
             </section>
-            {result && !result.ok ? <p className="qe-error">{result.error}</p> : null}
+            {fresh && !fresh.ok ? <p className="qe-error">{fresh.error}</p> : null}
             {incomplete ? <p className="qe-error">Complete ou remova a gravação para adicionar.</p> : null}
           </div>
 

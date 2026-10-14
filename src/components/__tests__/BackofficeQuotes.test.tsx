@@ -156,4 +156,41 @@ describe("painel: aba Orçamentos", () => {
     ));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  it("dois cartões andam ao mesmo tempo; o mesmo cartão não começa outro movimento enquanto salva", async () => {
+    const Q2 = { ...QUOTE, id: "99aa0000-0000-4000-8000-000000000000", code: "ORC-99AA00", customerName: "Segundo Cliente" };
+    const fetchMock = stubApi({ quotes: [QUOTE, Q2] });
+    // PATCH lento: só responde quando liberado.
+    const pending: Array<() => void> = [];
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") await new Promise<void>((resolve) => pending.push(resolve));
+      return original(url, init);
+    });
+    const user = await openQuotesTab();
+
+    await user.click(await cardOf("Cliente Orçamento"));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "em_negociacao");
+    await user.keyboard("{Escape}");
+    await user.click(await cardOf("Segundo Cliente"));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "em_negociacao");
+    await user.keyboard("{Escape}");
+
+    // Os dois estão salvando; cada um com a sua trava.
+    await waitFor(() => expect(pending).toHaveLength(2));
+    const card = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name} — #`) });
+    expect(card("Cliente Orçamento")).toHaveClass("is-busy");
+    expect(card("Segundo Cliente")).toHaveClass("is-busy");
+    // O mesmo cartão não aceita outro movimento enquanto salva: o card não arrasta e a "Etapa" fica travada.
+    expect(card("Cliente Orçamento")).toHaveAttribute("aria-disabled", "true");
+    await user.click(card("Cliente Orçamento"));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Etapa")).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(pending).toHaveLength(2);
+
+    pending.splice(0).forEach((resolve) => resolve());
+    await waitFor(() => expect(card("Cliente Orçamento")).not.toHaveClass("is-busy"));
+    const patches = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+    expect(patches).toHaveLength(2);
+  });
 });

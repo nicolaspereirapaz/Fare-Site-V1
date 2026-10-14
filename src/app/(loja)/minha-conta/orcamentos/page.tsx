@@ -18,7 +18,7 @@ export default async function AccountQuotesPage() {
     id: quote.id,
     status: quote.status,
     totalCents: quote.totalCents,
-    discount: discountLine(quote.discount, quote.totalCents),
+    discount: discountLine(quote.discount, quote.items),
     createdAt: quote.createdAt,
     items: quote.items.map((item) => ({
       productName: item.productName,

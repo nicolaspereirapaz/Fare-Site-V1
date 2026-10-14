@@ -215,7 +215,7 @@ export function calcularPersonalizacao(input: {
   }
 
   // Em centavos, sem arredondar a personalização por peça antes da margem.
-  const totalCentavos = Math.round((custoProduto + porPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);
+  const totalCentavos = Math.round(((custoProduto + porPeca) * 2 * quantidade * 100) * 1e4) / 1e4 + Math.round(freteFornecedor * 100);
   const precoUnitarioFinal = unitarioParaCima(totalCentavos, quantidade) / 100;
   return {
     descricao,
@@ -271,7 +271,8 @@ export function calcularItemOrcamento(input: {
     return { ...gravacao, detalhe: "custo digitado", custoUnitario: custoOverride, custoTotal: centavos(custoOverride * quantidade), manual: true };
   });
   const gravacoesPorPeca = gravacoes.reduce((soma, gravacao) => soma + gravacao.custoTotal / quantidade, 0);
-  const totalCentavos = Math.round((custoProduto + gravacoesPorPeca) * 2 * quantidade * 100) + Math.round(freteFornecedor * 100);
+  // Sem arredondar antes do teto: custo digitado com 3 casas (1,001) não pode perder o centavo.
+  const totalCentavos = Math.round(((custoProduto + gravacoesPorPeca) * 2 * quantidade * 100) * 1e4) / 1e4 + Math.round(freteFornecedor * 100);
   const precoUnitario = unitarioParaCima(totalCentavos, quantidade) / 100;
   return {
     gravacoes,
