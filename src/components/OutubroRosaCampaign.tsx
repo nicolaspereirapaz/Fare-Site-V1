@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Heart, RefreshCw, Search, ShoppingBag, SlidersHo
 import type { PublicProductsResponse } from "@/lib/publicCatalog";
 import { OUTUBRO_ROSA_CART_EVENT, OUTUBRO_ROSA_CART_PATH, readCampaignCart } from "@/lib/outubroRosaCart";
 import { OutubroRosaProductCard } from "@/components/OutubroRosaProductCard";
-import styles from "@/app/campanhas/outubro-rosa/outubro-rosa.module.css";
+import styles from "@/app/(loja)/campanhas/outubro-rosa/outubro-rosa.module.css";
 
 const PAGE_SIZE = 24;
 type CampaignResponse = PublicProductsResponse & { error?: string };

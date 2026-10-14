@@ -11,7 +11,7 @@ import {
   writeCampaignCart, type CampaignCartItem,
 } from "@/lib/outubroRosaCart";
 import { CAMPAIGN_HOME } from "@/lib/siteMode";
-import styles from "@/app/campanhas/outubro-rosa/outubro-rosa.module.css";
+import styles from "@/app/(loja)/campanhas/outubro-rosa/outubro-rosa.module.css";
 
 const QUANTITY_STEP = 10;
 

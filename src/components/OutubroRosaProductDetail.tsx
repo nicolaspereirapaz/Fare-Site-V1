@@ -9,7 +9,7 @@ import { formatProductName } from "@/lib/xbz";
 import { CAMPAIGN_REFERENCE_QUANTITY, unitPriceForQuantity, type CampaignQuantityPricing } from "@/lib/campaignPricing";
 import { appendCampaignCartItem, OUTUBRO_ROSA_CART_PATH } from "@/lib/outubroRosaCart";
 import { formatCampaignPrice, OutubroRosaProductCard } from "@/components/OutubroRosaProductCard";
-import styles from "@/app/campanhas/outubro-rosa/outubro-rosa.module.css";
+import styles from "@/app/(loja)/campanhas/outubro-rosa/outubro-rosa.module.css";
 
 type PriceTier = { quantity: number; unitPrice: number };
 type DetailResponse = {

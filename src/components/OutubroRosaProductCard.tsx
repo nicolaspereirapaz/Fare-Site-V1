@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ShoppingBag } from "lucide-react";
 import type { PublicCatalogProduct } from "@/lib/publicCatalog";
 import { formatProductName } from "@/lib/xbz";
-import styles from "@/app/campanhas/outubro-rosa/outubro-rosa.module.css";
+import styles from "@/app/(loja)/campanhas/outubro-rosa/outubro-rosa.module.css";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
