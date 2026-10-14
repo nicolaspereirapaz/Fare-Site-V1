@@ -179,7 +179,8 @@ export function KanbanCardBody({ code, total, title, summary, tag, warning, meta
 }
 
 /** Cartão do quadro: arrasta para outra coluna; clique (ou Enter) abre os detalhes. */
-export function KanbanCard({ id, busy = false, onDetails, ...props }: CardProps & { id: string; busy?: boolean; onDetails: () => void }) {
+/** fresh: cartão recém-criado (entra deslizando com brilho laranja). */
+export function KanbanCard({ id, busy = false, fresh = false, onDetails, ...props }: CardProps & { id: string; busy?: boolean; fresh?: boolean; onDetails: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled: busy });
   return (
     <article
@@ -187,7 +188,7 @@ export function KanbanCard({ id, busy = false, onDetails, ...props }: CardProps 
       {...listeners}
       aria-label={`${props.title} — #${props.code}`}
       aria-roledescription="cartão arrastável"
-      className={`kb-card${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}`}
+      className={`kb-card${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}${fresh ? " is-new" : ""}`}
       onClick={onDetails}
       onKeyDown={(event) => {
         if (event.key === "Enter") onDetails();

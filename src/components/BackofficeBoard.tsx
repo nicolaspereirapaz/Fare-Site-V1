@@ -318,7 +318,8 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
 
 type BackofficeTab = "pedidos" | "orcamentos";
 
-export function BackofficeBoard({ canCancel, initialTab = "pedidos" }: BackofficeBoardProps & { initialTab?: BackofficeTab }) {
+/** freshQuoteId: orçamento que acabou de ser criado no editor (?novo=<id>), destacado no quadro. */
+export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteId }: BackofficeBoardProps & { initialTab?: BackofficeTab; freshQuoteId?: string }) {
   const [tab, setTab] = useState<BackofficeTab>(initialTab);
   const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "pedidos", label: "Pedidos", icon: ClipboardList },
@@ -364,7 +365,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos" }: Backoffic
         ) : null}
       </div>
 
-      {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} />}
+      {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshQuoteId} />}
     </div>
   );
 }

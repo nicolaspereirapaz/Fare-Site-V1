@@ -414,3 +414,19 @@
   .qe-pk-det-info { overflow: visible; }
   .qe-pk-det-colors { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------- prévia do PDF depois de "Criar orçamento" */
+.qe-done { width: min(1100px, 100%); height: calc(100vh - 48px); }
+.qe-done .qe-modal-head h2 { display: flex; align-items: center; gap: 8px; }
+.qe-done-ok { color: #22a45d; }
+.qe-done-body { flex: 1; min-height: 0; background: #e9eaee; }
+.qe-done-pdf { display: block; width: 100%; height: 100%; border: 0; }
+.qe-done-foot { justify-content: flex-end; }
+.qe-done-foot .qe-btn { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; }
+.qe-modal-foot.qe-done-foot .qe-btn-secondary { margin-left: 0; }
+@media (max-width: 900px) {
+  .qe-done { height: 100vh; }
+  .qe-modal-foot.qe-done-foot { grid-template-columns: 1fr 1fr; }
+  .qe-done-foot .qe-btn-primary { grid-column: 1 / -1; justify-content: center; }
+  .qe-done-foot .qe-btn-secondary { justify-content: center; }
+}

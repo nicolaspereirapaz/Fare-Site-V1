@@ -43,7 +43,7 @@ type Selected = { kind: "quote"; id: string } | { kind: "order"; id: string } | 
  * Pedidos feitos direto no site (sem orçamento) também entram em "Aguardando pagamento".
  * Pagamento recebido → vira pedido em "Aguardando arte" (aba Pedidos) e sai daqui.
  */
-export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
+export function QuotesBoard({ canCancel = false, freshQuoteId }: { canCancel?: boolean; freshQuoteId?: string }) {
   const [quotes, setQuotes] = useState<BackofficeQuoteSummary[]>([]);
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +57,8 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
     setBusyIds(new Set(busyRef.current));
   };
   const [selected, setSelected] = useState<Selected>(null);
+  /** Orçamento que acabou de ser criado no editor (?novo=<id>): aparece em destaque por alguns segundos. */
+  const [freshId, setFreshId] = useState<string | null>(freshQuoteId ?? null);
 
   const load = useCallback(async () => {
     const [quotesResponse, ordersResponse] = await Promise.all([
@@ -89,6 +91,17 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
       active = false;
     };
   }, [load]);
+
+  const freshLoaded = Boolean(freshId && quotes.some((quote) => quote.id === freshId));
+  useEffect(() => {
+    if (!freshLoaded) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("novo");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    document.querySelector(".kb-card.is-new")?.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "center" });
+    const timer = window.setTimeout(() => setFreshId(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [freshLoaded]);
 
   async function send(id: string, url: string, statuses: string[]) {
     if (busyRef.current.has(id)) return;
@@ -220,7 +233,7 @@ export function QuotesBoard({ canCancel = false }: { canCancel?: boolean }) {
                 total={[...columnQuotes, ...columnOrders].reduce((sum, entry) => sum + (entry.total ?? 0), 0)}
               >
                 {columnQuotes.map((quote) => (
-                  <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
+                  <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} fresh={quote.id === freshId} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
                 ))}
                 {columnOrders.map((order) => (
                   <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} onDetails={() => setSelected({ kind: "order", id: order.id })} />

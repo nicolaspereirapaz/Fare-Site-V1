@@ -67,15 +67,16 @@ describe("marcar proposta enviada", () => {
   it("não marca se o orçamento mudou depois de lido (ex.: encerrado enquanto as fotos carregavam)", () => {
     const db = new DatabaseSync(":memory:");
     const quote = createManualQuote(db, { ownerId: "u1", customer, items: [item], createdBy: "Bia", internalNotes: "", idempotencyKey: "k" });
-    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "em_negociacao" });
+    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "aguardando_pagamento" });
     expect(() => markProposalSent(db, quote.id, new Date(), quote.updatedAt)).toThrow(/mudou/);
     expect(findQuoteById(db, quote.id)!.proposalSentAt).toBeNull();
   });
 
   it("em negociação ou aguardando pagamento: só guarda a data, sem mudar a situação", () => {
     const db = new DatabaseSync(":memory:");
+    // Feito pela equipe já nasce em "Em negociação".
     const quote = createManualQuote(db, { ownerId: "u1", customer, items: [item], createdBy: "Bia", internalNotes: "", idempotencyKey: "k" });
-    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "em_negociacao" });
+    expect(markProposalSent(db, quote.id, new Date("2026-10-13T11:00:00Z"))).toMatchObject({ status: "em_negociacao" });
     updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "aguardando_pagamento" });
     const sent = markProposalSent(db, quote.id, new Date("2026-10-13T12:00:00Z"));
     expect(sent).toMatchObject({ status: "aguardando_pagamento", proposalSentAt: "2026-10-13T12:00:00.000Z" });

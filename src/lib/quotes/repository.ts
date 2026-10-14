@@ -181,7 +181,7 @@ export function listQuotesByOwners(database: DatabaseSync, ownerIds: string[]): 
   return rows.map(deserialize);
 }
 
-/** Orçamento montado pela equipe no painel (cliente do site ou cadastrado no painel). */
+/** Orçamento montado pela equipe no painel (cliente do site ou cadastrado no painel). Já tem preço: nasce em "Em negociação". */
 export function createManualQuote(
   database: DatabaseSync,
   input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string; discount?: QuoteDiscount | null },
@@ -192,7 +192,7 @@ export function createManualQuote(
   const total = totalCents(input.items, discount);
   database.prepare(`
     INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, discount_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'em_negociacao', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
   `).run(randomUUID(), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, now, now);
   const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")

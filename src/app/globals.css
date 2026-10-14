@@ -6459,3 +6459,19 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-board-6 {
   grid-template-columns: repeat(6, minmax(224px, 290px));
 }
+
+/* Orçamento recém-criado: o cartão entra deslizando e brilha em laranja por ~2,5 s. */
+.kb-card.is-new {
+  animation: kb-card-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both, kb-card-glow 2.8s ease-out 0.15s both;
+}
+@keyframes kb-card-in {
+  from { opacity: 0; transform: translateY(-18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes kb-card-glow {
+  0%, 40% { box-shadow: 0 0 0 2px #f65c2d, 0 10px 26px rgba(246, 92, 45, 0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(246, 92, 45, 0), 0 1px 2px rgba(23, 27, 45, 0.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kb-card.is-new { animation: kb-card-glow 2.8s ease-out both; }
+}

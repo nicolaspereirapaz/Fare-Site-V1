@@ -49,7 +49,6 @@ describe("desconto gravado no orçamento", () => {
       ownerId: "painel:p1", customer, items: [item(8, 300)], createdBy: "Bia", internalNotes: "", idempotencyKey: "k1",
       discount: { type: "value", value: 150 },
     });
-    updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "em_negociacao" });
     updateQuoteStatus(db, { quoteId: quote.id, nextStatus: "aguardando_pagamento" });
     const { order } = convertQuoteToOrder(db, { quoteId: quote.id, actorId: "equipe-1" });
     expect(findOrderById(db, order.id)).toMatchObject({ totalCents: 225000, discount: { type: "value", value: 150 } });

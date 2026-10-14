@@ -82,6 +82,17 @@ describe("painel: aba Orçamentos", () => {
     expect(screen.getByRole("region", { name: "Em negociação" })).toHaveClass("kb-column");
   });
 
+  it("orçamento recém-criado (?novo=<id>) aparece em destaque e o parâmetro sai da URL", async () => {
+    stubApi({ quotes: [QUOTE, { ...QUOTE, id: "novo-1", code: "ORC-NOVO01", customerName: "Acabou de criar", status: "em_negociacao" }] });
+    window.history.replaceState(null, "", "/equipe?aba=orcamentos&novo=novo-1");
+    render(<BackofficeBoard canCancel={false} freshQuoteId="novo-1" initialTab="orcamentos" />);
+    const fresh = await cardOf("Acabou de criar");
+    expect(fresh).toHaveClass("is-new");
+    expect(within(screen.getByRole("region", { name: "Em negociação" })).getByText("Acabou de criar")).toBeInTheDocument();
+    expect((await cardOf("Cliente Orçamento"))).not.toHaveClass("is-new");
+    expect(window.location.search).toBe("?aba=orcamentos");
+  });
+
   it("orçamento que virou pedido ou foi encerrado sai do quadro", async () => {
     stubApi({ quotes: [QUOTE, { ...QUOTE, id: "q2", customerName: "Já é pedido", status: "virou_pedido" }, { ...QUOTE, id: "q3", customerName: "Desistiu", status: "encerrado" }] });
     await openQuotesTab();

@@ -7,14 +7,19 @@ import { getStaffSession } from "@/lib/staff/server";
 
 export const metadata: Metadata = { title: "Painel" };
 
-export default async function StaffPanelPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
+export default async function StaffPanelPage({ searchParams }: { searchParams: Promise<{ aba?: string; novo?: string }> }) {
   const session = await getStaffSession();
   if (!session) redirect("/equipe/entrar");
 
+  const params = await searchParams;
   return (
     <>
       <StaffTopbar name={session.user.name} role={session.user.role} />
-      <BackofficeBoard canCancel={canCancelOrders(session.user.role)} initialTab={(await searchParams).aba === "orcamentos" ? "orcamentos" : "pedidos"} />
+      <BackofficeBoard
+        canCancel={canCancelOrders(session.user.role)}
+        freshQuoteId={typeof params.novo === "string" ? params.novo.slice(0, 64) : undefined}
+        initialTab={params.aba === "orcamentos" ? "orcamentos" : "pedidos"}
+      />
     </>
   );
 }

@@ -12,7 +12,8 @@ describe("orçamento feito no painel", () => {
   it("cria com dono, autor e observação interna; aparece para o dono", () => {
     const db = new DatabaseSync(":memory:");
     const quote = createManualQuote(db, { ownerId: "painel:p1", customer, items: [item(5.77, 300)], createdBy: "Bia", internalNotes: "Entrega até 30/10", idempotencyKey: "k1" });
-    expect(quote).toMatchObject({ userId: "painel:p1", status: "aguardando_orcamento", createdBy: "Bia", internalNotes: "Entrega até 30/10", totalCents: 173100 });
+    // Feito pela equipe já tem preço: nasce em "Em negociação" (o do site espera o orçamento).
+    expect(quote).toMatchObject({ userId: "painel:p1", status: "em_negociacao", createdBy: "Bia", internalNotes: "Entrega até 30/10", totalCents: 173100 });
     expect(findQuoteById(db, quote.id)).toMatchObject({ createdBy: "Bia", internalNotes: "Entrega até 30/10" });
     // Duplo clique não cria dois.
     expect(createManualQuote(db, { ownerId: "painel:p1", customer, items: [item(5.77, 300)], createdBy: "Bia", internalNotes: "", idempotencyKey: "k1" }).id).toBe(quote.id);

@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PencilLine, Search, X } from "lucide-react";
 import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductConfigModal";
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
+import { QuoteCreatedDialog } from "@/components/staff/QuoteCreatedDialog";
+import { quoteCode } from "@/lib/quotes/quoteCode";
 import {
   brl,
   EMPTY_TOTALS,
@@ -167,6 +169,8 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Orçamento acabou de ser criado: mostra a prévia do PDF antes de voltar ao quadro. */
+  const [created, setCreated] = useState<string | null>(null);
   const [state, setState] = useState<{ updatedAt: string; status: string; createdBy: string | null } | null>(null);
   const idempotencyKey = useRef(`painel-${newId()}`);
   const editable = !state || ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"].includes(state.status);
@@ -262,6 +266,10 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
     );
     setSaving(false);
     if (ok) {
+      if (!quoteId && data.id) {
+        setCreated(data.id);
+        return;
+      }
       router.push("/equipe?aba=orcamentos");
       router.refresh();
       return;
@@ -470,6 +478,16 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
       </div>
 
       {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onStateChange={setPickerState} /> : null}
+      {created ? (
+        <QuoteCreatedDialog
+          code={quoteCode(created)}
+          onClose={() => {
+            router.push(`/equipe?aba=orcamentos&novo=${encodeURIComponent(created)}`);
+            router.refresh();
+          }}
+          quoteId={created}
+        />
+      ) : null}
       {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} queue={queue && queue.total > 1 ? { position: queue.total - queue.rest.length, total: queue.total, onSkip: skipQueued } : undefined} start={modal} /> : null}
     </main>
   );
