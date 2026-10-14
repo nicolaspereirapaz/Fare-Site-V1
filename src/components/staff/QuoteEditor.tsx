@@ -8,6 +8,8 @@ import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductC
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
 import { QuoteCreatedDialog } from "@/components/staff/QuoteCreatedDialog";
 import { quoteCode } from "@/lib/quotes/quoteCode";
+import { DirectOrderFields } from "@/components/staff/DirectOrderFields";
+import { dateLabel, EMPTY_PAYMENT_FORM, paidCents, paymentFormError, todayInBrazil, type PaymentForm } from "@/components/staff/paymentFieldsShared";
 import {
   brl,
   EMPTY_TOTALS,
@@ -145,8 +147,10 @@ function CustomerPicker({ onPick }: { onPick: (customer: Customer) => void }) {
 
 /* ------------------------------------------------------------------ editor */
 
-export function QuoteEditor({ quoteId }: { quoteId?: string }) {
+export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mode?: "quote" | "order" }) {
   const router = useRouter();
+  const isOrder = mode === "order";
+  const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paidAt: todayInBrazil() }));
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
   /** Orçamento já salvo sem cliente: dá para escolher agora. */
@@ -254,18 +258,32 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
   const skipQueued = useCallback(() => queue && openNext(queue.rest, queue.total), [queue, openNext]);
 
   async function submit() {
+    if (isOrder && (!customer || paymentFormError(payment, Math.round(totals.total * 100)))) return;
     setSaving(true);
     setSaveError(null);
     const body = quoteId
       ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
-      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody };
-    const { ok, status, data } = await postJson<{ id?: string; message?: string; preview?: Preview[] }>(
-      quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
+      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody,
+        ...(isOrder ? {
+          paymentMethod: payment.paymentMethod,
+          payment: { amountCents: paidCents(payment.paid), paidAt: (paidCents(payment.paid) ?? 0) > 0 ? payment.paidAt : null },
+          installments: payment.paymentMethod === "cartao_credito" ? Number(payment.installments) : null,
+          dueDate: ["boleto", "faturamento_empresa"].includes(payment.paymentMethod) ? payment.dueDate || null : null,
+          deliveryDate: payment.deliveryDate || null, deliveryMode: payment.deliveryMode,
+        } : {}),
+      };
+    const { ok, status, data } = await postJson<{ id?: string; orderStatus?: string; message?: string; preview?: Preview[] }>(
+      isOrder ? "/api/backoffice/pedido-editor" : quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
       body,
       quoteId ? "PUT" : "POST",
     );
     setSaving(false);
     if (ok) {
+      if (isOrder) {
+        router.push(data.orderStatus === "aguardando_pagamento" ? "/equipe?aba=orcamentos" : "/equipe?aba=pedidos");
+        router.refresh();
+        return;
+      }
       if (!quoteId && data.id) {
         setCreated(data.id);
         return;
@@ -284,7 +302,9 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
 
   const productLabel = (item: Item) => (item.source === "catalogo" ? products[item.publicId]?.name ?? "Produto" : item.name);
   // Cliente é opcional: sem ele o orçamento fica "Cliente a definir".
-  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving;
+  const paymentError = isOrder ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
+  const receivedCents = paidCents(payment.paid) ?? 0;
+  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && (!isOrder || (customer && !changingCustomer && !paymentError));
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
 
   if (loading) return <main className="qe-page"><p className="qe-hint">Carregando orçamento…</p></main>;
@@ -292,14 +312,14 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
 
   return (
     <main className="qe-page">
-      <div className="qe-crumb"><Link href="/equipe?aba=orcamentos">Orçamentos</Link> / {quoteId ? "Editar" : "Novo"}</div>
-      <h1 className="qe-title">{quoteId ? "Editar orçamento" : "Novo orçamento"}</h1>
+      <div className="qe-crumb"><Link href={isOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{isOrder ? "Pedidos" : "Orçamentos"}</Link> / {quoteId ? "Editar" : "Novo"}</div>
+      <h1 className="qe-title">{isOrder ? "Novo pedido" : quoteId ? "Editar orçamento" : "Novo orçamento"}</h1>
       {!editable ? <p className="qe-error">Este orçamento já foi fechado e não pode mais ser alterado.</p> : null}
 
       <div className="qe-layout">
         <div>
           <section className="qe-card">
-            <h2>Cliente{!fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
+            <h2>Cliente{isOrder ? <span className="qe-optional">obrigatório</span> : !fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
             {fixedCustomer ? (
               <div className="qe-client">
                 <div className="qe-initials">{initials(fixedCustomer.name)}</div>
@@ -400,6 +420,7 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
             ) : null}
           </section>
 
+          {isOrder ? <DirectOrderFields onChange={setPayment} value={payment} /> : null}
           <section className="qe-card">
             <h2>Observações internas</h2>
             <textarea disabled={!editable} onChange={(event) => setNotes(event.target.value)} placeholder="Só a equipe vê." value={notes} />
@@ -458,6 +479,11 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
           ) : null}
           <div className="qe-sum-row"><span>Frete</span><span>A combinar</span></div>
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
+          {isOrder ? <>
+            <div className="qe-sum-row"><span>Já pago</span><span>{brl(receivedCents / 100)}</span></div>
+            <div className="qe-sum-row"><span>Falta pagar</span><span className="qe-payment-debt">{brl(Math.max(0, Math.round(totals.total * 100) - receivedCents) / 100)}</span></div>
+            <div className="qe-sum-row"><span>Entrega prevista</span><span>{dateLabel(payment.deliveryDate)}</span></div>
+          </> : null}
           {totals.pending ? <p className="qe-error">{totals.pending === 1 ? "1 item precisa de correção." : `${totals.pending} itens precisam de correção.`}</p> : null}
 
           <div className="qe-internal">
@@ -466,14 +492,15 @@ export function QuoteEditor({ quoteId }: { quoteId?: string }) {
             <div className="qe-sum-row"><span>Margem</span><span className="qe-margin">{brl(totals.margin)} · {marginPercent}%</span></div>
           </div>
 
-          <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p>
+          {!isOrder ? <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p> : null}
+          {paymentError ? <p className="qe-error">{paymentError}</p> : null}
           {saveError ? <p className="qe-error">{saveError}</p> : null}
           {editable ? (
             <button className="qe-btn qe-btn-primary qe-submit" disabled={!canSubmit} onClick={submit} type="button">
-              {saving ? "Salvando…" : quoteId ? "Salvar alterações" : "Criar orçamento"}
+              {saving ? "Salvando…" : isOrder ? "Criar pedido" : quoteId ? "Salvar alterações" : "Criar orçamento"}
             </button>
           ) : null}
-          {!fixedCustomer && !customer ? <p className="qe-hint qe-center">Sem cliente, fica como “Cliente a definir”. Dá para escolher depois.</p> : null}
+          {!fixedCustomer && !customer ? <p className="qe-hint qe-center">{isOrder ? "Selecione o cliente para criar o pedido." : "Sem cliente, fica como “Cliente a definir”. Dá para escolher depois."}</p> : null}
         </aside>
       </div>
 

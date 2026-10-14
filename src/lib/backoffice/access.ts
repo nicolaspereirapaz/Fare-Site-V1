@@ -5,6 +5,7 @@ import { ORDEM_STATUS_PEDIDO, TransicaoStatusPedidoInvalidaError, type StatusPed
 import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import type { Order } from "@/lib/orders/repository";
+import type { OrderFinance } from "@/lib/orders/payments";
 
 export type BackofficeSession = { user: { id: string; role?: unknown } };
 
@@ -38,6 +39,7 @@ export type BackofficeOrderSummary = {
   discount: { label: string; amount: number } | null;
   createdAt: string;
   history: OrderHistoryEntry[];
+  finance?: OrderFinance | null;
 };
 
 export function resolveUserRole(user: { role?: unknown } | null | undefined): UserRole {
@@ -67,7 +69,7 @@ function calculateOrderSummaryTotal(items: Order["items"]): number {
   return cents / 100;
 }
 
-function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = []): BackofficeOrderSummary {
+function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [], finance: OrderFinance | null = null): BackofficeOrderSummary {
   return {
     id: order.id,
     code: orderCode(order.id),
@@ -85,6 +87,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     discount: discountLine(order.discount, order.items),
     createdAt: order.createdAt,
     history,
+    ...(finance ? { finance } : {}),
   };
 }
 
@@ -102,6 +105,7 @@ export function createListBackofficeOrdersHandler(
   getSession: SessionReader<BackofficeSession>,
   listOrders: ListOrders,
   listHistory: ListOrderHistory = () => [],
+  readFinance: (order: Order) => OrderFinance | null = () => null,
 ) {
   return async function listBackofficeOrders(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -117,7 +121,7 @@ export function createListBackofficeOrdersHandler(
     const orders = listOrders();
 
     return Response.json({
-      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order))),
+      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order), readFinance(order))),
       counts: buildStatusCounts(orders),
     });
   };
@@ -127,6 +131,7 @@ export function createUpdateBackofficeOrderStatusHandler(
   getSession: SessionReader<BackofficeSession>,
   findOrder: FindOrder,
   changeOrderStatus: ChangeOrderStatus,
+  readFinance: (order: Order) => OrderFinance | null = () => null,
 ) {
   return async function updateBackofficeOrderStatus(request: Request, orderId: string): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -160,6 +165,10 @@ export function createUpdateBackofficeOrderStatusHandler(
       return Response.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
     }
 
+    const finance = readFinance(order);
+    if (finance && order.status === "aguardando_pagamento" && nextStatus === "aguardando_arte" && finance.paidCents <= 0) {
+      return Response.json({ error: "INVALID_TRANSITION", message: "Registre um recebimento para liberar a arte." }, { status: 409 });
+    }
     let updated: Order;
     try {
       updated = changeOrderStatus({ orderId, nextStatus, actorId: session.user.id });
@@ -170,6 +179,6 @@ export function createUpdateBackofficeOrderStatusHandler(
       throw error;
     }
 
-    return Response.json({ order: toBackofficeOrderSummary(updated) });
+    return Response.json({ order: toBackofficeOrderSummary(updated, [], readFinance(updated)) });
   };
 }

@@ -17,6 +17,8 @@ import {
 import { CheckCircle2, X } from "lucide-react";
 import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import type { OrderFinance } from "@/lib/orders/payments";
+import { dateLabel } from "@/components/staff/paymentFieldsShared";
 
 /** Partes comuns aos quadros de pedidos e de orçamentos do painel. */
 export type BackofficeItem = {
@@ -155,10 +157,11 @@ type CardProps = {
   warning?: string | null;
   /** Rodapé discreto: data, quem fez, proposta enviada… */
   meta?: string;
+  finance?: OrderFinance | null;
 };
 
 /** Conteúdo do cartão (usado no quadro e no cartão "flutuando" durante o arraste). */
-export function KanbanCardBody({ code, total, title, summary, tag, warning, meta }: CardProps) {
+export function KanbanCardBody({ code, total, title, summary, tag, warning, meta, finance }: CardProps) {
   return (
     <>
       <div className="kb-card-row">
@@ -167,6 +170,8 @@ export function KanbanCardBody({ code, total, title, summary, tag, warning, meta
       </div>
       <strong className="kb-title">{title}</strong>
       <span className="kb-summary">{summary}</span>
+      {finance && finance.balanceCents > 0 ? <span className="kb-order-debt">Cliente deve {formatCurrency(finance.balanceCents / 100)} · cobrar {finance.deliveryMode === "retirada" ? "na retirada" : "na entrega"}</span> : null}
+      {finance?.deliveryDate ? <span className="kb-order-delivery">Entrega prevista {dateLabel(finance.deliveryDate)}</span> : null}
       {tag || warning || meta ? (
         <div className="kb-card-meta">
           {tag}

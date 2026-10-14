@@ -42,7 +42,7 @@ async function readJson(request: Request): Promise<Record<string, unknown> | nul
   }
 }
 
-function customerSnapshot(deps: QuoteBuilderDeps, ref: string): { ownerId: string; customer: QuoteCustomer } | null {
+export function customerSnapshot(deps: QuoteBuilderDeps, ref: string): { ownerId: string; customer: QuoteCustomer } | null {
   const resolved = resolveCustomer(deps.database(), ref);
   if (!resolved) return null;
   const billing = resolved.kind === "conta" ? deps.readBilling?.(resolved.ownerId) ?? null : null;

@@ -21,6 +21,7 @@ import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
 import { PAYMENT_LABELS, type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
 import { ProposalActions } from "@/components/staff/ProposalActions";
+import { OrderPaymentPanel } from "@/components/staff/OrderPaymentPanel";
 import { canTransitionQuote, NO_CUSTOMER_NAME, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
@@ -155,11 +156,10 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
   const closeDialog = useCallback(() => {
     setSelected(null);
   }, []);
-  const reloadBoard = useCallback(() => {
-    load().then((payload) => {
-      setQuotes(payload.quotes);
-      setOrders(payload.orders);
-    }).catch(() => undefined);
+  const reloadBoard = useCallback(async () => {
+    const payload = await load();
+    setQuotes(payload.quotes);
+    setOrders(payload.orders);
   }, [load]);
   const boardQuotes = quotes.filter((quote): quote is BackofficeQuoteSummary & { status: Column } =>
     (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status),
@@ -179,11 +179,12 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
   const orderCard = (order: BackofficeOrder) => ({
     code: order.code,
     summary: itemsSummary(order.items),
-    tag: <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> Pedido do site</span>,
+    tag: <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
     title: order.customerCompany || order.customerName,
     total: order.total,
     warning: order.billing ? null : "Sem dados de faturamento",
     meta: `Pedido ${formatDay(order.createdAt)}`,
+    finance: order.finance,
   });
 
   return (
@@ -276,7 +277,7 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
         >
           <ProposalActions
             blocked={openQuote.items.some((item) => item.unitPrice === null) ? "Há item sem preço. Clique em “Editar itens e gravações” e salve para gerar a proposta." : null}
-            onSent={reloadBoard}
+            onSent={() => { void reloadBoard().catch(() => undefined); }}
             quoteId={openQuote.id}
             sentAt={openQuote.proposalSentAt}
           />
@@ -299,7 +300,7 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
           code={openOrder.code}
           footer={
             <>
-              <FinalAction busy={busyIds.has(openOrder.id)} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} />
+              {!openOrder.finance ? <FinalAction busy={busyIds.has(openOrder.id)} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} /> : null}
               {openOrder.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(openOrder.customerName, openOrder.customerPhone, openOrder.code, "pedido")} rel="noopener noreferrer" target="_blank">
                   <MessageCircle aria-hidden="true" size={15} /> WhatsApp
@@ -313,7 +314,7 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
             </>
           }
           onClose={closeDialog}
-          status="Pedido do site · aguardando pagamento"
+          status={openOrder.finance ? "Pedido direto · aguardando pagamento" : "Pedido do site · aguardando pagamento"}
           statusColor={COLUMN_COLORS.aguardando_pagamento}
           subtitle={`pedido de ${formatDay(openOrder.createdAt)}`}
           title={openOrder.customerName}
@@ -325,9 +326,12 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
             customerPhone={openOrder.customerPhone}
             items={openOrder.items}
             notes={openOrder.notes}
+            internalNotes={openOrder.finance?.internalNotes}
             paymentLabel={PAYMENT_LABELS[openOrder.paymentMethod]}
             total={openOrder.total}
+            discount={openOrder.discount}
           />
+          {openOrder.finance ? <OrderPaymentPanel key={openOrder.id} orderId={openOrder.id} status={openOrder.status} paymentMethod={openOrder.paymentMethod} finance={openOrder.finance} onRecorded={async () => { await reloadBoard(); closeDialog(); }} /> : null}
         </DetailsDialog>
       ) : null}
     </div>

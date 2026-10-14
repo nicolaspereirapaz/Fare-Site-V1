@@ -1,6 +1,7 @@
 import { database } from "@/lib/auth";
 import type { BuilderProduct } from "@/lib/backoffice/quoteBuilder";
-import { createQuoteBuilderHandlers } from "@/lib/backoffice/quoteBuilderHandlers";
+import { createQuoteBuilderHandlers, type QuoteBuilderDeps } from "@/lib/backoffice/quoteBuilderHandlers";
+import { createDirectOrderHandler } from "@/lib/backoffice/directOrderHandlers";
 import { browseStaffCatalog, type StaffFilters } from "@/lib/backoffice/productSearch";
 import { isProfileComplete } from "@/lib/account/profile";
 import { getCustomerProfile } from "@/lib/account/profileRepository";
@@ -77,7 +78,7 @@ async function catalog() {
   };
 }
 
-export const quoteBuilderHandlers = createQuoteBuilderHandlers({
+const builderDeps: QuoteBuilderDeps = {
   getSession: staffAuth.api.getSession as never,
   database: () => database,
   catalog,
@@ -87,4 +88,7 @@ export const quoteBuilderHandlers = createQuoteBuilderHandlers({
     const { personType, document, companyName, tradeName, stateRegistration, address } = profile;
     return { personType, document, companyName, tradeName, stateRegistration, address };
   },
-});
+};
+
+export const quoteBuilderHandlers = createQuoteBuilderHandlers(builderDeps);
+export const createStaffOrder = createDirectOrderHandler(builderDeps);

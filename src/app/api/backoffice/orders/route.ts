@@ -2,6 +2,7 @@ import { database } from "@/lib/auth";
 import { staffAuth, staffDatabase } from "@/lib/staff/auth";
 import { createListBackofficeOrdersHandler } from "@/lib/backoffice/access";
 import { listAllOrders, listOrderStatusHistory } from "@/lib/orders/repository";
+import { getOrderFinance } from "@/lib/orders/payments";
 
 export const dynamic = "force-dynamic";
 
@@ -21,4 +22,5 @@ export const GET = createListBackofficeOrdersHandler(
     at: entry.createdAt,
     by: staffName(entry.actorId),
   })),
+  (order) => getOrderFinance(database, order.id),
 );

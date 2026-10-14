@@ -19,6 +19,7 @@ export const ORDER_STATUS_LABELS: Record<StatusPedido, string> = {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   pix: "Pix",
+  dinheiro: "Dinheiro",
   cartao_credito: "Cartão de crédito",
   cartao_debito: "Cartão de débito",
   boleto: "Boleto",

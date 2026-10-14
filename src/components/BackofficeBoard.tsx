@@ -25,6 +25,8 @@ import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
 import { horasNoQuadro, visivelNoQuadroDePedidos } from "@/lib/backoffice/finishedOrders";
 import type { PaymentMethod } from "@/lib/orders/repository";
 import { QuotesBoard } from "@/components/BackofficeQuotesBoard";
+import type { OrderFinance } from "@/lib/orders/payments";
+import { OrderPaymentPanel } from "@/components/staff/OrderPaymentPanel";
 
 export type BackofficeOrder = {
   id: string;
@@ -42,6 +44,7 @@ export type BackofficeOrder = {
   discount?: { label: string; amount: number } | null;
   createdAt: string;
   history?: OrderHistoryEntry[];
+  finance?: OrderFinance | null;
 };
 
 /** Nomes das situações no painel interno. */
@@ -83,6 +86,7 @@ const HISTORY_LABELS: Partial<Record<StatusPedido, string>> = {
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   pix: "Pix",
+  dinheiro: "Dinheiro",
   cartao_credito: "Cartão de crédito",
   cartao_debito: "Cartão de débito",
   boleto: "Boleto",
@@ -201,6 +205,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     summary: itemsSummary(order.items),
     title: order.customerCompany || order.customerName,
     total: order.total,
+    finance: order.finance,
     warning: order.billing ? null : "Sem dados de faturamento",
     meta: order.status === "concluido"
       ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
@@ -300,10 +305,12 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
             customerPhone={open.customerPhone}
             items={open.items}
             notes={open.notes}
+            internalNotes={open.finance?.internalNotes}
             paymentLabel={PAYMENT_LABELS[open.paymentMethod]}
             total={open.total}
             discount={open.discount}
           />
+          {open.finance ? <OrderPaymentPanel key={open.id} orderId={open.id} status={open.status} paymentMethod={open.paymentMethod} finance={open.finance} onRecorded={async () => { setOrders(await fetchOrders()); }} /> : null}
           <section>
             <h3>Histórico</h3>
             <ul className="kb-history">
@@ -315,7 +322,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
               ))}
               <li>
                 <strong>Pedido criado</strong>
-                <span>{formatDate(open.createdAt)} · pelo site</span>
+                <span>{formatDate(open.createdAt)} · {open.finance ? `feito por ${open.finance.createdBy}` : "pelo site"}</span>
               </li>
             </ul>
           </section>
@@ -370,11 +377,14 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
           </button>
         ))}
       </div>
+        <div className="kb-new-actions">
+        <Link className="kb-new-quote" href="/equipe/pedidos/novo"><Plus aria-hidden="true" size={16} /> Novo pedido</Link>
         {tab === "orcamentos" ? (
           <Link className="kb-new-quote" href="/equipe/orcamentos/novo">
             <Plus aria-hidden="true" size={16} /> Novo orçamento
           </Link>
         ) : null}
+        </div>
       </div>
 
       {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} />}

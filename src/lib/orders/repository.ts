@@ -12,6 +12,7 @@ import {
 
 export const PAYMENT_METHODS = [
   "pix",
+  "dinheiro",
   "cartao_credito",
   "cartao_debito",
   "boleto",
@@ -108,7 +109,7 @@ const CREATE_ORDERS_TABLE_SQL = `
     idempotency_key TEXT NOT NULL,
     customer_snapshot TEXT NOT NULL,
     items_snapshot TEXT NOT NULL,
-    payment_method TEXT NOT NULL CHECK (payment_method IN ('pix', 'cartao_credito', 'cartao_debito', 'boleto', 'faturamento_empresa')),
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('pix', 'dinheiro', 'cartao_credito', 'cartao_debito', 'boleto', 'faturamento_empresa')),
     status TEXT NOT NULL CHECK (status IN (${ORDER_STATUS_SQL_VALUES})),
     total_cents INTEGER,
     created_at TEXT NOT NULL,
@@ -156,45 +157,77 @@ function hasCanonicalOrderStatusConstraint(database: DatabaseSync): boolean {
     && persistedStatuses.every((status, index) => status === ORDEM_STATUS_PEDIDO[index]);
 }
 
-function migrateOrderStatusConstraint(database: DatabaseSync) {
-  if (hasCanonicalOrderStatusConstraint(database)) return;
+const PAYMENT_CHECK_PATTERN = /CHECK\s*\(\s*payment_method\s+IN\s*\(([^)]*)\)\s*\)/i;
+const STATUS_CHECK_PATTERN = /CHECK\s*\(\s*status\s+IN\s*\(([^)]*)\)\s*\)/i;
 
+function hasCanonicalOrderConstraints(database: DatabaseSync): boolean {
+  const row = database.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='fare_orders'").get() as SqliteSchemaRow;
+  const methods = Array.from(row.sql?.match(PAYMENT_CHECK_PATTERN)?.[1].matchAll(/'((?:''|[^'])*)'/g) ?? [], ([, method]) => method);
+  return hasCanonicalOrderStatusConstraint(database) && methods.length === PAYMENT_METHODS.length
+    && PAYMENT_METHODS.every(method => methods.includes(method));
+}
+
+function orderTransaction<T>(database: DatabaseSync, action: () => T): T {
+  const nested = database.isTransaction;
+  const savepoint = `orders_${randomUUID().replaceAll("-", "")}`;
+  database.exec(nested ? `SAVEPOINT ${savepoint}` : "BEGIN IMMEDIATE");
+  try {
+    const result = action();
+    database.exec(nested ? `RELEASE ${savepoint}` : "COMMIT");
+    return result;
+  } catch (error) {
+    database.exec(nested ? `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}` : "ROLLBACK");
+    throw error;
+  }
+}
+
+function quoteIdentifier(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+function migrateOrderStatusConstraint(database: DatabaseSync) {
+  if (hasCanonicalOrderConstraints(database)) return;
   const foreignKeysEnabled = Number(
     (database.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys,
   ) === 1;
-
+  // SQLite cannot disable FK enforcement inside an existing transaction. Fail before
+  // rebuilding instead of cascading/deleting history or nesting BEGIN.
+  if (foreignKeysEnabled && database.isTransaction) {
+    throw new Error("Execute a migração de pedidos fora da transação, antes dos writes.");
+  }
+  const legacyAlterTable = Number((database.prepare("PRAGMA legacy_alter_table").get() as { legacy_alter_table: number }).legacy_alter_table);
   if (foreignKeysEnabled) database.exec("PRAGMA foreign_keys = OFF");
-
-  let transactionStarted = false;
   try {
-    database.exec("BEGIN IMMEDIATE");
-    transactionStarted = true;
-
-    if (hasCanonicalOrderStatusConstraint(database)) {
-      database.exec("COMMIT");
-      transactionStarted = false;
-      return;
-    }
-
-    database.exec(`
-      ${CREATE_ORDERS_TABLE_SQL.replace("fare_orders", "fare_orders_status_migration")};
-      INSERT INTO fare_orders_status_migration (
-        id, user_id, idempotency_key, customer_snapshot, items_snapshot,
-        payment_method, status, total_cents, created_at, updated_at
-      )
-      SELECT
-        id, user_id, idempotency_key, customer_snapshot, items_snapshot,
-        payment_method, ${LEGACY_STATUS_CASE}, total_cents, created_at, updated_at
-      FROM fare_orders;
-      DROP TABLE fare_orders;
-      ALTER TABLE fare_orders_status_migration RENAME TO fare_orders;
-    `);
-    database.exec("COMMIT");
-    transactionStarted = false;
-  } catch (error) {
-    if (transactionStarted) database.exec("ROLLBACK");
-    throw error;
+    // The replacement is briefly absent from sqlite_schema. Keep dependent views
+    // and external triggers referring to the final name during the rename.
+    database.exec("PRAGMA legacy_alter_table = ON");
+    orderTransaction(database, () => {
+      if (hasCanonicalOrderConstraints(database)) return;
+      const original = (database.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='fare_orders'").get() as { sql: string }).sql;
+      const objects = database.prepare("SELECT sql FROM sqlite_schema WHERE tbl_name='fare_orders' AND type IN ('index','trigger') AND sql IS NOT NULL")
+        .all() as unknown as Array<{ sql: string }>;
+      const paymentCheck = `CHECK (payment_method IN (${PAYMENT_METHODS.map(method => `'${method}'`).join(", ")}))`;
+      const statusCheck = `CHECK (status IN (${ORDER_STATUS_SQL_VALUES}))`;
+      let rebuilt = original.replace(/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"fare_orders"|`fare_orders`|\[fare_orders\]|fare_orders)/i,
+        "CREATE TABLE fare_orders_status_migration");
+      if (rebuilt === original) throw new Error("Schema de pedidos não suportado para migração segura.");
+      rebuilt = PAYMENT_CHECK_PATTERN.test(rebuilt) ? rebuilt.replace(PAYMENT_CHECK_PATTERN, paymentCheck)
+        : rebuilt.replace(/\bpayment_method\s+TEXT\b/i, `payment_method TEXT ${paymentCheck}`);
+      rebuilt = STATUS_CHECK_PATTERN.test(rebuilt) ? rebuilt.replace(STATUS_CHECK_PATTERN, statusCheck)
+        : rebuilt.replace(/\bstatus\s+TEXT\b/i, `status TEXT ${statusCheck}`);
+      // Preserve every persisted column, including discount_json and custom columns,
+      // and let SQLite recreate UNIQUE/CHECK/FK constraints from the original DDL.
+      const columns = (database.prepare("PRAGMA table_info(fare_orders)").all() as Array<{ name: string }>).map(column => column.name);
+      const names = columns.map(quoteIdentifier).join(", ");
+      const values = columns.map(name => name === "status" ? LEGACY_STATUS_CASE : quoteIdentifier(name)).join(", ");
+      database.exec(`${rebuilt}; INSERT INTO fare_orders_status_migration (${names}) SELECT ${values} FROM fare_orders;
+        DROP TABLE fare_orders;
+        ALTER TABLE fare_orders_status_migration RENAME TO fare_orders;`);
+      for (const object of objects) database.exec(object.sql);
+      if (database.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Falha de integridade referencial na migração de pedidos.");
+    });
   } finally {
+    database.exec(`PRAGMA legacy_alter_table = ${legacyAlterTable}`);
     if (foreignKeysEnabled) database.exec("PRAGMA foreign_keys = ON");
   }
 }
@@ -209,18 +242,10 @@ function hasHistoryOrdinal(database: DatabaseSync): boolean {
 
 function migrateOrderStatusHistory(database: DatabaseSync) {
   if (hasHistoryOrdinal(database)) return;
-
-  let transactionStarted = false;
-  try {
-    database.exec("BEGIN IMMEDIATE");
-    transactionStarted = true;
-
-    if (hasHistoryOrdinal(database)) {
-      database.exec("COMMIT");
-      transactionStarted = false;
-      return;
-    }
-
+  orderTransaction(database, () => {
+    if (hasHistoryOrdinal(database)) return;
+    const objects = database.prepare("SELECT sql FROM sqlite_schema WHERE tbl_name='fare_order_status_history' AND type IN ('index','trigger') AND sql IS NOT NULL")
+      .all() as unknown as Array<{ sql: string }>;
     database.exec(`
       ALTER TABLE fare_order_status_history RENAME TO fare_order_status_history_legacy;
       ${CREATE_ORDER_STATUS_HISTORY_TABLE_SQL};
@@ -232,12 +257,8 @@ function migrateOrderStatusHistory(database: DatabaseSync) {
       ORDER BY rowid ASC;
       DROP TABLE fare_order_status_history_legacy;
     `);
-    database.exec("COMMIT");
-    transactionStarted = false;
-  } catch (error) {
-    if (transactionStarted) database.exec("ROLLBACK");
-    throw error;
-  }
+    for (const object of objects) database.exec(object.sql);
+  });
 }
 
 export function runOrderMigrations(database: DatabaseSync) {

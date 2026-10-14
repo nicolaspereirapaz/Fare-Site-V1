@@ -6200,12 +6200,22 @@ aside.checkout-card .checkout-mode > label.active {
 /* Quadro de orçamentos: botão novo, origem do card e editar. */
 .kb-new-quote { display: inline-flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 8px; padding: 0 14px 0 12px; border-radius: 8px; background: #F65C2D; color: #fff; font-weight: 600; font-size: 0.88rem; text-decoration: none; white-space: nowrap; box-shadow: 0 1px 2px rgba(212,83,42,.3); transition: background-color .15s ease; }
 .kb-new-quote:hover { background: #d4532a; }
+.kb-new-actions { display: flex; gap: 8px; }
+.kb-order-debt { display: block; margin-top: 9px; padding: 7px 8px; color: #a12a2a; background: #fdecec; border-radius: 6px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.kb-order-delivery { display: block; margin-top: 7px; color: #5b6170; font-size: 12px; }
+.kb-payment-balance { color: #a12a2a; font-weight: 600; }
+.kb-receipt-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.kb-receipt-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; min-width: 0; }
+.kb-receipt-form input, .kb-receipt-form select { min-width: 0; width: 100%; border: 1px solid #e6e7ec; border-radius: 6px; padding: 8px 10px; background: white; font: inherit; }
+.kb-receipt-actions { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
 @media (max-width: 600px) {
   .kb-heading { margin-bottom: 18px; }
   .kb-heading h1 { font-size: 1.55rem; }
   .kb-toolbar { flex-wrap: wrap; border-bottom: 0; }
   .kb-tabs { width: 100%; border-bottom: 1px solid var(--line); }
   .kb-new-quote { width: 100%; justify-content: center; margin-bottom: 0; }
+  .kb-new-actions { width: 100%; flex-wrap: wrap; }
+  .kb-receipt-form { grid-template-columns: 1fr; }
 }
 .kb-origin { font-size: 12px; color: #7a7f91; }
 .kb-edit-quote { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid #d5d8e1; background: #fff; color: #1d2447; font-weight: 600; font-size: 13.5px; text-decoration: none; }

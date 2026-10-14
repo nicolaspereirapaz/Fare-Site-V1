@@ -445,3 +445,12 @@
   .qe-done-foot .qe-btn-primary { grid-column: 1 / -1; justify-content: center; }
   .qe-done-foot .qe-btn-secondary { justify-content: center; }
 }
+
+/* Pedido direto: mesmas fontes, campos e cartões do editor existente. */
+.qe-payment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.qe-payment-debt { color: #a12a2a; font-weight: 600; }
+@media (max-width: 760px) {
+  .qe-payment-grid { grid-template-columns: 1fr; }
+  /* A regra desktop tardia da lista não pode sobrescrever as duas colunas mobile. */
+  .qe-line-list { grid-template-columns: minmax(0, 1fr) 56px; }
+}
