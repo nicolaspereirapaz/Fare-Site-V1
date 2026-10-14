@@ -93,6 +93,16 @@ describe("painel: aba Orçamentos", () => {
     expect(window.location.search).toBe("?aba=orcamentos");
   });
 
+  it("a animação do recém-criado toca uma vez só (trocar de aba e voltar não repete)", async () => {
+    stubApi({ quotes: [{ ...QUOTE, id: "novo-1", customerName: "Acabou de criar", status: "em_negociacao" }] });
+    const user = userEvent.setup();
+    render(<BackofficeBoard canCancel={false} freshQuoteId="novo-1" initialTab="orcamentos" />);
+    expect(await cardOf("Acabou de criar")).toHaveClass("is-new");
+    await user.click(screen.getByRole("tab", { name: /Pedidos/ }));
+    await user.click(screen.getByRole("tab", { name: /Orçamentos/ }));
+    expect(await cardOf("Acabou de criar")).not.toHaveClass("is-new");
+  });
+
   it("orçamento que virou pedido ou foi encerrado sai do quadro", async () => {
     stubApi({ quotes: [QUOTE, { ...QUOTE, id: "q2", customerName: "Já é pedido", status: "virou_pedido" }, { ...QUOTE, id: "q3", customerName: "Desistiu", status: "encerrado" }] });
     await openQuotesTab();

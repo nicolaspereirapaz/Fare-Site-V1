@@ -330,6 +330,9 @@ type BackofficeTab = "pedidos" | "orcamentos";
 /** freshQuoteId: orçamento que acabou de ser criado no editor (?novo=<id>), destacado no quadro. */
 export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteId }: BackofficeBoardProps & { initialTab?: BackofficeTab; freshQuoteId?: string }) {
   const [tab, setTab] = useState<BackofficeTab>(initialTab);
+  /** Destaque do orçamento recém-criado: usado uma vez (trocar de aba e voltar não repete a animação). */
+  const [freshId, setFreshId] = useState(freshQuoteId);
+  const clearFresh = useCallback(() => setFreshId(undefined), []);
   const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "pedidos", label: "Pedidos", icon: ClipboardList },
     { id: "orcamentos", label: "Orçamentos", icon: FileText },
@@ -374,7 +377,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
         ) : null}
       </div>
 
-      {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshQuoteId} />}
+      {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} />}
     </div>
   );
 }
