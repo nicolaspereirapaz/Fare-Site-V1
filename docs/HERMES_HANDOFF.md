@@ -200,3 +200,29 @@ conta Resend + domínio verificado para o envio real de e-mails.
 - Pagamento: débito saiu dos pedidos novos (`CHECKOUT_PAYMENT_METHODS`); proposta diz "Pix ou boleto faturado".
 - QA (scratch/fornecedores): `desconto_check.js`, `modal_check.js`, `kanban_check.js`, `sem_cliente_check.js`, `spot_check.js`, `proposal_check2.js`. Todos criam vendedor QA e apagam o que criaram.
 - Pendências do usuário: filtros da busca de produto iguais aos da brinde.me (precisa de prints); hospedagem; e-mail real; preço da Asia; critério de produtos parecidos.
+
+## PRÓXIMO: tela de busca de produto no editor (referência brinde.me) — pedido em 13/10
+Pedido do usuário: "Melhore a tela de pesquisa de produto, com opções de filtro de cores e outros filtros; ao clicar em detalhes do produto mostre um popup com foto grande, cores e estoques disponíveis, descrição etc."
+Fluxo que ele quer (igual ao sistema brinde.me que usa hoje): busca produto → escolhe → abre a janela "Configuração do produto" (já existe: `components/staff/ProductConfigModal.tsx`) → Adicionar → repete.
+
+Referência — janela "Escolha o produto" da brinde.me (prints enviados em 13/10):
+- Janela grande (quase tela cheia). Título "Escolha o produto", X para fechar.
+- Coluna esquerda (~240px, fundo lilás bem claro):
+  - Campo "Buscar produto..." com lupa.
+  - "Filtros":
+    - FORNECEDOR: select "Todos os fornecedores" (aqui: XBZ, Spot, Asia).
+    - GRUPO DE CORES: select "Todos os grupos" com bolinha colorida ao lado de cada cor (Amarelo, Azul, Azul claro, Bambu, Bege, Bicolor, Bordô, Branco…). Juntar variações ("Azul (tom 2)", "Azul / Prata") no grupo da cor principal.
+    - PREÇO: slider de faixa com duas bolinhas + campos "R$ 0" – "R$ 750" (é o CUSTO do fornecedor; só equipe vê).
+    - ESTOQUE MÍNIMO: campo "Qualquer ... un." + chips Qualquer | 100+ | 500+ | 1.000+ | 5.000+.
+  - Sugestão nossa: também filtro de Categoria (as 23 categorias da loja).
+- Topo direito: ordenação "Relevância" (+ menor/maior custo, mais estoque).
+- Grade de cards (6 por linha no desktop): foto, nome (cortado com …), código do produto, nome do fornecedor em lilás, custo em negrito, "N em estoque" + ícone (i).
+  - Card selecionado: borda verde, check verde no canto, e um botão "Detalhes" (ícone de abrir) em cima da foto + lupa.
+- Rodapé: "Página 1 de 273 • 6544 resultados", paginação (Primeira, Anterior, 1 2 3 4 5, Próxima, Última), botões "Voltar" e "Confirmar" (vermelho/laranja).
+- Aqui: clicar no card (ou Confirmar) abre a janela de configuração; "Detalhes" abre um popup com foto grande, todas as cores (miniatura + estoque de cada), descrição, categoria, código Fare e do fornecedor, e botão "Usar este produto".
+Dados: busca atual em `/api/backoffice/orcamento-editor/produtos?q=` (`quoteBuilderServer.ts`, `catalog.search`), devolve até 12; precisa de paginação + filtros no servidor (catálogo ~4.460 produtos em `data/xbz-catalog.sqlite`). Custo e estoque só para a equipe (nunca no site).
+
+Já feito em 13/10 (não refazer): campos de valor da janela do produto (`MoneyField` em ProductConfigModal.tsx) mostram o valor real e são editáveis com clique/Backspace (custo do produto, custo de cada gravação, preço por peça); digitado fica laranja; vazio volta ao calculado.
+
+Também pendente: teste no navegador do desconto + PDF na tela nova (`scratch/fornecedores/desconto_check.js` ainda usa a tela antiga do editor — adaptar para a janela; `modal_check.js` já usa a janela e serve de modelo). Testes automáticos de desconto/PDF passam (549 no total).
+Revisão GPT 6.1 de 13/10: 7 achados, todos corrigidos (commit a74cb6f).
