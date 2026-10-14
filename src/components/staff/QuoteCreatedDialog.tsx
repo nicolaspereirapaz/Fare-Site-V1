@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { CheckCircle2, Download, ExternalLink, LayoutGrid } from "lucide-react";
+import { PdfPreview } from "@/components/staff/PdfPreview";
 
 /**
  * Logo depois de "Criar orçamento": prévia do PDF da proposta (o mesmo que vai ao cliente),
@@ -33,7 +34,7 @@ export function QuoteCreatedDialog({ quoteId, code, onClose }: { quoteId: string
           </h2>
         </header>
         <div className="qe-done-body">
-          <iframe className="qe-done-pdf" src={`${base}?ver=1`} title={`Prévia da proposta ${code}`} />
+          <PdfPreview label={`Prévia da proposta ${code}`} url={`${base}?ver=1`} />
         </div>
         <footer className="qe-modal-foot qe-done-foot">
           <a className="qe-btn qe-btn-secondary" href={`${base}?ver=1`} rel="noopener noreferrer" target="_blank">
