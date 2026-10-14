@@ -88,8 +88,9 @@ function tecnicaOf(form: EngForm): Tecnica | null {
 }
 
 /**
- * Campo de valor editável. Vazio = valor calculado (aparece apagado). Ao clicar, o calculado vira texto no campo
- * para editar; sair sem mudar volta a ser automático. Valor digitado fica com fundo laranja.
+ * Campo de valor editável como qualquer campo de texto: mostra sempre o valor em uso (o calculado ou o digitado).
+ * Enquanto edita, guarda o texto local (apagar tudo não "volta" sozinho para o calculado).
+ * Ao sair: vazio ou igual ao calculado = automático; valor digitado fica com fundo laranja.
  */
 export function MoneyField({ value, calculated, onChange, ariaLabel, className = "" }: {
   value: string;
@@ -98,26 +99,31 @@ export function MoneyField({ value, calculated, onChange, ariaLabel, className =
   ariaLabel: string;
   className?: string;
 }) {
-  const base = useRef<number | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (value || (calculated !== null ? moneyInput(calculated) : ""));
   return (
     <input
       aria-label={ariaLabel}
       className={`${className}${value ? " is-manual" : ""}`.trim()}
       inputMode="decimal"
       onBlur={() => {
-        if (value && base.current !== null && Math.abs(parseNumber(value) - base.current) < 1e-9) onChange("");
-        base.current = null;
+        const text = (draft ?? value).trim();
+        const number = parseNumber(text);
+        if (!text || !Number.isFinite(number) || (calculated !== null && Math.abs(number - calculated) < 1e-9)) onChange("");
+        else onChange(moneyInput(number));
+        setDraft(null);
       }}
-      onChange={(event) => onChange(cleanMoney(event.target.value))}
+      onChange={(event) => {
+        const text = cleanMoney(event.target.value);
+        setDraft(text);
+        const number = parseNumber(text);
+        if (text && Number.isFinite(number)) onChange(text);
+      }}
       onFocus={(event) => {
-        if (value || calculated === null) return;
-        base.current = calculated;
-        onChange(moneyInput(calculated));
-        const input = event.currentTarget;
-        requestAnimationFrame(() => input.select());
+        setDraft(shown);
+        event.currentTarget.select();
       }}
-      placeholder={calculated !== null ? moneyInput(calculated) : ""}
-      value={value}
+      value={shown}
     />
   );
 }
