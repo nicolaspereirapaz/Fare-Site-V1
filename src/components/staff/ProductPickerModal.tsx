@@ -109,8 +109,10 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
         </header>
         <div className="qe-pk-det-body">
           <div className="qe-pk-det-photo">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {photo ? <img alt={`${product.name} — ${variant}`} src={photo} /> : <span>Produto sem foto.</span>}
+            <div className="qe-pk-det-frame">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {photo ? <img alt={`${product.name} — ${variant}`} src={photo} /> : <span>Produto sem foto.</span>}
+            </div>
           </div>
           <div className="qe-pk-det-info">
             <h3>{product.name}</h3>
