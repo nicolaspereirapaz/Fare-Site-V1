@@ -295,6 +295,8 @@
 .qe-pk-side { padding: 16px; background: #f5f4fb; border-right: 1px solid var(--qe-line); overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
 .qe-pk-filters-head { display: flex; justify-content: space-between; align-items: center; font: 600 14px var(--font-outfit), sans-serif; color: var(--qe-ink); }
 .qe-pk-filters-head .qe-btn-text { font-size: 12.5px; }
+.qe-pk-groups { display: flex; flex-direction: column; gap: 16px; }
+.qe-pk-filtertoggle, .qe-pk-apply { display: none; }
 .qe-pk-group { display: flex; flex-direction: column; gap: 7px; }
 .qe-pk-group > span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--qe-muted); }
 .qe-pk-colors { display: flex; flex-direction: column; gap: 1px; max-height: 236px; overflow-y: auto; padding: 4px; border: 1px solid #d5d8e1; border-radius: 8px; background: #fff; }
@@ -358,8 +360,9 @@
 .qe-pk-scrim-top { z-index: 210; background: rgba(23, 27, 45, .35); }
 .qe-pk-det { width: min(980px, 100%); }
 .qe-pk-det-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 0; flex: 1; overflow: hidden; }
-.qe-pk-det-photo { display: grid; place-items: center; padding: 20px; background: #f2f2f3; min-height: 360px; }
-.qe-pk-det-photo img { width: 100%; height: 100%; max-height: 62vh; object-fit: contain; mix-blend-mode: multiply; }
+.qe-pk-det-photo { display: grid; place-items: center; padding: 20px; background: #f2f2f3; min-height: 360px; overflow: hidden; }
+/* min-height 0 + max-height 100%: foto alta (lápis, caneta) não sai da caixa. */
+.qe-pk-det-photo img { width: 100%; height: 100%; min-height: 0; max-height: 62vh; object-fit: contain; mix-blend-mode: multiply; }
 .qe-pk-det-info { padding: 18px 22px; overflow-y: auto; }
 .qe-pk-det-info h3 { margin: 0 0 12px; font: 600 19px/1.25 var(--font-outfit), sans-serif; color: var(--qe-ink); }
 .qe-pk-det-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0 0 14px; }
@@ -388,7 +391,17 @@
   .qe-pk-pager { order: -1; width: 100%; justify-content: center; grid-column: 1 / -1; }
   .qe-pk-pageinfo { grid-column: 1 / -1; text-align: center; white-space: normal; font-size: 12.5px; }
   .qe-pk-det-body { grid-template-columns: 1fr; overflow-y: auto; }
-  .qe-pk-det-photo { min-height: 240px; }
+  /* Foto dos detalhes com altura fixa no celular; a imagem cabe inteira dentro dela. */
+  .qe-pk-det-photo { min-height: 0; height: min(280px, 36vh); padding: 12px; }
+  .qe-pk-det-photo img { max-height: 100%; }
+  /* Filtros recolhidos: só a busca e o botão "Filtros"; os produtos aparecem logo abaixo. */
+  .qe-pk-side { gap: 10px; padding: 12px 14px; }
+  .qe-pk-filters-title { display: none; }
+  .qe-pk-filtertoggle { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border: 1px solid #d5d8e1; border-radius: 8px; background: #fff; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--qe-ink); cursor: pointer; }
+  .qe-pk-filtertoggle[aria-expanded="true"] { border-color: var(--qe-navy); }
+  .qe-pk-filtertoggle[aria-expanded="true"] .qe-pk-chev { transform: rotate(180deg); }
+  .qe-pk-side:not(.open) .qe-pk-groups { display: none; }
+  .qe-pk-apply { display: flex; justify-content: center; width: 100%; }
   .qe-pk-det-info { overflow: visible; }
   .qe-pk-det-colors { grid-template-columns: 1fr; }
 }

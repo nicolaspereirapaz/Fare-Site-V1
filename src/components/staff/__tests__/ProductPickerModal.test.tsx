@@ -97,4 +97,18 @@ describe("janela de busca", () => {
     fireEvent.keyDown(use, { key: "Tab" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Fechar detalhes" }));
   });
+
+  it("celular: botão Filtros abre e fecha o painel e mostra quantos filtros estão ativos", async () => {
+    const user = userEvent.setup();
+    renderPicker();
+    await screen.findByRole("option", { name: "Produto 1" });
+    const toggle = screen.getByRole("button", { name: /^Filtros/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Fornecedor" }), "spot");
+    expect(screen.getByRole("button", { name: /^Filtros/ })).toHaveTextContent("Filtros (1)");
+    await user.click(screen.getByRole("button", { name: /^Ver \d+ produtos?$/ }));
+    expect(screen.getByRole("button", { name: /^Filtros/ })).toHaveAttribute("aria-expanded", "false");
+  });
 });

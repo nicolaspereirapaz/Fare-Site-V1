@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, Maximize2, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, Maximize2, Search, SlidersHorizontal, X } from "lucide-react";
 import { COLOR_GROUPS, colorGroupOf, colorGroupSwatch, isLightColorGroup } from "@/lib/colorGroups";
 import { PRODUCT_CATEGORIES } from "@/lib/productCategories";
 import { brl, useDebounced, type Product } from "@/components/staff/quoteEditorShared";
@@ -167,6 +167,8 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PickerProduct | null>(null);
   const [details, setDetails] = useState<Product | null>(null);
+  /** Celular: filtros recolhidos atrás do botão "Filtros" (no computador ficam sempre abertos). */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef(details);
@@ -251,6 +253,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
   const confirm = (product: Product, variant?: string) => onPick({ product, variant: variant ?? suggestedVariant(product, state) });
   const requestKey = `${query}|${supplier}|${colorGroup}|${category}|${sort}|${page}|${costs}|${stock}`;
   const loading = loadedKey !== requestKey;
+  const activeFilters = [state.supplier, state.colorGroup, state.category, state.minCost > 0 || state.maxCost < COST_MAX, state.minStock].filter(Boolean).length;
   const filtered = Boolean(state.supplier || state.colorGroup || state.category || state.minCost > 0 || state.maxCost < COST_MAX || state.minStock || state.query.trim());
   const pages = data?.pages ?? 1;
   const current = data?.page ?? 1;
@@ -267,80 +270,90 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
         </header>
 
         <div className="qe-pk-body">
-          <aside className="qe-pk-side">
+          <aside className={`qe-pk-side${filtersOpen ? " open" : ""}`}>
             <div className="qe-search">
               <Search aria-hidden="true" size={16} />
               <input aria-label="Buscar produto" onChange={(event) => set({ query: event.target.value })} placeholder="Buscar produto..." ref={searchRef} value={state.query} />
             </div>
 
             <div className="qe-pk-filters-head">
-              <span>Filtros</span>
+              <span className="qe-pk-filters-title">Filtros</span>
+              <button aria-controls="qe-pk-filter-groups" aria-expanded={filtersOpen} className="qe-pk-filtertoggle" onClick={() => setFiltersOpen((open) => !open)} type="button">
+                <SlidersHorizontal aria-hidden="true" size={15} />
+                Filtros{activeFilters ? ` (${activeFilters})` : ""}
+                <ChevronDown aria-hidden="true" className="qe-pk-chev" size={15} />
+              </button>
               {filtered ? (
                 <button className="qe-btn-text" onClick={() => { setState(EMPTY_PICKER); setCostText({ min: "0", max: costLabel(COST_MAX) }); }} type="button">Limpar</button>
               ) : null}
             </div>
 
-            <label className="qe-pk-group">
-              <span>Fornecedor</span>
-              <select onChange={(event) => set({ supplier: event.target.value })} value={state.supplier}>
-                {SUPPLIERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-
-            <div className="qe-pk-group">
-              <span id="qe-pk-color-label">Grupo de cores</span>
-              <div aria-labelledby="qe-pk-color-label" className="qe-pk-colors" role="radiogroup">
-                <button aria-checked={!state.colorGroup} className={!state.colorGroup ? "on" : undefined} onClick={() => set({ colorGroup: "" })} role="radio" type="button">
-                  <i className="qe-pk-dot qe-pk-dot-all" />Todos os grupos
-                </button>
-                {COLOR_GROUPS.map((group) => {
-                  const count = data?.colorCounts[group.name] ?? 0;
-                  if (!count && state.colorGroup !== group.name) return null;
-                  return (
-                    <button aria-checked={state.colorGroup === group.name} className={state.colorGroup === group.name ? "on" : undefined} key={group.name} onClick={() => set({ colorGroup: group.name })} role="radio" type="button">
-                      <i className={`qe-pk-dot${isLightColorGroup(group.name) ? " light" : ""}`} style={colorGroupSwatch(group.name)} />
-                      {group.name}
-                      <small>{units(count)}</small>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <label className="qe-pk-group">
-              <span>Categoria</span>
-              <select onChange={(event) => set({ category: event.target.value })} value={state.category}>
-                <option value="">Todas as categorias</option>
-                {PRODUCT_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select>
-            </label>
-
-            <div className="qe-pk-group">
-              <span>Custo por peça</span>
-              <div className="qe-pk-range">
-                <div className="qe-pk-track"><div style={{ left: `${left}%`, right: `${right}%` }} /></div>
-                <input aria-label="Custo mínimo" max={COST_MAX} min={0} onChange={(event) => slide("min", Number(event.target.value))} step={1} type="range" value={state.minCost} />
-                <input aria-label="Custo máximo" max={COST_MAX} min={0} onChange={(event) => slide("max", Number(event.target.value))} step={1} type="range" value={state.maxCost} />
-              </div>
-              <div className="qe-pk-range-fields">
-                <label><span>R$</span><input aria-label="Custo mínimo em reais" inputMode="numeric" onBlur={(event) => commitCost("min", event.target.value)} onChange={(event) => setCostText({ ...costText, min: event.target.value })} onKeyDown={(event) => event.key === "Enter" && commitCost("min", event.currentTarget.value)} value={costText.min} /></label>
-                <i>–</i>
-                <label><span>R$</span><input aria-label="Custo máximo em reais" inputMode="numeric" onBlur={(event) => commitCost("max", event.target.value)} onChange={(event) => setCostText({ ...costText, max: event.target.value })} onKeyDown={(event) => event.key === "Enter" && commitCost("max", event.currentTarget.value)} value={costText.max} /></label>
-              </div>
-              {state.maxCost >= COST_MAX ? <small className="qe-pk-help">{reaisInt(COST_MAX)} = sem limite</small> : null}
-            </div>
-
-            <div className="qe-pk-group">
-              <span>Estoque mínimo (numa cor)</span>
-              <label className="qe-pk-stock">
-                <input aria-label="Estoque mínimo" inputMode="numeric" onChange={(event) => set({ minStock: event.target.value.replace(/\D/g, "").slice(0, 7) })} placeholder="Qualquer" value={state.minStock} />
-                <span>un.</span>
+            <div className="qe-pk-groups" id="qe-pk-filter-groups">
+              <label className="qe-pk-group">
+                <span>Fornecedor</span>
+                <select onChange={(event) => set({ supplier: event.target.value })} value={state.supplier}>
+                  {SUPPLIERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
               </label>
-              <div className="qe-pk-chips">
-                {STOCK_CHIPS.map(([value, label]) => (
-                  <button aria-pressed={state.minStock === value} className={state.minStock === value ? "on" : undefined} key={label} onClick={() => set({ minStock: value })} type="button">{label}</button>
-                ))}
+
+              <div className="qe-pk-group">
+                <span id="qe-pk-color-label">Grupo de cores</span>
+                <div aria-labelledby="qe-pk-color-label" className="qe-pk-colors" role="radiogroup">
+                  <button aria-checked={!state.colorGroup} className={!state.colorGroup ? "on" : undefined} onClick={() => set({ colorGroup: "" })} role="radio" type="button">
+                    <i className="qe-pk-dot qe-pk-dot-all" />Todos os grupos
+                  </button>
+                  {COLOR_GROUPS.map((group) => {
+                    const count = data?.colorCounts[group.name] ?? 0;
+                    if (!count && state.colorGroup !== group.name) return null;
+                    return (
+                      <button aria-checked={state.colorGroup === group.name} className={state.colorGroup === group.name ? "on" : undefined} key={group.name} onClick={() => set({ colorGroup: group.name })} role="radio" type="button">
+                        <i className={`qe-pk-dot${isLightColorGroup(group.name) ? " light" : ""}`} style={colorGroupSwatch(group.name)} />
+                        {group.name}
+                        <small>{units(count)}</small>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              <label className="qe-pk-group">
+                <span>Categoria</span>
+                <select onChange={(event) => set({ category: event.target.value })} value={state.category}>
+                  <option value="">Todas as categorias</option>
+                  {PRODUCT_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </label>
+
+              <div className="qe-pk-group">
+                <span>Custo por peça</span>
+                <div className="qe-pk-range">
+                  <div className="qe-pk-track"><div style={{ left: `${left}%`, right: `${right}%` }} /></div>
+                  <input aria-label="Custo mínimo" max={COST_MAX} min={0} onChange={(event) => slide("min", Number(event.target.value))} step={1} type="range" value={state.minCost} />
+                  <input aria-label="Custo máximo" max={COST_MAX} min={0} onChange={(event) => slide("max", Number(event.target.value))} step={1} type="range" value={state.maxCost} />
+                </div>
+                <div className="qe-pk-range-fields">
+                  <label><span>R$</span><input aria-label="Custo mínimo em reais" inputMode="numeric" onBlur={(event) => commitCost("min", event.target.value)} onChange={(event) => setCostText({ ...costText, min: event.target.value })} onKeyDown={(event) => event.key === "Enter" && commitCost("min", event.currentTarget.value)} value={costText.min} /></label>
+                  <i>–</i>
+                  <label><span>R$</span><input aria-label="Custo máximo em reais" inputMode="numeric" onBlur={(event) => commitCost("max", event.target.value)} onChange={(event) => setCostText({ ...costText, max: event.target.value })} onKeyDown={(event) => event.key === "Enter" && commitCost("max", event.currentTarget.value)} value={costText.max} /></label>
+                </div>
+                {state.maxCost >= COST_MAX ? <small className="qe-pk-help">{reaisInt(COST_MAX)} = sem limite</small> : null}
+              </div>
+
+              <div className="qe-pk-group">
+                <span>Estoque mínimo (numa cor)</span>
+                <label className="qe-pk-stock">
+                  <input aria-label="Estoque mínimo" inputMode="numeric" onChange={(event) => set({ minStock: event.target.value.replace(/\D/g, "").slice(0, 7) })} placeholder="Qualquer" value={state.minStock} />
+                  <span>un.</span>
+                </label>
+                <div className="qe-pk-chips">
+                  {STOCK_CHIPS.map(([value, label]) => (
+                    <button aria-pressed={state.minStock === value} className={state.minStock === value ? "on" : undefined} key={label} onClick={() => set({ minStock: value })} type="button">{label}</button>
+                  ))}
+                </div>
+              </div>
+              <button className="qe-btn qe-btn-primary qe-pk-apply" onClick={() => setFiltersOpen(false)} type="button">
+                {data ? `Ver ${units(data.total)} ${data.total === 1 ? "produto" : "produtos"}` : "Ver produtos"}
+              </button>
             </div>
           </aside>
 
