@@ -44,7 +44,7 @@ function stubOrdersApi(initial: Array<typeof ORDER>, patchResult?: { status: num
       if (patchResult) return json(patchResult.body, patchResult.status);
       const id = url.split("/").pop();
       const next = JSON.parse(String(init.body)).status as string;
-      orders = orders.map((order) => (order.id === id ? { ...order, status: next } : order));
+      orders = orders.map((order) => (order.id === id ? { ...order, status: next, history: [...order.history, { status: next, at: new Date().toISOString(), by: "Teste" }] } : order));
       return json({ order: orders.find((order) => order.id === id) });
     }
     return json({ error: "NOT_FOUND" }, 404);
@@ -72,7 +72,7 @@ describe("painel: aba Pedidos", () => {
 
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual([
-      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Aguardando retirada", "Aguardando feedback",
+      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Aguardando retirada", "Aguardando feedback", "Finalizado",
     ]);
     const column = screen.getByRole("region", { name: "Aguardando arte" });
     expect(column).toHaveClass("kb-column");
@@ -91,11 +91,12 @@ describe("painel: aba Pedidos", () => {
     expect(within(card).getByText("Sem dados de faturamento")).toBeInTheDocument();
   });
 
-  it("pedido aguardando pagamento, concluído ou cancelado não aparece no quadro de pedidos", async () => {
+  it("pedido aguardando pagamento, cancelado ou finalizado sem data/há mais de 24 h não aparece no quadro de pedidos", async () => {
     stubOrdersApi([
       ORDER,
       { ...ORDER, id: "o2", customerName: "Ainda não pagou", status: "aguardando_pagamento" },
       { ...ORDER, id: "o3", customerName: "Já terminou", status: "concluido" },
+      { ...ORDER, id: "o5", customerName: "Terminou ontem cedo", status: "concluido", history: [{ status: "concluido", at: new Date(Date.now() - 25 * 3_600_000).toISOString(), by: "Bia" }] },
       { ...ORDER, id: "o4", customerName: "Desistiu", status: "cancelado" },
     ]);
     render(<BackofficeBoard canCancel={false} />);
@@ -103,6 +104,7 @@ describe("painel: aba Pedidos", () => {
 
     expect(screen.queryByText("Ainda não pagou")).not.toBeInTheDocument();
     expect(screen.queryByText("Já terminou")).not.toBeInTheDocument();
+    expect(screen.queryByText("Terminou ontem cedo")).not.toBeInTheDocument();
     expect(screen.queryByText("Desistiu")).not.toBeInTheDocument();
   });
 
@@ -142,19 +144,28 @@ describe("painel: aba Pedidos", () => {
     ));
   });
 
-  it("em Aguardando feedback, 'Concluir pedido' (no detalhe) tira o pedido do quadro", async () => {
+  it("finalizado há menos de 24 h fica na coluna Finalizado, com o tempo que falta", async () => {
+    stubOrdersApi([{ ...ORDER, status: "concluido", history: [{ status: "concluido", at: new Date(Date.now() - 2 * 3_600_000).toISOString(), by: "Bia" }] }]);
+    render(<BackofficeBoard canCancel={false} />);
+    const column = await screen.findByRole("region", { name: "Finalizado" });
+    const card = (await within(column).findByText("Cliente Teste")).closest("article") as HTMLElement;
+    expect(within(card).getByText("Sai do quadro em 22 h")).toBeInTheDocument();
+  });
+
+  it("em Aguardando feedback, 'Finalizar pedido' (no detalhe) leva para a coluna Finalizado", async () => {
     const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_feedback" }]);
     const user = userEvent.setup();
     render(<BackofficeBoard canCancel />);
     await user.click(await cardOf("Cliente Teste"));
 
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Concluir pedido/ }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Finalizar pedido/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/backoffice/orders/order-1",
       expect.objectContaining({ body: JSON.stringify({ status: "concluido" }) }),
     ));
-    await waitFor(() => expect(screen.queryByText("Cliente Teste")).not.toBeInTheDocument());
+    const column = screen.getByRole("region", { name: "Finalizado" });
+    expect(await within(column).findByText("Cliente Teste")).toBeInTheDocument();
   });
 
   it("'Ver detalhes' abre uma janela no centro com contato, faturamento, itens, observações e histórico", async () => {

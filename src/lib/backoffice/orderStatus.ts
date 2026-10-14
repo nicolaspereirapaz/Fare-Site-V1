@@ -2,9 +2,10 @@
  * Situações do PEDIDO.
  * - aguardando_pagamento: pedido feito no site, esperando o pagamento (aparece na aba Orçamentos do painel,
  *   coluna "Aguardando pagamento", junto com os orçamentos fechados).
- * - aguardando_arte → criando_arte → aguardando_producao → em_producao → aguardando_retirada → aguardando_feedback:
- *   as 6 colunas da aba Pedidos.
- * - concluido / cancelado: o pedido sai do quadro.
+ * - aguardando_arte → criando_arte → aguardando_producao → em_producao → aguardando_retirada → aguardando_feedback
+ *   → concluido ("Finalizado" no painel): as 7 colunas da aba Pedidos.
+ * - concluido fica 24 h na coluna Finalizado e depois some do quadro (`finishedOrders.ts`).
+ * - cancelado: o pedido sai do quadro.
  */
 export const ORDEM_STATUS_PEDIDO = [
   "aguardando_pagamento",
@@ -28,6 +29,7 @@ export const COLUNAS_QUADRO_PEDIDOS = [
   "em_producao",
   "aguardando_retirada",
   "aguardando_feedback",
+  "concluido",
 ] as const satisfies readonly StatusPedido[];
 
 /** Situações antigas (antes de 2026-10-09) → nova situação equivalente. */
@@ -48,7 +50,8 @@ const TRANSICOES_PERMITIDAS: Record<StatusPedido, StatusPedido[]> = {
   em_producao: ["aguardando_retirada", "aguardando_producao", "cancelado"],
   aguardando_retirada: ["aguardando_feedback", "em_producao", "cancelado"],
   aguardando_feedback: ["concluido", "aguardando_retirada"],
-  concluido: [],
+  // Finalizado por engano: volta enquanto ainda está no quadro.
+  concluido: ["aguardando_feedback"],
   cancelado: [],
 };
 

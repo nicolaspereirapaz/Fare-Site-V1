@@ -22,6 +22,7 @@ import {
   whatsAppReplyUrl,
 } from "@/components/backofficeShared";
 import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
+import { horasNoQuadro, visivelNoQuadroDePedidos } from "@/lib/backoffice/finishedOrders";
 import type { PaymentMethod } from "@/lib/orders/repository";
 import { QuotesBoard } from "@/components/BackofficeQuotesBoard";
 
@@ -52,7 +53,7 @@ export const STATUS_LABELS: Record<StatusPedido, string> = {
   em_producao: "Em produção",
   aguardando_retirada: "Aguardando retirada",
   aguardando_feedback: "Aguardando feedback",
-  concluido: "Concluído",
+  concluido: "Finalizado",
   cancelado: "Cancelado",
 };
 
@@ -65,7 +66,7 @@ export const STATUS_COLORS: Record<StatusPedido, { dot: string; bg: string; fg: 
   em_producao: { dot: "#2c3561", bg: "#e9ebf3", fg: "#1d2447" },
   aguardando_retirada: { dot: "#b7791f", bg: "#fbf0dc", fg: "#7a4f0d" },
   aguardando_feedback: { dot: "#167b55", bg: "#e3f3ea", fg: "#0f5a3e" },
-  concluido: { dot: "#167b55", bg: "#e3f3ea", fg: "#0f5a3e" },
+  concluido: { dot: "#8e9196", bg: "#eeeff1", fg: "#3f4248" },
   cancelado: { dot: "#a12a2a", bg: "#fdecec", fg: "#a12a2a" },
 };
 
@@ -76,7 +77,7 @@ const HISTORY_LABELS: Partial<Record<StatusPedido, string>> = {
   em_producao: "Produção iniciada",
   aguardando_retirada: "Pronto para retirada",
   aguardando_feedback: "Entregue",
-  concluido: "Concluído",
+  concluido: "Finalizado",
   cancelado: "Cancelado",
 };
 
@@ -103,7 +104,7 @@ function historyLabel(entry: OrderHistoryEntry) {
   return HISTORY_LABELS[entry.status] ?? STATUS_LABELS[entry.status];
 }
 
-/** Quadro de pedidos: Aguardando arte | Criando arte | Aguardando produção | Em produção | Aguardando retirada | Aguardando feedback. */
+/** Quadro de pedidos: Aguardando arte | … | Aguardando feedback | Finalizado (fica 24 h e some). */
 function OrdersBoard({ canCancel }: BackofficeBoardProps) {
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +118,12 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     setBusyIds(new Set(busyRef.current));
   };
   const [openId, setOpenId] = useState<string | null>(null);
+  /** Relógio do quadro: a cada minuto recalcula o que sai da coluna Finalizado. */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     const response = await fetch("/api/backoffice/orders", { cache: "no-store" });
@@ -195,7 +202,9 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     title: order.customerCompany || order.customerName,
     total: order.total,
     warning: order.billing ? null : "Sem dados de faturamento",
-    meta: `Pago em ${formatDay(order.history?.find((entry) => entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
+    meta: order.status === "concluido"
+      ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
+      : `Pago em ${formatDay(order.history?.find((entry) => entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
   });
 
   return (
@@ -229,7 +238,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
           }}
         >
           {COLUNAS_QUADRO_PEDIDOS.map((status) => {
-            const column = orders.filter((order) => order.status === status);
+            const column = orders.filter((order) => order.status === status && visivelNoQuadroDePedidos(order, now));
             return (
               <KanbanColumn
                 color={STATUS_COLORS[status].dot}
@@ -264,7 +273,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
                 />
               ) : null}
               {podeTransicionarStatusPedido(open.status, "concluido") ? (
-                <FinalAction busy={busyIds.has(open.id)} label="Concluir pedido" onClick={() => move(open, "concluido")} />
+                <FinalAction busy={busyIds.has(open.id)} label="Finalizar pedido" onClick={() => move(open, "concluido")} />
               ) : null}
               {open.customerPhone ? (
                 <a className="kb-whatsapp" href={whatsAppReplyUrl(open.customerName, open.customerPhone, open.code, "pedido")} rel="noopener noreferrer" target="_blank">

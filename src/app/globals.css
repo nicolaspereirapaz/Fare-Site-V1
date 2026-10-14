@@ -6475,3 +6475,23 @@ aside.checkout-card .checkout-mode > label.active {
 @media (prefers-reduced-motion: reduce) {
   .kb-card.is-new { animation: kb-card-glow 2.8s ease-out both; }
 }
+
+/* Quadro de pedidos com 7 etapas (+ Finalizado): colunas um pouco mais estreitas para caber lado a lado. */
+.kb-board-6 {
+  grid-template-columns: repeat(7, minmax(186px, 250px));
+  gap: 10px;
+}
+.kb-toolbar-6 {
+  max-width: calc(7 * 250px + 6 * 10px);
+}
+
+/* Cartão estreito (7 colunas em telas de ~1440 px): código e valor em linhas separadas, sem vazar da borda. */
+@container (max-width: 210px) {
+  .kb-card-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .kb-value {
+    font-size: 0.95rem;
+  }
+}

@@ -22,10 +22,14 @@ describe("situações do pedido", () => {
     ]);
   });
 
-  it("o quadro de pedidos tem as 6 etapas, da arte à entrega", () => {
+  it("o quadro de pedidos tem as 7 etapas, da arte ao Finalizado", () => {
     expect(COLUNAS_QUADRO_PEDIDOS).toEqual([
-      "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback",
+      "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback", "concluido",
     ]);
+  });
+
+  it("finalizado por engano volta para Aguardando feedback (enquanto está no quadro)", () => {
+    expect(podeTransicionarStatusPedido("concluido", "aguardando_feedback")).toBe(true);
   });
 
   it.each([
@@ -75,10 +79,13 @@ describe("situações do pedido", () => {
     expect(podeTransicionarStatusPedido("aguardando_arte", "aguardando_pagamento")).toBe(false);
   });
 
-  it("concluído e cancelado são finais", () => {
-    const finais: StatusPedido[] = ["concluido", "cancelado"];
+  it("cancelado é final; finalizado só volta para Aguardando feedback", () => {
+    const finais: StatusPedido[] = ["cancelado"];
     for (const estado of finais) {
       for (const alvo of ORDEM_STATUS_PEDIDO) expect(podeTransicionarStatusPedido(estado, alvo)).toBe(false);
+    }
+    for (const alvo of ORDEM_STATUS_PEDIDO) {
+      expect(podeTransicionarStatusPedido("concluido", alvo)).toBe(alvo === "aguardando_feedback");
     }
   });
 });
