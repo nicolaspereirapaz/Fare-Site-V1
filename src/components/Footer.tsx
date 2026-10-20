@@ -37,7 +37,7 @@ export function Footer() {
       </div>
       <div className="container-shell footer-bottom">
         <span>© {new Date().getFullYear()} Fare Foto. Todos os direitos reservados.</span>
-        <span>Catálogo em versão inicial · valores confirmados no atendimento.</span>
+        <span>Catálogo em versão inicial · valores confirmados no atendimento. · <Link href="/privacidade">Política de privacidade</Link></span>
       </div>
     </footer>
   );

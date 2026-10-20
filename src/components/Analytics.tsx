@@ -73,7 +73,7 @@ export function Analytics({ gaId, pixelId }: { gaId: string | null; pixelId: str
       ) : null}
       {choice === null ? (
         <div className="cookie-banner" role="region" aria-label="Aviso de cookies">
-          <p>Usamos cookies do Google e da Meta para entender as visitas e melhorar nossos anúncios. Você escolhe.</p>
+          <p>Usamos cookies do Google e da Meta para entender as visitas e melhorar nossos anúncios. Você escolhe. <a href="/privacidade">Saiba mais</a></p>
           <div>
             <button className="button button-secondary" onClick={() => decide("recusado")} type="button">Recusar</button>
             <button className="button button-primary" onClick={() => decide("aceito")} type="button">Aceitar</button>
@@ -81,5 +81,21 @@ export function Analytics({ gaId, pixelId }: { gaId: string | null; pixelId: str
         </div>
       ) : null}
     </>
+  );
+}
+
+/** "Mudar minha escolha": apaga a escolha e recarrega; o aviso de cookies aparece de novo. */
+export function CookieChoiceReset() {
+  return (
+    <button
+      className="button button-secondary"
+      onClick={() => {
+        try { localStorage.removeItem(CONSENT_KEY); } catch { /* sem armazenamento: nada guardado */ }
+        window.location.reload(); // recarrega para descarregar o Google e a Meta, se estavam aceitos
+      }}
+      type="button"
+    >
+      Mudar minha escolha de cookies
+    </button>
   );
 }

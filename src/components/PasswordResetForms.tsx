@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { buildWhatsAppUrl } from "@/lib/commerce";
+import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 
 const MIN_LENGTH = 8;
 
@@ -45,6 +47,9 @@ export function ForgotPasswordForm() {
 
       <p className="auth-alternate">
         Lembrou a senha? <Link href="/entrar">Entrar</Link>
+      </p>
+      <p className="auth-privacy">
+        Não chegou o e-mail? <a href={buildWhatsAppUrl(FARE_FOTO_WHATSAPP, "Olá! Esqueci a senha da minha conta na Fare Foto.")} rel="noreferrer" target="_blank">Fale com a gente pelo WhatsApp</a>.
       </p>
     </div>
   );

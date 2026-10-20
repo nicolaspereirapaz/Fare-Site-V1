@@ -6648,3 +6648,12 @@ aside.checkout-card .checkout-mode > label.active {
 .product-specs dt::after { content: ":"; }
 .product-specs dd { margin: 0; color: var(--ink); }
 @media (max-width: 380px) { .product-specs { grid-template-columns: 1fr; } }
+
+/* Política de privacidade: texto corrido e legível */
+.legal-page { max-width: 760px; padding-block: 40px 64px; line-height: 1.6; }
+.legal-page h1 { margin: 6px 0 4px; color: var(--navy); }
+.legal-page h2 { margin: 28px 0 8px; font-size: 1.2rem; color: var(--navy); }
+.legal-page ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.legal-updated { margin: 0 0 18px; color: var(--muted); font-size: 0.9rem; }
+.auth-privacy { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.footer-bottom a, .cookie-banner a { color: inherit; text-decoration: underline; }

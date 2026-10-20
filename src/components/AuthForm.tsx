@@ -76,7 +76,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         ) : null}
         <label><span>E-mail</span><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label><span>Senha</span><input autoComplete={signingUp ? "new-password" : "current-password"} minLength={8} required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        {signingUp ? null : (
+        {signingUp ? (
+          <p className="auth-privacy">Seus dados são usados só para os seus pedidos. Veja a <Link href="/privacidade">política de privacidade</Link>.</p>
+        ) : (
           <Link className="auth-forgot" href="/esqueci-senha">Esqueci minha senha</Link>
         )}
         {error ? <p className="auth-error" role="alert">{error}</p> : null}
