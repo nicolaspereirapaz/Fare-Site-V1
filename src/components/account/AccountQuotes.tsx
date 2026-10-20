@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarDays, FileText, MessageCircle } from "lucide-react";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import { perUnitText, quantityText } from "@/components/staff/photoItems";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 import { QUOTE_STATUS_LABELS, quoteCode, type QuoteStatus } from "@/lib/quotes/quoteCode";
 
@@ -68,8 +69,8 @@ export function AccountQuotes({ quotes }: { quotes: AccountQuote[] }) {
                     {item.color ? <small> · {item.color}</small> : null}
                     {item.gravacoes?.length ? <small className="account-quote-engraving">Gravação: {item.gravacoes.join(" + ")}</small> : null}
                   </span>
-                  <span>{item.quantity} un.</span>
-                  <span>{item.unitPrice === null ? "sob consulta" : `${brl(item.unitPrice)}/un.`}</span>
+                  <span>{quantityText(item.productName, item.quantity)}</span>
+                  <span>{item.unitPrice === null ? "sob consulta" : `${brl(item.unitPrice)}${perUnitText(item.productName)}`}</span>
                 </li>
               ))}
             </ul>

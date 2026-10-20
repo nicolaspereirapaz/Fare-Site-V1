@@ -5,7 +5,8 @@ import {
   catalogProductCount, migrateCatalogDatabase, persistInitialCatalog, readCatalogProducts,
   readSyncState, recordSyncAttempt, updateCatalogStock,
 } from "@/lib/xbzCatalogRepository";
-import { shouldRefreshStock, stockSyncInterval, XBZ_SYNC_POLICY } from "@/lib/xbzCatalogService";
+import { catalogVersion, shouldRefreshStock, stockSyncInterval, XBZ_SYNC_POLICY } from "@/lib/xbzCatalogService";
+import { groupAvailableProducts } from "@/lib/xbz";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
@@ -22,6 +23,19 @@ describe("catálogo XBZ local", () => {
   let database: DatabaseSync;
   beforeEach(() => { database = new DatabaseSync(":memory:"); migrateCatalogDatabase(database); });
   afterEach(() => database.close());
+
+  it("catálogo da memória: versão só muda quando o banco grava; agrupamento guardado devolve cópia", () => {
+    const before = catalogVersion(database);
+    readCatalogProducts(database);
+    expect(catalogVersion(database)).toBe(before);
+    persistInitialCatalog(database, [product()], "2026-09-28T12:00:00.000Z");
+    expect(catalogVersion(database)).not.toBe(before);
+
+    const products = readCatalogProducts(database);
+    const first = groupAvailableProducts(products);
+    first.length = 0; // quem mexe na lista não estraga a guardada
+    expect(groupAvailableProducts(products)).toHaveLength(1);
+  });
 
   it("persiste todos os dados somente na primeira carga", () => {
     persistInitialCatalog(database, [product()], "2026-09-28T12:00:00.000Z");

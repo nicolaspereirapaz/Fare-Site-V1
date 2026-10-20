@@ -1,0 +1,191 @@
+/* home que junta fotos (pessoas e famílias) e brindes (empresas), e o menu "Fotos". */
+
+/* ---------- Menu "Fotos" no cabeçalho ---------- */
+.fotos-panel { padding-bottom: 14px; }
+.fotos-menu-grid { display: grid; grid-template-columns: repeat(4, 160px); gap: 10px; margin: 0; padding: 0 2px; list-style: none; }
+.fotos-menu-card { display: grid; gap: 2px; border-radius: 10px; padding: 6px 6px 8px; color: var(--navy-dark); transition: background 150ms ease; }
+.fotos-menu-card:hover, .fotos-menu-card:focus-visible { background: var(--cream); }
+.fotos-menu-photo { position: relative; display: block; overflow: hidden; margin-bottom: 6px; aspect-ratio: 1; border-radius: 8px; background: #f3f3f3; }
+.fotos-menu-photo img { object-fit: cover; transition: transform 300ms ease; }
+.fotos-menu-card:hover .fotos-menu-photo img { transform: scale(1.05); }
+.fotos-menu-card strong { font-size: 0.92rem; }
+.fotos-menu-card small { color: var(--muted); font-size: 0.8rem; }
+.fotos-menu-card .fotos-menu-note { display: inline-flex; align-items: center; gap: 4px; color: var(--success); font-weight: 600; }
+.fotos-menu-soon { margin: 10px 8px 0; border-top: 1px solid var(--line); padding-top: 10px; color: var(--muted); font-size: 0.8rem; }
+
+/* ---------- Topo: duas portas ---------- */
+.home-doors { padding: 40px 0 56px; background: linear-gradient(180deg, #fff 0%, var(--cream) 100%); }
+.home-doors-head { margin-bottom: 26px; text-align: center; }
+.home-doors-head h1 { margin: 10px 0 0; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: clamp(2.1rem, 4.2vw, 3.6rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; }
+.home-doors-head p { max-width: 60ch; margin: 12px auto 0; color: var(--muted); font-size: 1.08rem; line-height: 1.6; }
+.home-doors-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.home-door {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-sm);
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+.home-door:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.home-door-fotos { background: linear-gradient(160deg, #fff7f1 0%, #fdebe0 100%); }
+.home-door-grafica { background: linear-gradient(160deg, #fbf8ee 0%, #f3ead2 100%); }
+/* Brindes: azul-marinho, como o banner antigo do holofote. */
+.home-door-brindes { border-color: transparent; background: radial-gradient(120% 90% at 80% 100%, #3b4785 0%, var(--navy) 45%, var(--navy-dark) 100%); }
+.home-door.home-door-brindes h2 { color: #fff; }
+.home-door.home-door-brindes p { color: rgba(255, 255, 255, .78); }
+.home-door.home-door-brindes .text-link { color: #fff; }
+.home-door-copy { display: grid; min-width: 0; align-content: start; justify-items: start; gap: 12px; padding: 28px 28px 6px; }
+.home-door-copy > h2, .home-door-copy > p { justify-self: stretch; }
+.home-door-tag { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: #fff; padding: 5px 12px; color: var(--orange); font-size: 0.8rem; font-weight: 700; box-shadow: 0 2px 8px rgba(36, 38, 50, .06); }
+.home-door-grafica .home-door-tag { color: #8a6a12; }
+.home-door-brindes .home-door-tag { background: rgba(255, 255, 255, .12); color: #fff; box-shadow: none; }
+.home-door h2 { margin: 0; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: clamp(1.55rem, 2.1vw, 2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; }
+.home-door p { margin: 0; color: var(--muted); font-size: 0.98rem; line-height: 1.55; }
+.home-door-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.home-door-chips li { border: 1px solid rgba(44, 53, 97, .12); border-radius: 999px; background: rgba(255, 255, 255, .7); padding: 4px 11px; color: var(--navy-dark); font-size: 0.82rem; font-weight: 600; }
+.home-door-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 4px; }
+.home-door-media { position: relative; margin-top: 18px; aspect-ratio: 4 / 3; }
+/* Fotos: faixa de ponta a ponta no mesmo cinza do fundo da foto de produto. */
+.home-door-media-fotos { background: #f3f3f3; }
+.home-door-media-fotos img { object-fit: cover; object-position: 50% 52%; }
+/* Holofote das portas: brindes num círculo de luz com anel girando; impressos num quadrado arredondado */
+.home-door-media-brindes { display: grid; place-items: center; }
+.ds-stage { position: relative; display: grid; width: 100%; height: 100%; place-items: center; }
+.ds-ring { position: absolute; top: 50%; left: 50%; width: min(80%, 300px); aspect-ratio: 1; overflow: visible; translate: -50% -54%; animation: ds-spin 26s linear infinite; }
+.ds-ring text { fill: rgba(255, 255, 255, .5); font: 600 17px var(--font-dm-sans), sans-serif; letter-spacing: .3em; text-transform: uppercase; }
+.ds-disc { position: relative; display: block; width: min(60%, 230px); aspect-ratio: 1; overflow: hidden; margin-top: -8%; border-radius: 50%; background: #fff; /* branco liso: na troca a foto (fundo branco) não vira um quadrado */ box-shadow: 0 34px 70px -24px rgba(0, 0, 0, .65), 0 0 0 10px rgba(255, 255, 255, .05), 0 0 0 20px rgba(255, 255, 255, .03); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.ds-disc:hover { transform: scale(1.03); }
+.ds-disc:focus-visible { outline: 3px solid var(--orange); outline-offset: 6px; }
+.ds-photo { position: absolute; inset: 16%; transition: opacity .6s cubic-bezier(.2, .8, .2, 1), transform .6s cubic-bezier(.2, .8, .2, 1), filter .6s; }
+.ds-photo img { object-fit: contain; mix-blend-mode: multiply; }
+.ds-photo.out { opacity: 0; transform: scale(.86) rotate(-8deg); filter: blur(4px); }
+.ds-photo.in { opacity: 1; transform: none; filter: none; }
+.ds-label { position: absolute; bottom: 7%; left: 50%; display: flex; align-items: center; gap: 8px; border-radius: 999px; background: #fff; padding: 7px 14px; color: var(--navy-dark); font-size: .82rem; font-weight: 700; white-space: nowrap; translate: -50% 0; box-shadow: 0 12px 26px -12px rgba(0, 0, 0, .5); }
+.ds-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); }
+.ds-badge { position: absolute; z-index: 2; top: 2%; right: 9%; display: grid; width: 78px; height: 78px; place-content: center; border-radius: 50%; background: #f65c2d; color: #fff; font-family: var(--font-outfit), sans-serif; line-height: 1; text-align: center; box-shadow: 0 16px 32px -12px rgba(246, 92, 45, .7); animation: ds-float 6s ease-in-out infinite; }
+.ds-badge b { font-size: 1.15rem; font-weight: 600; }
+.ds-badge small { font-size: .66rem; opacity: .9; }
+/* Impressos: quadrado de cantos arredondados, com dois cartões atrás que se ajeitam a cada troca */
+.home-door-media-grafica { display: grid; place-items: center; }
+.ds-square .ds-disc { width: min(58%, 230px); margin-top: 0; translate: 0 -7%; border: 6px solid #fff; border-radius: 28px; background: #ededed; box-shadow: 0 30px 60px -26px rgba(70, 52, 10, .5); }
+.ds-square .ds-photo { inset: 0; }
+.ds-square .ds-photo img { object-fit: cover; mix-blend-mode: normal; }
+.ds-square .ds-photo.out { transform: scale(.9) rotate(4deg); }
+.ds-deck { position: absolute; top: 50%; left: 50%; width: min(58%, 230px); aspect-ratio: 1; border-radius: 28px; background: #fff; box-shadow: 0 18px 40px -22px rgba(70, 52, 10, .45); }
+.ds-deck-1 { background: #efdcae; translate: -50% -57%; rotate: -9deg; animation: ds-deal-1 .7s cubic-bezier(.2, .8, .2, 1); }
+.ds-deck-2 { background: #fff; translate: -50% -57%; rotate: 7deg; animation: ds-deal-2 .7s cubic-bezier(.2, .8, .2, 1); }
+.ds-square .ds-label { bottom: 6%; }
+@keyframes ds-deal-1 { from { rotate: -2deg; } }
+@keyframes ds-deal-2 { from { rotate: 1deg; } }
+@keyframes ds-spin { to { rotate: 360deg; } }
+@keyframes ds-float { 50% { translate: 0 -8px; } }
+
+
+/* ---------- Para você ---------- */
+.home-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .8fr); gap: 18px; }
+.home-photo-card { display: grid; align-content: start; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; color: var(--ink); transition: transform 220ms ease, box-shadow 220ms ease; }
+.home-photo-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-sm); }
+.home-photo-media { position: relative; display: block; aspect-ratio: 1; background: #f3f3f3; }
+.home-photo-media img { object-fit: cover; transition: transform 360ms ease; }
+.home-photo-card:hover .home-photo-media img { transform: scale(1.04); }
+.home-photo-size { position: absolute; left: 12px; top: 12px; border-radius: 999px; background: var(--navy); padding: 4px 10px; color: #fff; font-size: 0.78rem; font-weight: 700; }
+.home-photo-copy { display: grid; gap: 3px; padding: 14px 16px 16px; }
+.home-photo-copy strong { color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 1.15rem; }
+.home-photo-copy small { color: var(--muted); font-size: 0.88rem; }
+.home-photo-copy .home-photo-note { display: inline-flex; align-items: center; gap: 5px; color: var(--success); font-weight: 600; }
+.home-photo-soon { place-content: center; justify-items: center; gap: 8px; padding: 24px; border-style: dashed; background: var(--cream); color: var(--muted); text-align: center; }
+.home-photo-soon:hover { transform: none; box-shadow: none; }
+.home-photo-soon svg { color: var(--orange); }
+.home-photo-soon strong { color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 1.1rem; }
+.home-photo-soon small { font-size: 0.88rem; line-height: 1.5; }
+
+/* ---------- Ocasiões ---------- */
+.home-ocasioes { background: var(--cream); }
+.home-occasion-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.home-occasion { position: relative; display: grid; align-content: start; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 22px 18px 18px; }
+.home-occasion.now { border-color: var(--orange); box-shadow: 0 0 0 1px var(--orange), var(--shadow-sm); }
+.home-occasion-now { position: absolute; top: -11px; right: 16px; border-radius: 999px; background: var(--orange); padding: 3px 10px; color: #fff; font-size: 0.74rem; font-weight: 700; letter-spacing: .02em; }
+.home-occasion-icon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 12px; background: var(--orange-soft); color: var(--orange); }
+.home-occasion h3 { margin: 4px 0 4px; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 1.2rem; }
+.home-occasion-link { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border-radius: 12px; background: var(--cream); padding: 10px 12px; color: var(--ink); font-size: 0.88rem; line-height: 1.35; transition: background 150ms ease; }
+.home-occasion-link small { display: block; color: var(--orange); font-size: 0.72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.home-occasion-link > svg:first-child { color: var(--navy); }
+.home-occasion-link > svg:last-child { color: var(--muted); transition: transform 150ms ease; }
+.home-occasion-link:hover { background: var(--navy-soft); }
+.home-occasion-link:hover > svg:last-child { transform: translateX(3px); color: var(--navy); }
+
+/* ---------- Como funciona: abas ---------- */
+.home-how-tabs { display: flex; justify-content: center; gap: 6px; width: max-content; margin: -14px auto 34px; border-radius: 999px; background: var(--navy-soft); padding: 5px; }
+.home-how-tabs button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 999px; background: transparent; padding: 9px 20px; color: var(--navy); font: inherit; font-weight: 700; cursor: pointer; }
+.home-how-tabs button.active { background: #fff; box-shadow: 0 2px 8px rgba(36, 38, 50, .1); }
+
+@media (max-width: 1100px) {
+  .home-doors-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-door-brindes { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; grid-template-rows: none; }
+  .home-door-brindes .home-door-media { margin-top: 0; }
+  .home-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-occasion-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .home-doors { padding: 24px 0 36px; }
+  .home-doors-head { margin-bottom: 18px; }
+  .home-doors-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .home-door-brindes { grid-template-columns: none; }
+  .home-door-media { aspect-ratio: 16 / 10; }
+  .home-door-brindes .home-door-media { aspect-ratio: 1; margin-top: 14px; }
+  .home-door-copy { padding: 22px 20px 4px; gap: 10px; }
+}
+@media (max-width: 640px) {
+  .home-photo-grid { gap: 12px; }
+  .home-photo-copy { padding: 10px 12px 12px; }
+  .home-photo-copy strong { font-size: 1rem; }
+  .home-photo-copy small { font-size: 0.8rem; }
+  .home-occasion-grid { grid-template-columns: minmax(0, 1fr); }
+  .home-how-tabs { margin-top: -10px; max-width: 100%; }
+  .home-how-tabs button { padding: 9px 12px; } /* cabe em celular de 360 px */
+}
+@media (prefers-reduced-motion: reduce) {
+  /* com "reduzir animações": os itens continuam trocando, só esmaecendo, sem giro, desfoque nem anel girando */
+  .ds-ring, .ds-badge, .ds-deck { animation: none; }
+  .ds-photo { transition: opacity .6s ease; }
+  .ds-photo.out { transform: none; filter: none; }
+  .home-door, .home-photo-card, .home-photo-media img, .fotos-menu-photo img { transition: none; }
+  .home-door:hover, .home-photo-card:hover { transform: none; }
+}
+
+/* ---------- Gráfica: home e página ---------- */
+.home-grafica-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.home-grafica-media { aspect-ratio: 1; background: #ededed; }
+.home-grafica-more { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+.home-grafica-more a { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; background: #fff; padding: 9px 16px; color: var(--navy); font-size: .92rem; font-weight: 600; transition: border-color 150ms ease, background 150ms ease; }
+.home-grafica-more a svg { color: var(--orange); }
+.home-grafica-more a:hover { border-color: var(--navy); background: var(--cream); }
+.grafica-list-grid { grid-template-columns: repeat(2, auto); }
+
+.grafica-hero { padding: 26px 0 56px; background: linear-gradient(180deg, #fff 0%, #fbf8ee 100%); }
+.grafica-hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; gap: 48px; margin-top: 28px; }
+.grafica-hero h1 { margin: 12px 0 0; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: clamp(2.2rem, 4.4vw, 3.8rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; }
+.grafica-hero-grid > div > p { max-width: 54ch; margin: 16px 0 22px; color: var(--muted); font-size: 1.08rem; line-height: 1.65; }
+.grafica-hero-points { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.grafica-hero-points li { display: flex; gap: 14px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 16px 18px; }
+.grafica-hero-points svg { flex: none; margin-top: 2px; color: var(--orange); }
+.grafica-hero-points strong { display: block; color: var(--navy); }
+.grafica-hero-points span { color: var(--muted); font-size: .94rem; line-height: 1.5; }
+.grafica-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 26px 0 0; border-radius: var(--radius-md); background: var(--navy-soft); padding: 16px 20px; color: var(--navy-dark); }
+.grafica-note a { color: var(--orange); font-weight: 700; text-decoration: underline; }
+
+/* menu com 6 itens: um pouco menos de espaço entre eles */
+.main-nav { gap: 24px; }
+
+@media (max-width: 1100px) {
+  .home-grafica-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .grafica-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .main-nav { gap: 0; }
+}
+
+/* Página da gráfica: cards iguais aos dos brindes; só ajusta a âncora do menu e o destaque ao chegar por ela */
+.grafica-product-card { scroll-margin-top: 110px; }
+.grafica-product-card:target { box-shadow: 0 0 0 2px var(--orange); }
+/* as fotos da gráfica já têm fundo neutro: ocupam o quadro todo, sem a moldura clara */
+.grafica-product-card .supplier-photo { background: #ededed; }
+.grafica-product-card .supplier-photo img { object-fit: cover; padding: 0; mix-blend-mode: normal; }

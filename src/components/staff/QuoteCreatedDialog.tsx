@@ -2,14 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import { CheckCircle2, Download, ExternalLink, LayoutGrid } from "lucide-react";
-import { PdfPreview } from "@/components/staff/PdfPreview";
 
 /**
- * Logo depois de "Criar orçamento": prévia do PDF da proposta (o mesmo que vai ao cliente),
- * com Baixar PDF. Fechar leva ao quadro, onde o cartão novo aparece em destaque em "Em negociação".
+ * Logo depois de salvar (criar ou editar orçamento, criar pedido): prévia do HTML que vai ao cliente,
+ * com Baixar HTML. Fechar leva ao quadro, onde o cartão aparece em destaque.
  */
-export function QuoteCreatedDialog({ quoteId, code, onClose }: { quoteId: string; code: string; onClose: () => void }) {
-  const base = `/api/backoffice/quotes/${quoteId}/proposta`;
+export function QuoteCreatedDialog({ quoteId, code, onClose, kind = "quote", verb = "criado" }: {
+  /** Id do orçamento ou do pedido. */
+  quoteId: string; code: string; onClose: () => void; kind?: "quote" | "order"; verb?: "criado" | "salvo";
+}) {
+  const base = kind === "order" ? `/api/backoffice/orders/${quoteId}/documento` : `/api/backoffice/quotes/${quoteId}/proposta`;
+  const label = kind === "order" ? "Pedido" : "Orçamento";
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -30,18 +33,18 @@ export function QuoteCreatedDialog({ quoteId, code, onClose }: { quoteId: string
         <header className="qe-modal-head">
           <h2 id="qe-done-title">
             <CheckCircle2 aria-hidden="true" className="qe-done-ok" size={20} />
-            Orçamento {code} criado
+            {label} {code} {verb}
           </h2>
         </header>
         <div className="qe-done-body">
-          <PdfPreview label={`Prévia da proposta ${code}`} url={`${base}?ver=1`} />
+          <iframe title={`Prévia ${kind === "order" ? "do pedido" : "da proposta"} ${code}`} src={`${base}?ver=1`} sandbox="allow-scripts" style={{ width: "100%", height: "100%", border: 0, background: "white", display: "block" }} />
         </div>
         <footer className="qe-modal-foot qe-done-foot">
           <a className="qe-btn qe-btn-secondary" href={`${base}?ver=1`} rel="noopener noreferrer" target="_blank">
             <ExternalLink aria-hidden="true" size={15} /> Abrir em outra aba
           </a>
           <a className="qe-btn qe-btn-secondary" href={base}>
-            <Download aria-hidden="true" size={15} /> Baixar PDF
+            <Download aria-hidden="true" size={15} /> Baixar HTML
           </a>
           <button className="qe-btn qe-btn-primary" onClick={onClose} ref={closeRef} type="button">
             <LayoutGrid aria-hidden="true" size={15} /> Ir para o quadro

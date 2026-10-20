@@ -1,0 +1,47 @@
+/* galeria da revelação. As fotos já vêm com fundo neutro de e-commerce, então ocupam o quadro todo. */
+.photo-gallery .product-main-image { aspect-ratio: 1; background: #f3f3f3; touch-action: pan-y; }
+.photo-gallery .product-main-image img { object-fit: cover; padding: 0; animation: pg-fade .25s ease-out; }
+.photo-gallery .product-thumbnail-button { background: #f3f3f3; }
+.photo-gallery .product-thumbnail-button img { object-fit: cover; padding: 0; }
+
+.pg-arrow {
+  position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 40px; height: 40px;
+  margin-top: -20px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: var(--navy);
+  box-shadow: 0 2px 10px rgba(36, 38, 50, .16); cursor: pointer; opacity: 0; transition: opacity .2s;
+}
+.pg-prev { left: 12px; }
+.pg-next { right: 12px; }
+.photo-gallery .product-main-image:hover .pg-arrow, .pg-arrow:focus-visible { opacity: 1; }
+.pg-arrow:focus-visible { outline: 2px solid var(--orange, #d4532a); outline-offset: 2px; }
+
+/* etiqueta com o tamanho, apontando para a borda de cima de cada foto do exemplo */
+.pg-tag {
+  position: absolute; z-index: 1; transform: translate(-50%, calc(-100% - 8px));
+  padding: 4px 10px; border-radius: 999px; background: var(--navy); color: #fff;
+  font-size: 0.8125rem; font-weight: 700; line-height: 1.3; white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(36, 38, 50, .22); pointer-events: none;
+  animation: pg-tag-in .3s ease-out both;
+}
+.pg-tag::after {
+  content: ""; position: absolute; left: 50%; top: 100%; margin-left: -5px;
+  border: 5px solid transparent; border-top-color: var(--navy);
+}
+@keyframes pg-tag-in { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+
+/* bolinhas: só no celular, onde as miniaturas ficam embaixo */
+.pg-dots { display: none; }
+
+@keyframes pg-fade { from { opacity: .4; } to { opacity: 1; } }
+
+@media (max-width: 700px) {
+  /* no celular as setas descem para o rodapé, ao lado das bolinhas, e não cobrem as etiquetas */
+  .pg-arrow { top: auto; bottom: 6px; width: 32px; height: 32px; margin-top: 0; opacity: .9; }
+  .pg-tag { padding: 3px 8px; font-size: 0.6875rem; transform: translate(-50%, calc(-100% - 6px)); }
+  .pg-tag::after { margin-left: -4px; border-width: 4px; }
+  .pg-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 6px; }
+  .pg-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(44, 53, 97, .25); }
+  .pg-dots i.active { background: var(--navy); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-gallery .product-main-image img, .pg-tag { animation: none; }
+}

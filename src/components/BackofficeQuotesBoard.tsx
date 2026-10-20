@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { MessageCircle, PencilLine, RefreshCw, ShoppingCart, TriangleAlert, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CloseQuoteDialog } from "@/components/staff/CloseQuoteDialog";
+import { Camera, RefreshCw, ShoppingCart, TriangleAlert } from "lucide-react";
 import {
-  DetailsDialog,
-  DetailsSections,
-  FinalAction,
   formatDay,
   itemsSummary,
   KanbanBoard,
@@ -14,15 +12,11 @@ import {
   KanbanCardBody,
   KanbanColumn,
   messageFor,
-  StageSelect,
-  whatsAppReplyUrl,
 } from "@/components/backofficeShared";
-import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
-import { PAYMENT_LABELS, type BackofficeOrder } from "@/components/BackofficeBoard";
+import { movePath } from "@/lib/backoffice/boardMoves";
+import { type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
-import { ProposalActions } from "@/components/staff/ProposalActions";
-import { OrderPaymentPanel } from "@/components/staff/OrderPaymentPanel";
-import { canTransitionQuote, NO_CUSTOMER_NAME, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from "@/lib/quotes/quoteCode";
+import { canTransitionQuote, NO_CUSTOMER_NAME, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
 
@@ -36,7 +30,6 @@ const isColumn = (status: string): status is Column => (QUOTE_BOARD_COLUMNS as r
 /** Pedido feito no site (esperando pagamento) mora na última coluna e não se arrasta. */
 const ORDER_PREFIX = "pedido:";
 
-type Selected = { kind: "quote"; id: string } | { kind: "order"; id: string } | null;
 
 
 /**
@@ -44,7 +37,7 @@ type Selected = { kind: "quote"; id: string } | { kind: "order"; id: string } | 
  * Pedidos feitos direto no site (sem orçamento) também entram em "Aguardando pagamento".
  * Pagamento recebido → vira pedido em "Aguardando arte" (aba Pedidos) e sai daqui.
  */
-export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: { canCancel?: boolean; freshQuoteId?: string; onFreshShown?: () => void }) {
+export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolean; freshQuoteId?: string; onFreshShown?: () => void }) {
   const [quotes, setQuotes] = useState<BackofficeQuoteSummary[]>([]);
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +50,8 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
     else busyRef.current.delete(id);
     setBusyIds(new Set(busyRef.current));
   };
-  const [selected, setSelected] = useState<Selected>(null);
+  const router = useRouter();
+  const [closingQuote, setClosingQuote] = useState<BackofficeQuoteSummary | null>(null);
   /** Orçamento que acabou de ser criado no editor (?novo=<id>): aparece em destaque por alguns segundos. */
   const [freshId, setFreshId] = useState<string | null>(freshQuoteId ?? null);
 
@@ -93,7 +87,7 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
     };
   }, [load]);
 
-  const freshLoaded = Boolean(freshId && quotes.some((quote) => quote.id === freshId));
+  const freshLoaded = Boolean(freshId && (quotes.some((quote) => quote.id === freshId) || orders.some((order) => order.id === freshId)));
   useEffect(() => {
     if (!freshLoaded) return;
     onFreshShown?.();
@@ -119,7 +113,6 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(messageFor(payload.error));
       }
-      setSelected(null);
     } catch (caught) {
       changeError = caught instanceof Error ? caught.message : "Erro inesperado.";
     }
@@ -134,11 +127,6 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
     setBusy(id, false);
   }
 
-  function changeQuote(quote: BackofficeQuoteSummary, next: QuoteStatus) {
-    if (next === "encerrado" && !window.confirm(`Encerrar o orçamento #${quote.code} de ${quote.customerName}?`)) return;
-    void send(quote.id, `/api/backoffice/quotes/${quote.id}`, [next]);
-  }
-
   /** Até uma coluna do quadro (arrastar ou "Etapa"): passa por cada etapa no caminho. */
   function moveQuote(quote: BackofficeQuoteSummary & { status: Column }, column: Column) {
     const path = movePath(QUOTE_BOARD_COLUMNS, quote.status, column, canTransitionQuote);
@@ -148,25 +136,10 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
     void send(quote.id, `/api/backoffice/quotes/${quote.id}`, path);
   }
 
-  function changeOrder(order: BackofficeOrder, next: "aguardando_arte" | "cancelado") {
-    if (next === "cancelado" && !window.confirm(`Cancelar o pedido #${order.code} de ${order.customerName}? Isso não pode ser desfeito.`)) return;
-    void send(order.id, `/api/backoffice/orders/${order.id}`, [next]);
-  }
-
-  const closeDialog = useCallback(() => {
-    setSelected(null);
-  }, []);
-  const reloadBoard = useCallback(async () => {
-    const payload = await load();
-    setQuotes(payload.quotes);
-    setOrders(payload.orders);
-  }, [load]);
   const boardQuotes = quotes.filter((quote): quote is BackofficeQuoteSummary & { status: Column } =>
     (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status),
   );
   const siteOrders = orders.filter((order) => order.status === "aguardando_pagamento");
-  const openQuote = selected?.kind === "quote" ? boardQuotes.find((quote) => quote.id === selected.id) ?? null : null;
-  const openOrder = selected?.kind === "order" ? siteOrders.find((order) => order.id === selected.id) ?? null : null;
   const quoteCard = (quote: BackofficeQuoteSummary) => ({
     code: quote.code,
     summary: itemsSummary(quote.items),
@@ -179,10 +152,13 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
   const orderCard = (order: BackofficeOrder) => ({
     code: order.code,
     summary: itemsSummary(order.items),
-    tag: <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
+    tag: order.photos
+      ? <span className="kb-tag kb-tag-photos"><Camera aria-hidden="true" size={12} /> Fotos do site</span>
+      : <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
     title: order.customerCompany || order.customerName,
     total: order.total,
-    warning: order.billing ? null : "Sem dados de faturamento",
+    // Fotos são de pessoa física: não pedem dados de faturamento.
+    warning: order.billing || order.photos ? null : "Sem dados de faturamento",
     meta: `Pedido ${formatDay(order.createdAt)}`,
     finance: order.finance,
   });
@@ -235,10 +211,10 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
                 total={[...columnQuotes, ...columnOrders].reduce((sum, entry) => sum + (entry.total ?? 0), 0)}
               >
                 {columnQuotes.map((quote) => (
-                  <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} fresh={quote.id === freshId} id={quote.id} key={quote.id} onDetails={() => setSelected({ kind: "quote", id: quote.id })} />
+                  <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} fresh={quote.id === freshId} id={quote.id} key={quote.id} onDetails={() => router.push(`/equipe/orcamentos/${quote.id}/consulta`)} action={quote.status === "aguardando_pagamento" ? <button className="kb-close-quote" type="button" disabled={busyIds.has(quote.id)} onClick={() => setClosingQuote(quote)}>Fechar Orçamento</button> : null} />
                 ))}
                 {columnOrders.map((order) => (
-                  <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} onDetails={() => setSelected({ kind: "order", id: order.id })} />
+                  <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} fresh={order.id === freshId} onDetails={() => router.push(`/equipe/pedidos/${order.id}`)} />
                 ))}
               </KanbanColumn>
             );
@@ -246,94 +222,7 @@ export function QuotesBoard({ canCancel = false, freshQuoteId, onFreshShown }: {
         </KanbanBoard>
       )}
 
-      {openQuote ? (
-        <DetailsDialog
-          code={openQuote.code}
-          footer={
-            <>
-              <StageSelect
-                busy={busyIds.has(openQuote.id)}
-                labels={QUOTE_STATUS_LABELS}
-                onChange={(next) => isColumn(next) && moveQuote(openQuote, next)}
-                options={reachableColumns(QUOTE_BOARD_COLUMNS, openQuote.status, canTransitionQuote)}
-                value={openQuote.status}
-              />
-              {openQuote.status === "aguardando_pagamento" ? (
-                <FinalAction busy={busyIds.has(openQuote.id)} label="Pagamento recebido" onClick={() => changeQuote(openQuote, "virou_pedido")} />
-              ) : null}
-              <Link className="kb-edit-quote" href={`/equipe/orcamentos/${openQuote.id}`}>
-                <PencilLine aria-hidden="true" size={15} /> Editar itens e gravações
-              </Link>
-              <button className="kb-danger" disabled={busyIds.has(openQuote.id)} onClick={() => changeQuote(openQuote, "encerrado")} type="button">
-                <XCircle aria-hidden="true" size={15} /> Encerrar orçamento
-              </button>
-            </>
-          }
-          onClose={closeDialog}
-          status={QUOTE_STATUS_LABELS[openQuote.status]}
-          statusColor={COLUMN_COLORS[openQuote.status]}
-          subtitle={`orçamento de ${formatDay(openQuote.createdAt)}${openQuote.createdBy ? ` · feito por ${openQuote.createdBy}` : " · pedido pelo site"}`}
-          title={openQuote.customerName}
-        >
-          <ProposalActions
-            blocked={openQuote.items.some((item) => item.unitPrice === null) ? "Há item sem preço. Clique em “Editar itens e gravações” e salve para gerar a proposta." : null}
-            onSent={() => { void reloadBoard().catch(() => undefined); }}
-            quoteId={openQuote.id}
-            sentAt={openQuote.proposalSentAt}
-          />
-          <DetailsSections
-            billing={openQuote.billing}
-            customerCompany={openQuote.customerCompany}
-            customerName={openQuote.customerName}
-            customerPhone={openQuote.customerPhone}
-            items={openQuote.items}
-            internalNotes={openQuote.internalNotes}
-            notes={openQuote.notes}
-            total={openQuote.total}
-            discount={openQuote.discount}
-          />
-        </DetailsDialog>
-      ) : null}
-
-      {openOrder ? (
-        <DetailsDialog
-          code={openOrder.code}
-          footer={
-            <>
-              {!openOrder.finance ? <FinalAction busy={busyIds.has(openOrder.id)} label="Pagamento recebido" onClick={() => changeOrder(openOrder, "aguardando_arte")} /> : null}
-              {openOrder.customerPhone ? (
-                <a className="kb-whatsapp" href={whatsAppReplyUrl(openOrder.customerName, openOrder.customerPhone, openOrder.code, "pedido")} rel="noopener noreferrer" target="_blank">
-                  <MessageCircle aria-hidden="true" size={15} /> WhatsApp
-                </a>
-              ) : null}
-              {canCancel ? (
-                <button className="kb-danger" disabled={busyIds.has(openOrder.id)} onClick={() => changeOrder(openOrder, "cancelado")} type="button">
-                  <XCircle aria-hidden="true" size={15} /> Cancelar pedido
-                </button>
-              ) : null}
-            </>
-          }
-          onClose={closeDialog}
-          status={openOrder.finance ? "Pedido direto · aguardando pagamento" : "Pedido do site · aguardando pagamento"}
-          statusColor={COLUMN_COLORS.aguardando_pagamento}
-          subtitle={`pedido de ${formatDay(openOrder.createdAt)}`}
-          title={openOrder.customerName}
-        >
-          <DetailsSections
-            billing={openOrder.billing}
-            customerCompany={openOrder.customerCompany}
-            customerName={openOrder.customerName}
-            customerPhone={openOrder.customerPhone}
-            items={openOrder.items}
-            notes={openOrder.notes}
-            internalNotes={openOrder.finance?.internalNotes}
-            paymentLabel={PAYMENT_LABELS[openOrder.paymentMethod]}
-            total={openOrder.total}
-            discount={openOrder.discount}
-          />
-          {openOrder.finance ? <OrderPaymentPanel key={openOrder.id} orderId={openOrder.id} status={openOrder.status} paymentMethod={openOrder.paymentMethod} finance={openOrder.finance} onRecorded={async () => { await reloadBoard(); closeDialog(); }} /> : null}
-        </DetailsDialog>
-      ) : null}
+      {closingQuote ? <CloseQuoteDialog quote={closingQuote} onClose={() => setClosingQuote(null)} onClosed={order => router.push(`/equipe?aba=${order.status === 'aguardando_pagamento' ? 'orcamentos' : 'pedidos'}&novo=${order.id}`)} /> : null}
     </div>
   );
 }

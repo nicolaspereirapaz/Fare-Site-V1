@@ -25,6 +25,13 @@ describe("PDF da proposta", () => {
     const pdf = await renderProposalPdf(PROPOSAL);
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(10_000);
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const parsed = await getDocument({ data: new Uint8Array(pdf), useSystemFonts: true }).promise;
+    const page = await parsed.getPage(1);
+    const text = (await page.getTextContent()).items.map(item => "str" in item ? item.str : "").join(" ");
+    expect(text).toContain("Sinal mínimo (50%): R$ 991,50");
+    expect(text).toContain("Chave Pix (CNPJ): 50.344.377/0001-36");
+    await parsed.cleanup();
     // Anotação de link (URI) para a página do produto e para o WhatsApp da Fare Foto.
     const raw = pdf.toString("latin1");
     expect(raw).toContain("https://www.farefoto.com.br/brindes/7c669c153f261709");

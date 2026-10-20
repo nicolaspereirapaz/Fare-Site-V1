@@ -12,6 +12,20 @@ export async function fetchMyProfile(): Promise<AccountProfileData | null> {
   }
 }
 
+/** Salva nome completo e WhatsApp na conta (criar conta e carrinho). Devolve a mensagem de erro, ou null se deu certo. */
+export async function saveMyContact(contact: { name?: string; phone: string }): Promise<string | null> {
+  try {
+    const response = await fetch("/api/account/profile", {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(contact),
+    });
+    if (response.ok) return null;
+    const data = await response.json().catch(() => ({})) as { errors?: Record<string, string> };
+    return data.errors?.name ?? data.errors?.phone ?? "Não foi possível salvar seus dados.";
+  } catch {
+    return "Sem conexão. Tente de novo.";
+  }
+}
+
 /** Endereço pelo CEP (ViaCEP, gratuito). null se o CEP não existir ou o serviço falhar. */
 export async function lookupCep(cep: string): Promise<Pick<CustomerAddress, "street" | "district" | "city" | "state"> | null> {
   const digits = cep.replace(/\D/g, "");

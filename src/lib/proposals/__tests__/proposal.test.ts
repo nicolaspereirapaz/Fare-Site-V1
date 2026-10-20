@@ -127,9 +127,11 @@ describe("mensagem do WhatsApp", () => {
       "",
       "*Total: R$ 1.983,00* (frete a combinar)",
       "Produção: 7 dias após a aprovação da arte. Início mediante sinal de 50%.",
+      "Sinal mínimo (50%): R$ 991,50",
+      "Chave Pix (CNPJ): 50.344.377/0001-36",
       "Válida até 20/10/2026.",
       "",
-      "O PDF com os detalhes vai em seguida. Para aprovar, é só responder por aqui!",
+      "Vou anexar o documento HTML com os detalhes na conversa. Para aprovar, é só responder por aqui!",
     ].join("\n"));
   });
 
@@ -152,5 +154,16 @@ describe("botões do PDF (cliente responde para a Fare Foto)", () => {
     expect(talk.origin + talk.pathname).toBe("https://wa.me/5511953147703");
     expect(approve.searchParams.get("text")).toBe("Olá, Bia! Aprovo a proposta ORC-B84713 (total R$ 1.983,00). Como seguimos?");
     expect(talk.searchParams.get("text")).toBe("Olá, Bia! Quero falar sobre a proposta ORC-B84713.");
+  });
+});
+
+describe("fotos na mensagem do WhatsApp", () => {
+  it("cada tamanho aparece com a medida e o preço por cópia", () => {
+    const photo = (id: string, productName: string, quantity: number, unitPrice: number): QuoteCartItem =>
+      ({ id, productName, slug: `avulso:${id}`, quantity, selections: {}, artworkName: null, unitPrice });
+    const quote = { ...QUOTE, items: [photo("a", "Revelação 10 × 15 cm · papel Fosco", 30, 3), photo("b", "Revelação 15 × 21 cm", 10, 6)] };
+    const text = proposalWhatsAppText(buildProposal(quote, { seller: "Ana", now: NOW, siteUrl: SITE }));
+    expect(text).toContain("• 30 × Revelação de Fotos 10x15cm (Papel Fosco) — R$ 3,00/cópia");
+    expect(text).toContain("• 10 × Revelação de Fotos 15x21cm — R$ 6,00/cópia");
   });
 });

@@ -16,6 +16,7 @@ export default async function StaffPanelPage({ searchParams }: { searchParams: P
     <>
       <StaffTopbar name={session.user.name} role={session.user.role} />
       <BackofficeBoard
+        key={`${params.aba ?? "pedidos"}:${params.novo ?? ""}`}
         canCancel={canCancelOrders(session.user.role)}
         freshQuoteId={typeof params.novo === "string" ? params.novo.slice(0, 64) : undefined}
         initialTab={params.aba === "orcamentos" ? "orcamentos" : "pedidos"}

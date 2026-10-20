@@ -18,6 +18,8 @@ export type QuoteCartItem = {
   gravacoes?: Array<{ descricao: string; local: string }>;
   /** Composição do preço feita pela equipe no painel (custo, personalização). Nunca vai para o cliente. */
   costing?: ItemCosting | null;
+  /** Mockup enviado pela equipe (arquivo em data/mockups): substitui a foto do produto no painel e nos PDFs. */
+  mockup?: string;
 };
 
 export type ItemCosting = {

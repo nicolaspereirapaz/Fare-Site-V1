@@ -1,5 +1,53 @@
 # Handoff — Fare Foto
 
+## HTML — fontes pequenas ampliadas (18/10/2026)
+
+Mantido visual/Inter da referência, mas rótulos/etiquetas agora têm no mínimo 12px; dados, observações e textos auxiliares passaram para 13–15px. Arquivos de exemplo regenerados. Dois testes focados e verificação Chrome offline desktop/mobile dos dois documentos aprovados, sem overflow e com zoom preservado. Sem iniciar/parar servidor.
+
+## HTML — visual mais fiel à referência (18/10/2026)
+
+`html.ts` agora incorpora os mesmos Inter 400/500/600/700 do HTML de referência, extraídos para `src/assets/document-inter-*.woff2`, com CSP `font-src data:`. Layout de 860px, margens, hierarquia menor, condições em cartões contornados, etiquetas e total seguem a referência; fotos continuam sem cortes, zoom acessível e mobile. Sem alteração de dados/regras. Exemplos regenerados em `Pictures/Fare Foto/Documentos exemplo`; versões anteriores guardadas com sufixo `-visual-anterior.html`. Dois testes focados e Chrome offline desktop/mobile nos dois documentos aprovados; quatro pesos realmente carregados, sem overflow e zoom/teclado funcionando. Nenhum servidor iniciado ou parado nesta revisão.
+
+## Documentos comerciais HTML — substituição do PDF (18/10/2026)
+
+- **Concluído para pedidos E orçamentos:** as rotas autenticadas existentes `/api/backoffice/orders/[code]/documento` e `/api/backoffice/quotes/[id]/proposta` agora usam `src/lib/proposals/html.ts`, via `server.ts`. GET devolve `text/html;charset=utf-8`, `.html`, `nosniff`, `no-store`; inline somente com `?ver=1`, attachment nos demais casos. O nome interno histórico do handler continua `pdf` por compatibilidade, mas não gera PDF. POST/status/idempotência e guards da equipe/switch temporário não foram alterados.
+- HTML autossuficiente com logo e fotos raster incorporados, CSS/JS inline, fontes locais do sistema, fotos grandes `object-fit:contain`, duas colunas desktop e coluna única até 720px. Modal nativo acessível, abre por botão/Enter, fecha por botão/Escape/fundo e restaura foco; funciona offline. Estilo inspirado apenas no HTML de referência, sem copiar seus dados/imagens. Falha ao obter foto mostra “Foto indisponível”. Fetch limitado a 8 MiB/6s, hosts explícitos já usados pelo catálogo, sem redirects; imagens locais restritas a `/images/` raster. Textos/atributos escapados e CSP sem rede/subrecursos externos.
+- Dados comerciais continuam vindo dos builders existentes, sem recalcular/inventar recebimentos/prazos/Pix de pedidos. Pedido mantém total persistido, recebimentos/saldo reais e condições do financeiro; não recebe sinal/validade/aprovação da proposta. Custos, códigos internos, notas e e-mail não entram no documento. Foto de produtos estáticos também é resolvida agora; brindes usam cor do catálogo como antes.
+- UI: `ProposalActions` (inclusive dentro de `StaffDocumentPage`) e `QuoteCreatedDialog` usam “Ver HTML”/“Baixar HTML”; prévia agora é iframe `sandbox="allow-scripts"`, sem same-origin e sem pdf.js. WhatsApp informa documento HTML e anexo manual, sem alegar envio automático ou link público. PDF renderer/dependências e componente antigo de preview ficam sem uso nos fluxos comerciais; não foram removidos.
+- Verificação reduzida: **7 arquivos / 41 testes focados aprovados na rodada final conjunta**; testes usam renderizador real e `Response`, SQLite em memória, incluindo 401/403 e distinção pedido/proposta. TypeScript `--noEmit` e ESLint dos sete módulos principais aprovados. Sem build/suíte completa/servidor HTTP Next ou dados reais de teste. Headless Chrome real abriu ambos arquivos offline em 1280px/390px: 4 combinações aprovadas, sem overflow horizontal, imagens carregadas, zoom por Enter, Escape/foco, botão e fundo. Foto natural 1350×1800, exibida 380×400 desktop e 334×340 mobile. Resultados e 4 prints em `C:/Users/Nicolas/AppData/Local/hermes/profiles/dev-profile/cache/scratch/fare-html-qa/`; harness `.../scratch/fare-html-check.mjs`.
+- Exemplos **sintéticos, identificados como EXEMPLO FICTÍCIO, sem cliente real**, criados pelo renderer: `C:/Users/Nicolas/Pictures/Fare Foto/Documentos exemplo/orcamento-exemplo.html` (225442 bytes) e `pedido-exemplo.html` (224730 bytes). Podem ser recriados com `FARE_HTML_EXAMPLES_DIR="C:/Users/Nicolas/Pictures/Fare Foto/Documentos exemplo" npx vitest run src/lib/proposals/__tests__/html.test.ts`.
+- Nenhum servidor foi iniciado nesta tarefa, nenhum banco real foi alterado, sem commit/push. **Atenção operacional:** na checagem final havia listener 3000 PID 32592, processo Node `.../fare_new_project/node_modules/next/dist/server/lib/start-server.js`, pai 6080; não foi iniciado por esta tarefa. Confirmar com a sessão principal se deve ser parado, pois a instrução do Nicolas é manter a porta 3000 parada. Não confundir com os arquivos HTML, que abrem sem servidor.
+- **Próxima fase APROVADA mas NÃO implementada:** comercial vende com foto original; DESIGN anexa mockup do cliente ao pedido; comercial reenvia HTML pelo WhatsApp para aprovação; equipe registra aprovado/ajustes; produção deve ficar bloqueada até aprovação. Anexos de mockup, versionamento, registro de aprovação e bloqueio de produção permanecem pendentes. O botão atual aprova somente a proposta comercial pelo WhatsApp, não registra aprovação de arte no sistema.
+
+
+## Camisetas removidas da oferta (17/10/2026)
+
+Removida camiseta do catálogo estático e das menções em HeroCarousel/ContactForm. `siteProductVisibility.ts` filtra nomes camiseta/T-shirt em `getLocalCatalog`, inclusive leituras de detalhe e equipe, sem apagar dados de fornecedores nem pedidos. Quatro testes focados aprovados. Busca HTTP por camiseta já não retorna camisetas (pode retornar chaveiro cuja descrição menciona camiseta). Sem push.
+
+## Tailscale — catálogo (17/10/2026)
+
+Adicionado `100.111.15.19` ao `allowedDevOrigins` em `next.config.ts`. Sem esse host, os scripts `/_next/` retornavam 403 e o catálogo ficava carregando. Após recarga automática do Next, scripts 200 e navegador headless no endereço Tailscale renderizou 24 produtos da categoria Cadernos e Agendas, sem spinner. Nenhuma alteração de firewall ou abertura pública.
+
+## Acesso temporário aberto — loja e equipe (17/10/2026)
+
+**ATIVO somente em `.env.local`: `FARE_TEMPORARY_PASSWORDLESS=1`. O código fica fechado por padrão.**
+
+- Restaurar: trocar para `FARE_TEMPORARY_PASSWORDLESS=0` (ou remover a linha) e **reiniciar o processo Next deste projeto na porta 3000**. Nenhuma senha, conta, convite ou configuração original do Better Auth foi substituída. Não é necessário reverter código ou apagar bancos.
+- Loja: sessão real tem preferência; sem sessão usa visitante exclusivo deste navegador, cookie `fare-temporary-visitor` assinado com `BETTER_AUTH_SECRET`, HttpOnly, SameSite=Lax, Secure em HTTPS, validade 30 dias. IDs aleatórios de 256 bits; IDs enviados pelo cliente não escolhem o dono. Nomes ficam em `fare_temporary_visitors`, sem criar conta Better Auth. Histórico e cadastro são isolados por visitante, nunca vinculados a clientes existentes por e-mail/CPF. Limpar/expirar cookies perde o acesso ao histórico temporário. Faturamento PF/PJ continua com a validação original; senha não aparece para visitante.
+- Equipe e todas as APIs backoffice usam leitor central: sem sessão real, ator **`temporary-open-admin` / “Acesso temporário — sem autenticação”**, administrador, sem imitar funcionário. `/entrar` e `/equipe/entrar` redirecionam para as respectivas áreas. Catálogo/preços e checkout/orçamento usam o mesmo leitor da loja.
+- **ALERTA:** qualquer pessoa que alcance o servidor pode ler dados de clientes, custos e operar como administrador. Não publicar/expor fora de ambiente controlado; é abertura temporária explicitamente autorizada, não um mecanismo de segurança. O cookie protege apenas a separação entre visitantes da loja; o painel aberto permite acesso administrativo aos dados.
+- Execução local: `FARE_FULL_SITE=1 PORT=3000 npm run dev -- -H 0.0.0.0 -p 3000`. O processo `next start` antigo da porta 3000 foi parado por PID confirmado deste projeto; projeto alheio da porta 3100 preservado. Sem build concorrente, commit ou push.
+- Verificação reduzida por pedido do usuário: **5 arquivos / 11 testes focados aprovados**. Smoke HTTP real: `/`, `/equipe`, APIs de pedidos/orçamentos do quadro e perfil → 200; preços visíveis; `/entrar` → conta e `/equipe/entrar` → painel; dois navegadores com cookies HttpOnly e IDs distintos; senha oculta no perfil temporário. Com switch 0 e processo reiniciado: `/equipe` volta ao login, APIs do quadro e perfil → 401. Processo reiniciado novamente com switch 1 ao concluir. Nenhum pedido/pagamento de teste foi inserido no banco real. Sem suíte completa, tsc/lint/build, QA visual ou fluxo completo de criação financeira nesta rodada.
+
+
+## Atualização local — 2026-10-16 — fechamento guiado concluído
+
+Implementado o modelo aprovado de Fechar Orçamento: total em destaque, atalhos 50%/total/retirada/outro, recebido e saldo ao vivo e fontes maiores. CSS isolado, sem redesenhar o Kanban. Valor recebido abre vazio; nenhum pagamento é presumido.
+
+Total na retirada é acordo explícito persistido, libera `aguardando_arte` com saldo integral e zero recebimentos. Zero comum mantém `aguardando_pagamento`. Consulta/PDF não inventam Pix ou “Pago em”; recebimento posterior usa o ledger existente e método real. Retry preserva payload/chave e não duplica.
+
+Validação: 746 testes, TypeScript/ESLint/build, 25 verificações autenticadas em clones (desktop/mobile, PDF e recebimento posterior). Registros reais preservados e integridade SQLite `ok`. Aplicação local na porta 3000, sem push. Alterações não commitadas devem ser preservadas, inclusive mudanças não relacionadas já existentes. Detalhes em `docs/QUOTE_CLOSING_FLOW.md`.
+
 ## Como continuar
 
 Abra este repositório em outra sessão do Hermes:

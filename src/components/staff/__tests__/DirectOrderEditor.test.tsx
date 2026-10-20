@@ -37,7 +37,10 @@ describe('mesmo editor no modo pedido direto', () => {
   await user.type(screen.getByLabelText('Data prevista de entrega'), '2026-10-23');
   await waitFor(() => expect(screen.getByRole('button', { name: 'Criar pedido' })).toBeEnabled());
   await user.click(screen.getByRole('button', { name: 'Criar pedido' }));
-  await waitFor(() => expect(push).toHaveBeenCalledWith('/equipe?aba=pedidos'));
+  // Prévia do documento do pedido na tela; fechar leva ao quadro.
+  expect(await screen.findByRole('heading', { name: /Pedido PED-PEDIDO criado/ })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: /Ir para o quadro/ }));
+  await waitFor(() => expect(push).toHaveBeenCalledWith('/equipe?aba=pedidos&novo=pedido-1'));
   const calls = vi.mocked(fetch).mock.calls;
   const call = calls.find(([url]) => url === '/api/backoffice/pedido-editor');
   expect(call).toBeDefined();

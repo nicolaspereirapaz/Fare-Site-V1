@@ -1,0 +1,21 @@
+/* Carrinho único (brindes + fotos): partes novas e a escolha de entrega dentro do cartão azul de finalizar. */
+
+/* Linha do pedido de fotos: foto padrão do produto (fundo neutro, ocupa o quadro) */
+.cart-photo-image { background: #ededed; }
+.cart-photo-edit { align-self: flex-start; margin-top: 4px; }
+.cart-more-links { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+
+/* Entrega ou retirada: os cartões brancos das fotos, sem herdar o estilo dos campos do formulário */
+.checkout-card .fp-delivery legend { color: #fff; }
+.checkout-card .fp-delivery label { display: grid; flex-direction: initial; font-size: inherit; font-weight: inherit; }
+.checkout-card .fp-delivery input { width: 18px; height: 18px; border: 0; padding: 0; box-shadow: none; }
+.checkout-card .fp-delivery strong { color: var(--ink); }
+.checkout-contact { margin: 0; border-radius: 12px; background: rgba(255, 255, 255, .08); padding: 12px 14px; color: rgba(255, 255, 255, .85); font-size: .9rem; line-height: 1.5; }
+.checkout-contact strong { color: #fff; }
+.checkout-contact .text-link { border: 0; background: none; padding: 0; color: #ffb79e; font: inherit; font-weight: 700; cursor: pointer; }
+.checkout-deadline { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; color: rgba(255, 255, 255, .8); font-size: .85rem; }
+
+.empty-cart-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+
+/* Imagem do produto sempre quadrada (fotos e brindes), alinhada ao topo do card */
+.cart-item .cart-item-image { align-self: start; aspect-ratio: 1; min-height: 0; height: auto; }

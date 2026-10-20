@@ -2,10 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { XbzCatalog, XbzProductCard } from "@/components/XbzCatalog";
 
+// Parâmetros da URL vistos pelo catálogo; null = fora do roteador (usa a categoria inicial).
+const navigation = vi.hoisted(() => ({ params: null as URLSearchParams | null }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => navigation.params }));
+
 const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 
 describe("catálogo de brindes", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    navigation.params = null;
+  });
 
   it("abre já filtrado pela categoria escolhida na Home", async () => {
     const fetchMock = vi.fn(async () => json({
@@ -22,6 +29,39 @@ describe("catálogo de brindes", () => {
     const firstUrl = String((fetchMock.mock.calls[0] as unknown[])[0]);
     expect(new URL(firstUrl, "http://x").searchParams.get("categoria")).toBe("Canecas");
     expect(await screen.findByRole("radio", { name: /Canecas/ })).toBeChecked();
+  });
+
+  it("troca de categoria quando a URL muda (menu Brindes com a página já aberta)", async () => {
+    const fetchMock = vi.fn(async () => json({
+      products: [],
+      categories: [{ name: "Mochilas", count: 3 }, { name: "Pet", count: 2 }],
+      pricesVisible: false,
+      meta: { total: 0, page: 1, limit: 24, fetchedAt: "2026-10-10T00:00:00.000Z", cached: true },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const lastCategory = () => new URL(String((fetchMock.mock.calls.at(-1) as unknown[])[0]), "http://x").searchParams.get("categoria");
+
+    navigation.params = new URLSearchParams("categoria=Mochilas");
+    const { rerender } = render(<XbzCatalog initialCategory="Mochilas" />);
+    await waitFor(() => expect(lastCategory()).toBe("Mochilas"));
+
+    navigation.params = new URLSearchParams("categoria=Pet");
+    rerender(<XbzCatalog initialCategory="Pet" />);
+    await waitFor(() => expect(lastCategory()).toBe("Pet"));
+    expect(await screen.findByRole("radio", { name: /Pet/ })).toBeChecked();
+  });
+
+  it("escolher uma categoria na lateral atualiza a URL", async () => {
+    const { fetchMock, lastParams } = mockCatalog(false);
+    navigation.params = new URLSearchParams();
+    render(<XbzCatalog />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("radio", { name: /Canecas/ }));
+
+    await waitFor(() => expect(lastParams().get("categoria")).toBe("Canecas"));
+    expect(new URL(window.location.href).searchParams.get("categoria")).toBe("Canecas");
+    window.history.replaceState(null, "", "/");
   });
 
   it("o card mostra o código Fare Foto só quando ele vem (cliente cadastrado)", () => {

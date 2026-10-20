@@ -1,13 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { push, requestCheckout, cart, updateQuantity, fetchMyProfile } = vi.hoisted(() => ({
+const { push, requestCheckout, cart, updateQuantity, fetchMyProfile, saveMyContact } = vi.hoisted(() => ({
   push: vi.fn(),
   requestCheckout: vi.fn(),
   cart: { items: [] as unknown[] },
   updateQuantity: vi.fn(),
   fetchMyProfile: vi.fn(),
+  saveMyContact: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -18,15 +19,26 @@ vi.mock("@/lib/requestCheckout", () => ({ requestCheckout }));
 vi.mock("@/lib/account/profileClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/account/profileClient")>()),
   fetchMyProfile,
+  saveMyContact,
 }));
 
 import { EMPTY_PROFILE } from "@/lib/account/profile";
 import { CartView } from "@/components/CartView";
+import { photoStore } from "@/components/fotos/store";
+import type { Photo } from "@/components/fotos/shared";
 
 const PHOTO_ITEM = {
   id: "item-1", productName: "Foto 10x15", slug: "foto-10x15", quantity: 1,
   selections: {}, artworkName: null, unitPrice: null, image: "/foto.jpg",
 };
+
+function photo(id: string, patch: Partial<Photo> = {}): Photo {
+  return {
+    id, name: `${id}.jpg`, url: `/${id}.jpg`, w: 1200, h: 1800, sizeId: "10x15", paper: "brilho", copies: 1,
+    fit: "preencher", landscape: false, zoom: 1, x: 0.5, y: 0.5, border: 0, filter: "original", filterStrength: 100,
+    brightness: 0, contrast: 0, saturation: 0, uploadId: `envio-${id}`, upload: { status: "pronto", progress: 1 }, ...patch,
+  };
+}
 
 describe("CartView", () => {
   beforeEach(() => {
@@ -35,58 +47,47 @@ describe("CartView", () => {
     requestCheckout.mockResolvedValue({ requiresAuth: true });
     updateQuantity.mockReset();
     fetchMyProfile.mockReset();
-    fetchMyProfile.mockResolvedValue(null);
+    // Cliente logado com nome e WhatsApp do cadastro (o carrinho não pede de novo).
+    fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, name: "Ana", email: "ana@x.com", phone: "(11) 99999-9999", complete: false });
+    saveMyContact.mockReset();
+    saveMyContact.mockResolvedValue(null);
     cart.items = [PHOTO_ITEM];
+    photoStore.set({ photos: [], inCart: false });
   });
 
-  it("já vem preenchido com os dados da conta do cliente", async () => {
+  it("usa nome e WhatsApp do cadastro, sem campos para digitar", async () => {
     fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, personType: "pj", name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", companyName: "Loja A Ltda", tradeName: "Loja A", complete: true });
     render(<CartView />);
-    expect(await screen.findByDisplayValue("Ana Silva")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("(11) 98888-7777")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Loja A")).toBeInTheDocument();
+    expect(await screen.findByText("Ana Silva")).toBeInTheDocument();
+    expect(screen.getByText(/\(11\) 98888-7777/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Nome/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Alterar no cadastro" })).toHaveAttribute("href", "/minha-conta/dados");
   });
 
-  it("mostra para quem o pedido será faturado, com atalho para alterar", async () => {
-    fetchMyProfile.mockResolvedValue({
-      ...EMPTY_PROFILE, personType: "pj", name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777",
-      document: "11.222.333/0001-81", companyName: "Padaria Boa Vista Ltda", stateRegistration: "ISENTO",
-      address: { cep: "13201-000", street: "Rua Barão de Jundiaí", number: "100", complement: "", district: "Centro", city: "Jundiaí", state: "SP" },
-      complete: true,
-    });
-    render(<CartView />);
-    const box = await screen.findByRole("region", { name: "Faturar para" });
-    expect(box).toHaveTextContent("Padaria Boa Vista Ltda");
-    expect(box).toHaveTextContent("CNPJ 11.222.333/0001-81");
-    expect(box).toHaveTextContent("Jundiaí/SP");
-    expect(screen.getByRole("link", { name: "Alterar" })).toHaveAttribute("href", "/minha-conta/dados");
-  });
-
-  it("convida a completar o cadastro quando faltam CPF/CNPJ ou endereço, sem bloquear o pedido", async () => {
-    fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", complete: false });
-    render(<CartView />);
-    const box = await screen.findByRole("region", { name: "Faturar para" });
-    expect(box).toHaveTextContent("Complete seu cadastro");
-    expect(screen.getByRole("link", { name: /Completar cadastro/ })).toHaveAttribute("href", "/minha-conta/dados");
-    expect(screen.getByRole("button", { name: /Criar pedido/ })).toBeEnabled();
-  });
-
-  it("não mostra o quadro de faturamento para quem não está logado", async () => {
-    render(<CartView />);
-    await Promise.resolve();
-    expect(screen.queryByRole("region", { name: "Faturar para" })).not.toBeInTheDocument();
-  });
-
-  it("não apaga o que o cliente já começou a digitar", async () => {
-    let resolve!: (value: unknown) => void;
-    fetchMyProfile.mockReturnValue(new Promise((r) => { resolve = r; }));
+  it("conta antiga sem WhatsApp: pede só o telefone, salva no cadastro e finaliza", async () => {
+    fetchMyProfile.mockResolvedValue({ ...EMPTY_PROFILE, name: "Ana", email: "ana@x.com", phone: "", complete: false });
+    requestCheckout.mockResolvedValue({ url: "https://wa.me/x" });
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign } });
     const user = userEvent.setup();
     render(<CartView />);
-    await user.type(screen.getByRole("textbox", { name: "Nome" }), "Outro Nome");
-    resolve({ ...EMPTY_PROFILE, name: "Ana Silva", email: "ana@x.com", phone: "(11) 98888-7777", complete: false });
+    await user.type(await screen.findByRole("textbox", { name: /Seu WhatsApp/ }), "11988887777");
+    expect(screen.queryByRole("textbox", { name: /Nome/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
+    await waitFor(() => expect(saveMyContact).toHaveBeenCalledWith({ phone: "(11) 98888-7777" }));
+    await waitFor(() => expect(requestCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ customer: expect.objectContaining({ name: "Ana", phone: "(11) 98888-7777" }) }), expect.anything(), "/api/quotes",
+    ));
+  });
 
-    expect(await screen.findByDisplayValue("(11) 98888-7777")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Outro Nome");
+  it("sem login: leva para entrar (nome e WhatsApp vêm do cadastro)", async () => {
+    fetchMyProfile.mockResolvedValue(null);
+    const user = userEvent.setup();
+    render(<CartView />);
+    expect(await screen.findByText(/entre na sua conta/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
+    expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
   });
 
   it("deixa digitar a quantidade e confirma com Enter", async () => {
@@ -157,62 +158,110 @@ describe("CartView", () => {
     expect(screen.queryByText(/Total estimado/)).not.toBeInTheDocument();
   });
 
-  it("exige uma forma de pagamento e informa a aprovação do faturamento", () => {
+  it("finaliza só com retirada ou entrega: sem pagamento nem faturamento", () => {
     render(<CartView />);
-
-    const payment = screen.getByRole("combobox", { name: "Forma de pagamento" });
-    expect(payment).toBeRequired();
-    expect(payment).toHaveValue("");
-    expect(screen.getByRole("option", { name: "Pix" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Cartão de crédito" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Cartão de débito" })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Boleto" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Faturamento para empresa" })).toBeInTheDocument();
-    expect(screen.getByText(/faturamento para empresa está sujeito à aprovação/i)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Retirar na loja/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Receber em casa/ })).not.toBeChecked();
+    expect(screen.queryByRole("combobox", { name: "Forma de pagamento" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Fazer pedido/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Faturar para" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finalizar no WhatsApp" })).toBeEnabled();
   });
 
-  it("envia pagamento e chave de idempotência ao criar o pedido", async () => {
+  it("com brindes, registra o orçamento e leva a entrega escolhida na mensagem", async () => {
     const user = userEvent.setup();
     render(<CartView />);
 
-    await user.type(screen.getByLabelText("Nome"), "Ana");
-    await user.type(screen.getByLabelText("WhatsApp para retorno"), "11999999999");
-    await user.selectOptions(screen.getByLabelText("Forma de pagamento"), "faturamento_empresa");
-    await user.click(screen.getByRole("button", { name: "Criar pedido e abrir WhatsApp" }));
-
-    expect(requestCheckout).toHaveBeenCalledWith(expect.objectContaining({
-      paymentMethod: "faturamento_empresa",
-      idempotencyKey: expect.stringMatching(/^[A-Za-z0-9_-]{8,128}$/),
-    }));
-    expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
-  });
-
-  it("'Só quero um orçamento' esconde a forma de pagamento e envia como orçamento", async () => {
-    requestCheckout.mockResolvedValue({ requiresAuth: true });
-    const user = userEvent.setup();
-    render(<CartView />);
-
-    expect(screen.getByRole("radio", { name: /Fazer pedido/ })).toBeChecked();
-    await user.click(screen.getByRole("radio", { name: /Só quero um orçamento/ }));
-    expect(screen.queryByLabelText("Forma de pagamento")).not.toBeInTheDocument();
-
-    await user.type(screen.getByLabelText("Nome"), "Ana");
-    await user.type(screen.getByLabelText("WhatsApp para retorno"), "11999999999");
-    await user.click(screen.getByRole("button", { name: "Pedir orçamento no WhatsApp" }));
+    await user.click(screen.getByRole("radio", { name: /Receber em casa/ }));
+    expect(await screen.findByText("Ana")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
 
     expect(requestCheckout).toHaveBeenCalledTimes(1);
     const [payload, , endpoint] = requestCheckout.mock.calls[0];
     expect(endpoint).toBe("/api/quotes");
     expect(payload).not.toHaveProperty("paymentMethod");
-    expect(payload).toMatchObject({ customer: { name: "Ana", phone: "(11) 99999-9999" } });
+    expect(payload).toMatchObject({
+      customer: { name: "Ana", phone: "(11) 99999-9999", notes: expect.stringContaining("receber em casa") },
+      idempotencyKey: expect.stringMatching(/^[A-Za-z0-9_-]{8,128}$/),
+    });
+    expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
   });
 
-  it("voltar para 'Fazer pedido' volta a exigir a forma de pagamento", async () => {
+  it("mostra o pedido de fotos junto com os brindes e manda o pedido de fotos junto no orçamento", async () => {
+    photoStore.set({ photos: [photo("a"), photo("b"), photo("c", { copies: 3 })], inCart: true });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ code: "PED-ABC123", url: "#whatsapp", summary: ["Pedido de fotos PED-ABC123:", "• Revelação 10 × 15 cm — papel Brilho", "  3 fotos · 5 cópias · R$ 17,50 (R$ 3,50 cada)"] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(<CartView />);
-    await user.click(screen.getByRole("radio", { name: /Só quero um orçamento/ }));
-    await user.click(screen.getByRole("radio", { name: /Fazer pedido/ }));
-    expect(screen.getByLabelText("Forma de pagamento")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Criar pedido e abrir WhatsApp" })).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "Revelação 10 × 15 cm" })).toBeInTheDocument();
+    expect(screen.getByText("2 itens")).toBeInTheDocument();
+    // 5 cópias de 10 × 15 = R$ 3,50 cada
+    expect(screen.getByText(/Subtotal R\$\s17,50/)).toBeInTheDocument();
+
+    expect(await screen.findByText("Ana")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
+
+    // 1) o servidor monta a pasta do pedido de fotos com o que foi enviado e as escolhas do editor
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/fotos/pedidos");
+    const body = JSON.parse(String(init.body));
+    expect(body).toMatchObject({ delivery: "retirada", customer: { name: "Ana", phone: "(11) 99999-9999" } });
+    expect(body.photos).toHaveLength(3);
+    expect(body.photos[2]).toMatchObject({ uploadId: "envio-c", sizeId: "10x15", paper: "brilho", copies: 3 });
+    // 2) o orçamento dos brindes leva o pedido de fotos nas observações
+    const [payload] = requestCheckout.mock.calls[0];
+    expect(payload.customer.notes).toContain("vou retirar na loja");
+    expect(payload.customer.notes).toContain("Pedido de fotos PED-ABC123:");
+    vi.unstubAllGlobals();
+  });
+
+  it("só com fotos, monta o pedido no servidor e não cria orçamento", async () => {
+    cart.items = [];
+    photoStore.set({ photos: [photo("a")], inCart: true });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ code: "PED-ABC123", url: "#whatsapp", summary: ["Pedido de fotos PED-ABC123:", "• Revelação 10 × 15 cm — papel Brilho", "  3 fotos · 5 cópias · R$ 17,50 (R$ 3,50 cada)"] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CartView />);
+
+    expect(await screen.findByText("Ana")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestCheckout).not.toHaveBeenCalled();
+    // pedido enviado: as fotos saem do carrinho
+    expect(photoStore.get().photos).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("pede para entrar na conta quando o pedido de fotos precisa de login", async () => {
+    cart.items = [];
+    photoStore.set({ photos: [photo("a")], inCart: true });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "Entre" }), { status: 401 })));
+    const user = userEvent.setup();
+    render(<CartView />);
+
+    expect(await screen.findByText("Ana")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Finalizar no WhatsApp" }));
+
+    expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
+    // as fotos continuam no carrinho para depois do login
+    expect(photoStore.get().photos).toHaveLength(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("espera as fotos terminarem de subir antes de finalizar", () => {
+    cart.items = [];
+    photoStore.set({ photos: [photo("a"), photo("b", { uploadId: undefined, upload: { status: "enviando", progress: 0.4 } })], inCart: true });
+    render(<CartView />);
+    const button = screen.getByRole("button", { name: /Enviando fotos para a loja \(faltam 1\)/ });
+    expect(button).toBeDisabled();
+  });
+
+  it("carrinho vazio convida a enviar fotos ou ver brindes", () => {
+    cart.items = [];
+    render(<CartView />);
+    expect(screen.getByRole("link", { name: "Enviar minhas fotos" })).toHaveAttribute("href", "/produtos/revelacao-de-fotos");
+    expect(screen.getByRole("link", { name: "Ver brindes" })).toHaveAttribute("href", "/brindes");
   });
 });

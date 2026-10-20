@@ -156,3 +156,29 @@ describe("API /api/account/profile", () => {
     expect(d.saveProfile).not.toHaveBeenCalled();
   });
 });
+
+describe("PATCH /api/account/profile (contato do cadastro e do carrinho)", () => {
+  const patch = (body: unknown) => new Request("http://localhost/api/account/profile", {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+
+  it("salva só o WhatsApp sem exigir CPF e endereço, e mantém o resto do cadastro", async () => {
+    const d = deps(stored(PF));
+    const response = await createProfileHandlers(SESSION, d).PATCH(patch({ phone: "11977776666" }));
+    expect(response.status).toBe(200);
+    expect(d.saveProfile).toHaveBeenCalledWith("u1", { ...stored(PF), phone: "(11) 97777-6666" });
+    expect(d.updateName).not.toHaveBeenCalled();
+  });
+
+  it("nome precisa ser completo; telefone com DDD; sem login não salva", async () => {
+    const d = deps();
+    const handlers = createProfileHandlers(SESSION, d);
+    const bad = await handlers.PATCH(patch({ name: "Ana", phone: "9888" }));
+    expect(bad.status).toBe(400);
+    await expect(bad.json()).resolves.toMatchObject({ errors: { name: expect.stringMatching(/nome completo/), phone: expect.stringMatching(/DDD/) } });
+    expect((await createProfileHandlers(async () => null, d).PATCH(patch({ phone: "11977776666" }))).status).toBe(401);
+    expect(d.saveProfile).not.toHaveBeenCalled();
+    await handlers.PATCH(patch({ name: "Ana  Maria Souza", phone: "11977776666" }));
+    expect(d.updateName).toHaveBeenCalledWith("Ana Maria Souza", expect.anything());
+  });
+});

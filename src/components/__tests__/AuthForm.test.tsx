@@ -5,6 +5,11 @@ import { authClient } from "@/lib/auth-client";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
+const { saveMyContact } = vi.hoisted(() => ({ saveMyContact: vi.fn() }));
+vi.mock("@/lib/account/profileClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/account/profileClient")>()),
+  saveMyContact,
+}));
 vi.mock("@/lib/auth-client", () => ({
   authClient: {
     signIn: { email: vi.fn() },
@@ -30,11 +35,13 @@ describe("AuthForm", () => {
     expect(push).toHaveBeenCalledWith("/minha-conta");
   });
 
-  it("cadastra nome, e-mail e senha sem permitir escolher papel", async () => {
+  it("cadastra nome completo, WhatsApp, e-mail e senha sem permitir escolher papel", async () => {
     vi.mocked(authClient.signUp.email).mockResolvedValue({ data: {} as never, error: null });
+    saveMyContact.mockResolvedValue(null);
     render(<AuthForm mode="sign-up" />);
 
-    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Ana Silva" } });
+    fireEvent.change(screen.getByLabelText("Nome completo"), { target: { value: "Ana Silva" } });
+    fireEvent.change(screen.getByLabelText("WhatsApp"), { target: { value: "11988887777" } });
     fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "ana@example.com" } });
     fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "segredo123" } });
     fireEvent.click(screen.getByRole("button", { name: "Criar conta" }));
@@ -44,7 +51,23 @@ describe("AuthForm", () => {
       email: "ana@example.com",
       password: "segredo123",
     }));
+    await waitFor(() => expect(saveMyContact).toHaveBeenCalledWith({ phone: "(11) 98888-7777" }));
     expect(screen.queryByLabelText("Papel")).not.toBeInTheDocument();
+  });
+
+  it("cadastro exige nome e sobrenome e WhatsApp com DDD", async () => {
+    render(<AuthForm mode="sign-up" />);
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "ana@example.com" } });
+    fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "segredo123" } });
+    fireEvent.change(screen.getByLabelText("Nome completo"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("WhatsApp"), { target: { value: "11988887777" } });
+    fireEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("nome completo");
+    fireEvent.change(screen.getByLabelText("Nome completo"), { target: { value: "Ana Silva" } });
+    fireEvent.change(screen.getByLabelText("WhatsApp"), { target: { value: "9888" } });
+    fireEvent.click(screen.getByRole("button", { name: "Criar conta" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("WhatsApp com DDD");
+    expect(authClient.signUp.email).not.toHaveBeenCalled();
   });
 
   it("na tela de entrar tem o link 'Esqueci minha senha'", () => {
@@ -79,7 +102,8 @@ describe("AuthForm", () => {
         data: null, error: { code, message: "english message", status: 400, statusText: "" },
       } as never);
       const { unmount } = render(<AuthForm mode="sign-up" />);
-      fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Ana" } });
+      fireEvent.change(screen.getByLabelText("Nome completo"), { target: { value: "Ana Silva" } });
+      fireEvent.change(screen.getByLabelText("WhatsApp"), { target: { value: "11988887777" } });
       fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "ana@example.com" } });
       fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "segredo123" } });
       fireEvent.click(screen.getByRole("button", { name: "Criar conta" }));

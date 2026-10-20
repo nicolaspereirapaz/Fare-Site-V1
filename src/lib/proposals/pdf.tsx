@@ -3,12 +3,14 @@ import path from "node:path";
 import { Document, Font, Image, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import { brl, proposalReplyLinks, type Proposal } from "@/lib/proposals/proposal";
+import type { OrderDocument } from "./orderDocument";
+import { buildWhatsAppUrl } from "@/lib/commerce";
 
 /** PDF A4 da proposta. Nome do produto é link para a página dele no site. */
 
 const ASSETS = path.join(process.cwd(), "src", "assets");
 let fontsReady = false;
-function registerFonts() {
+export function registerFonts() {
   if (fontsReady) return;
   Font.register({
     family: "DM Sans",
@@ -101,19 +103,21 @@ function Money({ value, style }: { value: number; style: Style | Style[] }) {
   );
 }
 
-function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string }) {
+function ProposalDocument({ proposal, logo }: { proposal: Proposal | OrderDocument; logo: string }) {
+  const order = "kind" in proposal && proposal.kind === "order" ? proposal : null;
+  const quote = "validUntil" in proposal ? proposal : null;
   const { customer } = proposal;
   const anyPhoto = proposal.items.some((item) => item.imageUrl);
-  const links = proposalReplyLinks(proposal);
+  const links = quote ? proposalReplyLinks(quote) : { talk: buildWhatsAppUrl(`55${proposal.company.whatsapp.replace(/\D/g, "")}`, `Olá, ${proposal.seller}! Quero falar sobre o pedido ${proposal.code}.`), approve: "" };
   return (
-    <Document author="Fare Foto" creator="Fare Foto" title={`Proposta ${proposal.code}`}>
+    <Document author="Fare Foto" creator="Fare Foto" title={`${order ? "Pedido" : "Proposta"} ${proposal.code}`}>
       <Page size="A4" style={s.page}>
         <View style={s.top}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <Image src={logo} style={s.logo} />
           <View>
-            <Text style={s.title}>Proposta comercial</Text>
-            <Text style={s.code}>Orçamento <Text style={s.codeStrong}>{proposal.code}</Text></Text>
+            <Text style={s.title}>{order ? "Pedido" : "Proposta comercial"}</Text>
+            <Text style={s.code}>{order ? "Pedido" : "Orçamento"} <Text style={s.codeStrong}>{proposal.code}</Text></Text>
           </View>
         </View>
 
@@ -127,7 +131,7 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           </View>
           <View style={s.metaDates}>
             <View style={s.date}><Text style={s.dateLabel}>Emitida em</Text><Text style={s.dateValue}>{proposal.issuedAt}</Text></View>
-            <View style={s.date}><Text style={s.dateLabel}>Válida até</Text><Text style={s.dateValue}>{proposal.validUntil}</Text></View>
+            {quote ? <View style={s.date}><Text style={s.dateLabel}>Válida até</Text><Text style={s.dateValue}>{quote.validUntil}</Text></View> : null}
           </View>
         </View>
 
@@ -171,23 +175,24 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal; logo: string
           </View>
           <View style={s.totals}>
             {/* Sinal de 50% no alto da coluna do total (espaço que ficava vazio). */}
-            <Text style={s.notice}>{proposal.notice}</Text>
+            {quote ? <><Text style={s.notice}>{quote.notice}</Text><Text style={s.small}>Sinal mínimo (50%): {brl(quote.minimumDeposit ?? Math.ceil(Math.round(quote.total * 100) / 2) / 100)}</Text><Text style={s.small}>Chave Pix (CNPJ): {quote.pixKey ?? "50.344.377/0001-36"}</Text></> : null}
             <View style={s.totalRow}><Text>Subtotal ({proposal.items.length} {proposal.items.length === 1 ? "item" : "itens"})</Text><Text>{brl(proposal.subtotal)}</Text></View>
             {proposal.discount ? (
               <View style={s.totalRow}><Text>{proposal.discount.label}</Text><Text style={s.discountValue}>− {brl(proposal.discount.amount)}</Text></View>
             ) : null}
-            <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View>
+            {quote ? <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View> : null}
             <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
+            {order?.finance ? <><View style={s.totalRow}><Text>Recebido</Text><Text>{brl(order.finance.paid)}</Text></View><View style={s.totalRow}><Text>Saldo</Text><Text>{brl(order.finance.balance)}</Text></View></> : null}
           </View>
         </View>
 
         <View style={s.cta}>
           <View>
-            <Text style={s.ctaTitle}>Gostou? Aprove pelo WhatsApp.</Text>
+            <Text style={s.ctaTitle}>{order ? "Fale sobre seu pedido pelo WhatsApp." : "Gostou? Aprove pelo WhatsApp."}</Text>
             <Text style={s.ctaSub}>Atendimento: {proposal.seller} · {proposal.company.whatsapp}</Text>
           </View>
           <View style={s.ctaButtons}>
-            <Link src={links.approve} style={s.btnApprove}><Text style={s.btnText}>Aprovar</Text></Link>
+            {quote ? <Link src={links.approve} style={s.btnApprove}><Text style={s.btnText}>Aprovar</Text></Link> : null}
             <Link src={links.talk} style={s.btnTalk}><Text style={s.btnText}>Falar com atendente</Text></Link>
           </View>
         </View>
@@ -215,7 +220,7 @@ async function inlineImage(url: string | null): Promise<string | null> {
   }
 }
 
-export async function renderProposalPdf(proposal: Proposal): Promise<Buffer> {
+async function renderDocumentPdf(proposal: Proposal | OrderDocument): Promise<Buffer> {
   registerFonts();
   const images = await Promise.all(proposal.items.map((item) => inlineImage(item.imageUrl)));
   const withImages = { ...proposal, items: proposal.items.map((item, index) => ({ ...item, imageUrl: images[index] })) };
@@ -223,3 +228,6 @@ export async function renderProposalPdf(proposal: Proposal): Promise<Buffer> {
   const logo = `data:image/png;base64,${readFileSync(path.join(ASSETS, "proposal-logo.png")).toString("base64")}`;
   return renderToBuffer(<ProposalDocument logo={logo} proposal={withImages} />);
 }
+
+export const renderProposalPdf = (proposal: Proposal): Promise<Buffer> => renderDocumentPdf(proposal);
+export const renderOrderPdf = (document: OrderDocument): Promise<Buffer> => renderDocumentPdf(document);

@@ -5,12 +5,13 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRi
 import { COLOR_GROUPS, colorGroupOf, colorGroupSwatch, isLightColorGroup } from "@/lib/colorGroups";
 import { PRODUCT_CATEGORIES } from "@/lib/productCategories";
 import { brl, useDebounced, type Product } from "@/components/staff/quoteEditorShared";
+import { PHOTO_PRODUCT_IMAGE, SIZE_GROUPS, SIZES, type SizeGroup } from "@/components/fotos/catalog";
 
 /**
  * Janela "Escolha o produto" (referência: brinde.me): busca + filtros à esquerda, grade de cards,
  * páginas no rodapé. Clique marca/desmarca (vários produtos, mesmo de páginas e buscas diferentes);
  * Confirmar abre a configuração de cada um, em fila. Duplo clique inclui o card e confirma na hora.
- * "Detalhes" abre foto grande, cores com estoque e descrição. Custo e estoque: só a equipe vê.
+ * "Detalhes" abre foto grande, cores com estoque e medidas. Custo e estoque: só a equipe vê.
  */
 
 export type PickedProduct = { product: Product; variant?: string };
@@ -18,7 +19,12 @@ type Match = { cost: number; stock: number; colors: number };
 type PickerProduct = Product & { match: Match };
 type Page = { products: PickerProduct[]; total: number; page: number; pages: number; colorCounts: Record<string, number> };
 
+/** Brindes (catálogo dos fornecedores), Fotos (tabela da revelação) e Gráfica (em breve): cada um com os seus filtros. */
+export type PickerTab = "brindes" | "fotos" | "grafica";
+const TABS: [PickerTab, string][] = [["brindes", "Brindes"], ["fotos", "Fotos"], ["grafica", "Gráfica"]];
+
 export type PickerState = {
+  tab: PickerTab;
   query: string; supplier: string; colorGroup: string; category: string;
   minCost: number; maxCost: number; minStock: string; sort: string; page: number;
 };
@@ -27,7 +33,7 @@ const COST_MAX = 800;
 const STOCK_CHIPS = [["", "Qualquer"], ["100", "100+"], ["500", "500+"], ["1000", "1.000+"], ["5000", "5.000+"]] as const;
 const SUPPLIERS = [["", "Todos os fornecedores"], ["xbz", "XBZ"], ["spot", "Spot"], ["asia", "Asia Import"]] as const;
 const SORTS = [["relevancia", "Relevância"], ["menor-custo", "Menor custo"], ["maior-custo", "Maior custo"], ["mais-estoque", "Mais estoque"], ["nome", "Nome (A–Z)"]] as const;
-export const EMPTY_PICKER: PickerState = { query: "", supplier: "", colorGroup: "", category: "", minCost: 0, maxCost: COST_MAX, minStock: "", sort: "relevancia", page: 1 };
+export const EMPTY_PICKER: PickerState = { tab: "brindes", query: "", supplier: "", colorGroup: "", category: "", minCost: 0, maxCost: COST_MAX, minStock: "", sort: "relevancia", page: 1 };
 
 const SUPPLIER_NAMES: Record<string, string> = { xbz: "XBZ", spot: "Spot", asia: "Asia Import" };
 /** "XBZ 00518" → "00518" (o servidor manda o código já com o nome do fornecedor). */
@@ -90,6 +96,17 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
   const stock = product.variants.reduce((sum, entry) => sum + entry.stock, 0);
   const photo = current?.imageUrl || product.imageUrl;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [specs, setSpecs] = useState<Array<{ label: string; value: string }> | null>(null);
+
+  // Medidas: buscadas ao abrir (a XBZ não manda no catálogo; o servidor lê e guarda).
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/backoffice/orcamento-editor/medidas?id=${encodeURIComponent(product.publicId)}`)
+      .then((response) => (response.ok ? response.json() : { specs: [] }))
+      .then((data: { specs?: Array<{ label: string; value: string }> }) => alive && setSpecs(data.specs ?? []))
+      .catch(() => alive && setSpecs([]));
+    return () => { alive = false; };
+  }, [product.publicId]);
 
   // Foco entra na janela ao abrir e volta para onde estava ao fechar.
   useEffect(() => {
@@ -136,10 +153,12 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
                 </li>
               ))}
             </ul>
-            {product.description ? (
+            {specs === null ? <p className="qe-pk-det-label">Carregando medidas…</p> : specs.length ? (
               <>
-                <p className="qe-pk-det-label">Descrição</p>
-                <p className="qe-pk-det-desc">{product.description}</p>
+                <p className="qe-pk-det-label">Medidas</p>
+                <dl className="qe-pk-det-codes qe-pk-det-specs">
+                  {specs.map((spec) => <div key={spec.label}><dt>{spec.label}</dt><dd>{spec.value}</dd></div>)}
+                </dl>
               </>
             ) : null}
           </div>
@@ -155,11 +174,13 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
 
 /* ------------------------------------------------------------------ janela */
 
-export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: {
+export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onStateChange }: {
   initial: PickerState;
   onClose: () => void;
   /** Produtos marcados, na ordem do clique (a configuração abre em fila). */
   onPick: (picked: PickedProduct[]) => void;
+  /** Tipo de foto escolhido na aba Fotos: abre a configuração (tamanho, papel, cópias e preço). */
+  onPickPhoto: (group: SizeGroup) => void;
   /** Guarda busca e filtros para a próxima vez que a janela abrir (adicionar vários produtos). */
   onStateChange: (state: PickerState) => void;
 }) {
@@ -205,8 +226,9 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
     };
   }, [onClose]);
 
-  const { supplier, colorGroup, category, sort, page } = state;
+  const { supplier, colorGroup, category, sort, page, tab } = state;
   useEffect(() => {
+    if (tab !== "brindes") return;
     const [minCost, maxCost] = costs.split("-").map(Number);
     const params = new URLSearchParams({ pagina: String(page), ordem: sort });
     if (query) params.set("q", query);
@@ -235,7 +257,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
     return () => {
       active = false;
     };
-  }, [query, supplier, colorGroup, category, sort, page, costs, stock]);
+  }, [query, supplier, colorGroup, category, sort, page, costs, stock, tab]);
 
   function commitCost(which: "min" | "max", text: string) {
     const value = parseCostInput(text);
@@ -280,7 +302,15 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
           <h2 id="qe-pk-title">Escolha o produto</h2>
           <button aria-label="Fechar" className="qe-modal-x" onClick={onClose} type="button"><X size={18} /></button>
         </header>
+        <div aria-label="Tipo de produto" className="qe-pk-tabs" role="tablist">
+          {TABS.map(([value, label]) => (
+            <button aria-selected={tab === value} className={tab === value ? "on" : undefined} key={value} onClick={() => setState((current) => ({ ...current, tab: value }))} role="tab" type="button">{label}</button>
+          ))}
+        </div>
 
+        {tab === "fotos" ? <PhotoPanel onPick={onPickPhoto} /> : null}
+        {tab === "grafica" ? <p className="qe-pk-empty qe-pk-soon">Gráfica &amp; Impressos: em breve (os filtros chegam junto com o catálogo).</p> : null}
+        {tab === "brindes" ? (
         <div className="qe-pk-body">
           <aside className={`qe-pk-side${filtersOpen ? " open" : ""}`}>
             <div className="qe-search">
@@ -296,7 +326,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
                 <ChevronDown aria-hidden="true" className="qe-pk-chev" size={15} />
               </button>
               {filtered ? (
-                <button className="qe-btn-text" onClick={() => { setState(EMPTY_PICKER); setCostText({ min: "0", max: costLabel(COST_MAX) }); }} type="button">Limpar</button>
+                <button className="qe-btn-text" onClick={() => { setState({ ...EMPTY_PICKER, tab: "brindes" }); setCostText({ min: "0", max: costLabel(COST_MAX) }); }} type="button">Limpar</button>
               ) : null}
             </div>
 
@@ -424,7 +454,14 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
             </div>
           </section>
         </div>
+        ) : null}
 
+        {tab !== "brindes" ? (
+          <footer className="qe-modal-foot qe-pk-foot">
+            <span className="qe-pk-pageinfo">{tab === "fotos" ? "Escolha o tipo; tamanho, papel e cópias vêm na próxima tela." : ""}</span>
+            <button className="qe-btn qe-btn-secondary" onClick={onClose} type="button">Voltar</button>
+          </footer>
+        ) : (
         <footer className="qe-modal-foot qe-pk-foot">
           <span className="qe-pk-pageinfo">{data ? `Página ${units(current)} de ${units(pages)} • ${units(data.total)} resultados` : ""}</span>
           <nav aria-label="Páginas" className="qe-pk-pager">
@@ -447,9 +484,36 @@ export function ProductPickerModal({ initial, onClose, onPick, onStateChange }: 
             {chosen.length ? `Confirmar (${chosen.length})` : "Confirmar"}
           </button>
         </footer>
+        )}
       </div>
 
       {details ? <ProductDetails onClose={() => setDetails(null)} onUse={(variant) => { choose(details, variant); setDetails(null); }} product={details} /> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ fotos */
+
+const sizeRange = (group: SizeGroup) => {
+  const list = SIZES.filter((size) => size.group === group);
+  return `${list[0].label.replace(" cm", "")} a ${list[list.length - 1].label}`;
+};
+
+/** Aba Fotos: os três tipos, como na página do cliente. Clique abre a configuração da foto. */
+function PhotoPanel({ onPick }: { onPick: (group: SizeGroup) => void }) {
+  return (
+    <div className="qe-pk-photos">
+      {SIZE_GROUPS.map((group) => (
+        <button className="qe-pk-photo-type" key={group.id} onClick={() => onPick(group.id)} type="button">
+          <span className="qe-pk-photo-img">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" src={PHOTO_PRODUCT_IMAGE[group.id]} />
+          </span>
+          <b>{group.label}</b>
+          <small>{sizeRange(group.id)}</small>
+          <em>{group.id === "grande" ? "Pronto em 3 dias úteis" : "Pronto em 1 hora"}</em>
+        </button>
+      ))}
     </div>
   );
 }

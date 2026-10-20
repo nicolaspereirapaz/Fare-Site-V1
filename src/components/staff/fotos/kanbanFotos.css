@@ -1,0 +1,6 @@
+/* Pedido de fotos no quadro e na página do pedido */
+.kb-tag.kb-tag-photos { background: var(--orange-soft); color: var(--orange-dark); font-weight: 700; }
+.pf-order-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 18px auto 0; border: 1px solid #f3d3c6; border-radius: var(--radius-md); background: var(--orange-soft); padding: 12px 16px; color: var(--navy-dark); font-size: .92rem; }
+.pf-order-banner strong { color: var(--orange-dark); }
+.pf-order-banner code { border-radius: 6px; background: #fff; padding: 2px 7px; font-size: .82rem; overflow-wrap: anywhere; }
+.pf-order-banner a { margin-left: auto; color: var(--navy); font-weight: 700; text-decoration: underline; }

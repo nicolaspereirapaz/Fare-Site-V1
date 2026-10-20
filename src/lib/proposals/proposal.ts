@@ -1,19 +1,27 @@
 import type { QuoteCartItem } from "@/lib/commerce";
+import { photoDocumentLines } from "@/components/staff/photoItems";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { applyDiscount, discountLabel } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_OWNER, quoteCode } from "@/lib/quotes/quoteCode";
 import type { Quote } from "@/lib/quotes/repository";
 
 /**
- * Proposta comercial que vai para o cliente (PDF + WhatsApp). Só dados públicos:
+ * Proposta comercial que vai para o cliente (HTML + WhatsApp). Só dados públicos:
  * nunca custo, fornecedor, código do fornecedor, SKU ou observação interna.
  */
 
 export const PROPOSAL_VALIDITY_DAYS = 7;
+
+/** Descrição e medidas do catálogo, para o documento que vai ao cliente (orçamento e pedido). */
+export type ProductDetails = { description: string; specs: string[] };
+export const productDetails = (details?: ProductDetails | null) => ({
+  ...(details?.description.trim() ? { description: details.description.trim() } : {}),
+  ...(details?.specs.length ? { specs: details.specs } : {}),
+});
 export const PROPOSAL_TERMS = {
   production: "7 dias após a aprovação da arte.",
   payment: "Pix ou boleto faturado (sob análise de CNPJ).",
-  /** Destaque separado no PDF, junto do total. */
+  /** Destaque separado no HTML, junto do total. */
   deposit: "Início da produção mediante sinal de 50%.",
   freight: "A combinar.",
 };
@@ -33,7 +41,13 @@ export type ProposalItem = {
   color: string | null;
   imageUrl: string | null;
   engravings: string[];
+  /** Descrição do fornecedor (brindes do catálogo). */
+  description?: string;
+  /** Medidas do produto ("Largura: 6,7 cm"), quando o fornecedor informa. */
+  specs?: string[];
   quantity: number;
+  /** Como contar a quantidade (padrão: unidade/unidades; fotos: cópia/cópias). */
+  unitLabel?: { one: string; many: string };
   unitPrice: number;
   total: number;
 };
@@ -51,6 +65,8 @@ export type Proposal = {
   discount: { label: string; amount: number } | null;
   /** Total a pagar (já com desconto). */
   total: number;
+  minimumDeposit?: number;
+  pixKey?: string;
   terms: Array<{ title: string; text: string }>;
   notice: string;
   company: typeof FARE_COMPANY;
@@ -66,7 +82,7 @@ function formatDate(date: Date) {
 
 export function buildProposal(
   quote: Quote,
-  options: { seller: string; now?: Date; siteUrl: string; imageOf?: (item: QuoteCartItem) => string | null },
+  options: { seller: string; now?: Date; siteUrl: string; imageOf?: (item: QuoteCartItem) => string | null; detailsOf?: (item: QuoteCartItem) => ProductDetails | null },
 ): Proposal {
   if (!OPEN.includes(quote.status)) throw new Error("Este orçamento já foi fechado.");
   if (!quote.items.length) throw new Error("O orçamento não tem itens.");
@@ -78,14 +94,17 @@ export function buildProposal(
   const items = quote.items.map((item): ProposalItem => {
     const unitPrice = item.unitPrice as number;
     const gift = item.slug.startsWith(GIFT_PREFIX);
+    const photo = photoDocumentLines(item);
     return {
-      name: item.productName,
+      name: photo?.name ?? item.productName,
       url: gift ? `${site}/${item.slug}` : null,
       code: item.codes?.fare || null,
-      color: item.selections?.["Variação"] || null,
+      color: photo ? photo.color : item.selections?.["Variação"] || null,
       imageUrl: options.imageOf?.(item) ?? null,
       engravings: (item.gravacoes ?? []).map((g) => (g.local ? `${g.descricao} · ${g.local}` : g.descricao)),
+      ...(photo ? { description: photo.description, specs: photo.specs } : productDetails(options.detailsOf?.(item))),
       quantity: item.quantity,
+      ...(photo ? { unitLabel: photo.unitLabel } : {}),
       unitPrice,
       total: cents(unitPrice * item.quantity),
     };
@@ -112,6 +131,8 @@ export function buildProposal(
     subtotal: applied.subtotalCents / 100,
     discount: quote.discount && applied.discountCents > 0 ? { label: discountLabel(quote.discount), amount: applied.discountCents / 100 } : null,
     total: applied.totalCents / 100,
+    minimumDeposit: Math.ceil(applied.totalCents / 2) / 100,
+    pixKey: "50.344.377/0001-36",
     terms: [
       { title: "Prazo de produção", text: PROPOSAL_TERMS.production },
       { title: "Pagamento", text: PROPOSAL_TERMS.payment },
@@ -129,9 +150,11 @@ export const brl = (value: number) => money.format(value).replace(/\u00a0/g, " "
 export function proposalWhatsAppText(proposal: Proposal): string {
   const first = proposal.customer.name.trim().split(/\s+/)[0] ?? "";
   const lines = proposal.items.map((item) => {
-    const parts = [`• ${item.quantity.toLocaleString("pt-BR")} × ${item.name}${item.color ? ` (${item.color})` : ""}`];
+    // Foto: "Revelação de Fotos 10x15cm" (vários tamanhos têm o mesmo nome) e preço por cópia.
+    const size = item.unitLabel && item.specs?.[0] ? ` ${item.specs[0]}` : "";
+    const parts = [`• ${item.quantity.toLocaleString("pt-BR")} × ${item.name}${size}${item.color ? ` (${item.color})` : ""}`];
     if (item.engravings.length) parts.push(item.engravings.join(" + "));
-    parts.push(`${brl(item.unitPrice)}/un.`);
+    parts.push(`${brl(item.unitPrice)}/${item.unitLabel ? item.unitLabel.one.toLowerCase() : "un."}`);
     return parts.join(" — ");
   });
   return [
@@ -144,9 +167,11 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     ...(proposal.discount ? [`Subtotal: ${brl(proposal.subtotal)} · ${proposal.discount.label}: − ${brl(proposal.discount.amount)}`] : []),
     `*Total: ${brl(proposal.total)}* (frete a combinar)`,
     `Produção: ${PROPOSAL_TERMS.production} Início mediante sinal de 50%.`,
+    `Sinal mínimo (50%): ${brl(proposal.minimumDeposit ?? Math.ceil(Math.round(proposal.total * 100) / 2) / 100)}`,
+    `Chave Pix (CNPJ): ${proposal.pixKey ?? "50.344.377/0001-36"}`,
     `Válida até ${proposal.validUntil}.`,
     "",
-    "O PDF com os detalhes vai em seguida. Para aprovar, é só responder por aqui!",
+    "Vou anexar o documento HTML com os detalhes na conversa. Para aprovar, é só responder por aqui!",
   ].join("\n");
 }
 
@@ -157,7 +182,7 @@ export function proposalWhatsAppUrl(proposal: Proposal): string | null {
   return buildWhatsAppUrl(full, proposalWhatsAppText(proposal));
 }
 
-/** Botões do PDF: o cliente responde para o WhatsApp da Fare Foto com a mensagem já escrita. */
+/** Botões do HTML: o cliente responde para o WhatsApp da Fare Foto com a mensagem já escrita. */
 export function proposalReplyLinks(proposal: Proposal): { approve: string; talk: string } {
   const store = `55${proposal.company.whatsapp.replace(/\D/g, "")}`;
   const hello = `Olá, ${proposal.seller}!`;

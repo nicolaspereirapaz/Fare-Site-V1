@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { isBrazilianPhone } from "@/lib/account/documents";
+import { formatPhoneBR, saveMyContact } from "@/lib/account/profileClient";
+
+/** Nome e sobrenome (o mesmo critério do servidor). */
+const fullName = (name: string) => name.trim().split(/\s+/).filter((part) => /\p{L}/u.test(part)).length >= 2;
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -25,6 +30,7 @@ function authErrorMessage(code: string | undefined) {
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +39,13 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
     setError(null);
+    if (signingUp && !fullName(name)) return setError("Informe seu nome completo (nome e sobrenome).");
+    if (signingUp && !isBrazilianPhone(phone)) return setError("Informe seu WhatsApp com DDD.");
+    setPending(true);
 
     const result = signingUp
-      ? await authClient.signUp.email({ name, email, password })
+      ? await authClient.signUp.email({ name: name.trim().replace(/\s+/g, " "), email, password })
       : await authClient.signIn.email({ email, password });
 
     if (result.error) {
@@ -45,6 +53,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       setPending(false);
       return;
     }
+    // Conta criada (já logada): guarda o WhatsApp, usado no carrinho e nos pedidos.
+    // Se falhar, o carrinho pede o telefone uma vez e salva.
+    if (signingUp) await saveMyContact({ phone });
 
     router.push("/minha-conta");
     router.refresh();
@@ -58,7 +69,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       <form className="auth-form" onSubmit={submit}>
         {signingUp ? (
-          <label><span>Nome</span><input autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <>
+            <label><span>Nome completo</span><input autoComplete="name" placeholder="Nome e sobrenome" required value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <label><span>WhatsApp</span><input autoComplete="tel" inputMode="tel" placeholder="(11) 90000-0000" required value={phone} onChange={(event) => setPhone(formatPhoneBR(event.target.value))} /></label>
+          </>
         ) : null}
         <label><span>E-mail</span><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label><span>Senha</span><input autoComplete={signingUp ? "new-password" : "current-password"} minLength={8} required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>

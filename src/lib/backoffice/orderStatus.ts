@@ -43,7 +43,8 @@ export const STATUS_PEDIDO_LEGADO: Record<string, StatusPedido> = {
 };
 
 const TRANSICOES_PERMITIDAS: Record<StatusPedido, StatusPedido[]> = {
-  aguardando_pagamento: ["aguardando_arte", "cancelado"],
+  // Pedido de fotos não tem arte: pago, vai direto para a produção.
+  aguardando_pagamento: ["aguardando_arte", "aguardando_producao", "cancelado"],
   aguardando_arte: ["criando_arte", "cancelado"],
   criando_arte: ["aguardando_producao", "aguardando_arte", "cancelado"],
   aguardando_producao: ["em_producao", "criando_arte", "cancelado"],

@@ -24,7 +24,7 @@ describe("mensagem do WhatsApp usa o número curto do pedido", () => {
     }));
     const { url } = await response.json();
     const text = new URL(url).searchParams.get("text")!;
-    expect(text).toContain("Pedido #FF-3F7A2C");
+    expect(text).toContain("Pedido #PED-3F7A2C");
     expect(text).toContain("Pagamento informado: Pix");
     expect(text).not.toContain("3f7a2c9e-a9cb");
   });

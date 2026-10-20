@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
 
-/** GET: PDF da proposta (?ver = abre no navegador). POST: marca como enviada e devolve a mensagem do WhatsApp. */
+/** GET: HTML autossuficiente da proposta (?ver=1 = abre no navegador). POST: marca como enviada e devolve a mensagem do WhatsApp. */
 export async function GET(request: Request, context: Context) {
   return proposalHandlers.pdf(request, (await context.params).id);
 }

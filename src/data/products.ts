@@ -281,53 +281,6 @@ export const products: Product[] = [
     artworkGuidance: "Envie JPG, PNG ou PDF. Arquivos com fundo transparente devem ser enviados em PNG.",
   },
   {
-    slug: "camiseta-personalizada",
-    name: "Camiseta personalizada",
-    category: "Brindes para sua empresa",
-    shortDescription: "Peças para eventos, equipes, presentes e ações da sua marca.",
-    description:
-      "Escolha modelo, cor e tamanho. Para grades variadas, informe os tamanhos nas observações do carrinho.",
-    image: "/images/camisetas-personalizadas.webp",
-    imageAlt: "Camiseta preta com estampa tipográfica personalizada",
-    badge: "Para equipes",
-    featured: true,
-    startingPrice: null,
-    quantities: [1, 5, 10, 25, 50],
-    options: [
-      {
-        id: "modelo",
-        label: "Modelo",
-        values: [
-          { id: "tradicional", label: "Tradicional" },
-          { id: "baby-look", label: "Baby look" },
-          { id: "infantil", label: "Infantil" },
-        ],
-      },
-      {
-        id: "cor",
-        label: "Cor",
-        values: [
-          { id: "branca", label: "Branca" },
-          { id: "preta", label: "Preta" },
-          { id: "outra", label: "Outra — consultar" },
-        ],
-      },
-      {
-        id: "tamanho",
-        label: "Tamanho",
-        values: [
-          { id: "p", label: "P" },
-          { id: "m", label: "M" },
-          { id: "g", label: "G" },
-          { id: "gg", label: "GG" },
-          { id: "grade", label: "Grade variada" },
-        ],
-      },
-    ],
-    highlights: ["Para uso pessoal ou corporativo", "Grade variada", "Arte validada antes da produção"],
-    artworkGuidance: "Logotipos funcionam melhor em PDF vetorial, SVG, AI ou PNG de alta resolução.",
-  },
-  {
     slug: "copo-termico-personalizado",
     name: "Copo térmico personalizado",
     category: "Brindes para sua empresa",

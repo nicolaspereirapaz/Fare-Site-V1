@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ArrowUpDown, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { ColorDots } from "@/components/ColorDots";
@@ -91,13 +92,40 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
   const [categories, setCategories] = useState<CategoryCount[]>([]);
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState(initialCategory);
+  // A categoria vive na URL (?categoria=): o menu "Brindes" troca a categoria sem recarregar a página.
+  const searchParams = useSearchParams();
+  const urlCategory = searchParams ? searchParams.get("categoria")?.trim() || "Todos" : initialCategory;
+  const [category, setCategory] = useState(urlCategory);
+  const [syncedUrlCategory, setSyncedUrlCategory] = useState(urlCategory);
   const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<CatalogSort>("relevancia");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // A URL mudou para outra categoria (menu do cabeçalho, voltar do navegador): mostra essa, da 1ª página, sem a busca anterior.
+  // Só reage quando a URL muda; a escolha feita aqui na lateral já está na tela quando a URL a alcança.
+  if (urlCategory !== syncedUrlCategory) {
+    setSyncedUrlCategory(urlCategory);
+    if (urlCategory !== category) {
+      setCategory(urlCategory);
+      setDraftSearch("");
+      setSearch("");
+      setPage(1);
+      setLoading(true);
+    }
+  }
+
+  function chooseCategory(next: string) {
+    setLoading(true);
+    setCategory(next);
+    setPage(1);
+    const url = new URL(window.location.href);
+    if (next === "Todos") url.searchParams.delete("categoria");
+    else url.searchParams.set("categoria", next);
+    if (url.href !== window.location.href) window.history.pushState(null, "", url);
+  }
 
   const load = useCallback(
     async () => {
@@ -180,13 +208,11 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
   );
 
   function clearFilters() {
-    setLoading(true);
+    chooseCategory("Todos");
     setDraftSearch("");
     setSearch("");
-    setCategory("Todos");
     setDraftFilters(EMPTY_FILTERS);
     setFilters(EMPTY_FILTERS);
-    setPage(1);
   }
 
   return (
@@ -302,11 +328,7 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
                 <input
                   checked={category === item.name}
                   name="xbz-category"
-                  onChange={() => {
-                    setLoading(true);
-                    setCategory(item.name);
-                    setPage(1);
-                  }}
+                  onChange={() => chooseCategory(item.name)}
                   type="radio"
                   value={item.name}
                 />

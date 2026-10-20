@@ -39,6 +39,7 @@ export function createDirectOrderHandler(deps: QuoteBuilderDeps) {
         payment: { amountCents: receipt.amountCents, paidAt: receipt.paidAt as string | null },
         installments: body.installments as number | null, dueDate: body.dueDate as string | null,
         deliveryDate: body.deliveryDate as string | null, deliveryMode: body.deliveryMode as DirectOrderInput["deliveryMode"],
+        deliveryTime: (body.deliveryTime ?? null) as string | null,
       });
       return json({ id: order.id, code: orderCode(order.id), orderStatus: order.status }, 201);
     } catch (error) {

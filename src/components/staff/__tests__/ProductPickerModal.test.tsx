@@ -57,9 +57,21 @@ describe("janela de busca", () => {
 
   const renderPicker = () => {
     const onPick = vi.fn();
-    render(<ProductPickerModal initial={EMPTY_PICKER} onClose={vi.fn()} onPick={onPick} onStateChange={vi.fn()} />);
-    return { onPick };
+    const onPickPhoto = vi.fn();
+    render(<ProductPickerModal initial={EMPTY_PICKER} onClose={vi.fn()} onPick={onPick} onPickPhoto={onPickPhoto} onStateChange={vi.fn()} />);
+    return { onPick, onPickPhoto };
   };
+
+  it("aba Fotos: só os três tipos, como na página do cliente; clique abre a configuração do tipo", async () => {
+    const user = userEvent.setup();
+    const { onPickPhoto } = renderPicker();
+    await user.click(screen.getByRole("tab", { name: "Fotos" }));
+    expect(screen.queryByLabelText("Buscar produto")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Ampliações/ }));
+    expect(onPickPhoto).toHaveBeenCalledWith("ampliacao");
+    await user.click(screen.getByRole("tab", { name: "Gráfica" }));
+    expect(screen.getByText(/em breve/)).toBeInTheDocument();
+  });
   const confirmButton = () => screen.getByRole("button", { name: /^Confirmar/ });
 
   it("vários produtos: clicar marca e desmarca, Confirmar (n) manda todos na ordem do clique", async () => {

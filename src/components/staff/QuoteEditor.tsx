@@ -6,10 +6,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PencilLine, Search, X } from "lucide-react";
 import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductConfigModal";
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
+import { PhotoConfigModal } from "@/components/staff/PhotoConfigModal";
+import { photoFromName, photoTablePrice, type PhotoChoice } from "@/components/staff/photoItems";
+import { paperLabel, PHOTO_PRODUCT_IMAGE, sizeById, SIZES, type SizeGroup } from "@/components/fotos/catalog";
 import { QuoteCreatedDialog } from "@/components/staff/QuoteCreatedDialog";
 import { quoteCode } from "@/lib/quotes/quoteCode";
+import { orderCode } from "@/lib/orders/orderCode";
+
+/** Mesma regra do servidor (ORDER_EDITABLE_STATUSES em lib/orders/payments). */
+const ORDER_EDITABLE = ["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback"];
 import { DirectOrderFields } from "@/components/staff/DirectOrderFields";
-import { dateLabel, EMPTY_PAYMENT_FORM, paidCents, paymentFormError, todayInBrazil, type PaymentForm } from "@/components/staff/paymentFieldsShared";
+import { deliveryLabel, EMPTY_PAYMENT_FORM, paidCents, paymentFormError, todayInBrazil, type PaymentForm } from "@/components/staff/paymentFieldsShared";
 import {
   brl,
   EMPTY_TOTALS,
@@ -17,6 +24,7 @@ import {
   fromServerItem,
   initials,
   newId,
+  parseNumber,
   postJson,
   useDebounced,
   type Customer,
@@ -147,9 +155,13 @@ function CustomerPicker({ onPick }: { onPick: (customer: Customer) => void }) {
 
 /* ------------------------------------------------------------------ editor */
 
-export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mode?: "quote" | "order" }) {
+export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: string; orderId?: string; mode?: "quote" | "order" }) {
   const router = useRouter();
-  const isOrder = mode === "order";
+  /** Editando pedido já criado: pagamento e entrega ficam na página do pedido. */
+  const editingOrder = Boolean(orderId);
+  const isOrder = mode === "order" || editingOrder;
+  const docId = quoteId ?? orderId;
+  const [paidOnServer, setPaidOnServer] = useState(0);
   const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paidAt: todayInBrazil() }));
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
@@ -165,28 +177,33 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalStart | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** Configuração de foto aberta (nova ou editando um item de foto da lista). */
+  const [photoModal, setPhotoModal] = useState<{ start: PhotoChoice; item?: Extract<Item, { source: "avulso" }> } | null>(null);
   /** Produtos marcados na busca que ainda vão ser configurados (o atual está em `modal`). */
   const [queue, setQueue] = useState<{ rest: PickedProduct[]; total: number } | null>(null);
   /** Busca e filtros da janela "Escolha o produto" continuam ao reabrir (vários produtos seguidos). */
   const [pickerState, setPickerState] = useState<PickerState>(EMPTY_PICKER);
-  const [loading, setLoading] = useState(Boolean(quoteId));
+  const [loading, setLoading] = useState(Boolean(docId));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  /** Orçamento acabou de ser criado: mostra a prévia do PDF antes de voltar ao quadro. */
-  const [created, setCreated] = useState<string | null>(null);
+  /** Orçamento acabou de ser criado: mostra a prévia do HTML antes de voltar ao quadro. */
+  // Depois de salvar: prévia do documento do cliente na tela.
+  const [created, setCreated] = useState<{ kind: "quote" | "order"; id: string; verb: "criado" | "salvo"; tab: string } | null>(null);
   const [state, setState] = useState<{ updatedAt: string; status: string; createdBy: string | null } | null>(null);
   const idempotencyKey = useRef(`painel-${newId()}`);
-  const editable = !state || ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"].includes(state.status);
+  const editable = !state || (editingOrder ? ORDER_EDITABLE : ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"]).includes(state.status);
 
-  // Abrir orçamento existente.
+  // Abrir orçamento ou pedido existente.
   useEffect(() => {
-    if (!quoteId) return;
+    if (!docId) return;
     let active = true;
-    fetch(`/api/backoffice/orcamento-editor/${quoteId}`, { cache: "no-store" })
+    fetch(editingOrder ? `/api/backoffice/pedido-editor/${docId}` : `/api/backoffice/orcamento-editor/${docId}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error === "QUOTE_NOT_FOUND" ? "Orçamento não encontrado." : "Não foi possível abrir o orçamento.");
+        if (!response.ok) throw new Error(editingOrder
+          ? payload.error === "ORDER_NOT_FOUND" ? "Pedido não encontrado." : "Não foi possível abrir o pedido."
+          : payload.error === "QUOTE_NOT_FOUND" ? "Orçamento não encontrado." : "Não foi possível abrir o orçamento.");
         if (!active) return;
         setItems((payload.items as ServerItem[]).map(fromServerItem));
         setProducts(payload.products ?? {});
@@ -195,13 +212,14 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
         if (payload.hasCustomer === false) setNeedsCustomer(true);
         else setFixedCustomer(payload.customer);
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
+        if (editingOrder) setPaidOnServer(payload.paidCents ?? 0);
       })
       .catch((error: unknown) => active && setLoadError(error instanceof Error ? error.message : "Erro inesperado."))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [quoteId]);
+  }, [docId, editingOrder]);
 
   // Prévia do preço no servidor a cada mudança dos itens ou do desconto.
   const discountBody = discount.value.trim() ? discount : null;
@@ -238,9 +256,18 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
     openNext(picked, picked.length);
   }, [openNext]);
   const closePicker = useCallback(() => setPickerOpen(false), []);
+  /** Aba Fotos: abre a configuração já no tipo escolhido (revelação começa no 10 × 15). */
+  const choosePhoto = useCallback((group: SizeGroup) => {
+    setPickerOpen(false);
+    setPhotoModal({ start: { sizeId: group === "revelacao" ? "10x15" : SIZES.find((size) => size.group === group)!.id } });
+  }, []);
+  const closePhotoModal = useCallback(() => setPhotoModal(null), []);
 
   function editItem(item: Item) {
-    if (item.source === "avulso") return setModal({ kind: "avulso", item });
+    if (item.source === "avulso") {
+      const photo = photoFromName(item.name);
+      return photo ? setPhotoModal({ start: photo, item }) : setModal({ kind: "avulso", item });
+    }
     const product = products[item.publicId];
     if (product) setModal({ kind: "catalogo", product, item });
   }
@@ -258,10 +285,10 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
   const skipQueued = useCallback(() => queue && openNext(queue.rest, queue.total), [queue, openNext]);
 
   async function submit() {
-    if (isOrder && (!customer || paymentFormError(payment, Math.round(totals.total * 100)))) return;
+    if (isOrder && !editingOrder && (!customer || paymentFormError(payment, Math.round(totals.total * 100)))) return;
     setSaving(true);
     setSaveError(null);
-    const body = quoteId
+    const body = docId
       ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
       : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody,
         ...(isOrder ? {
@@ -270,25 +297,23 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
           installments: payment.paymentMethod === "cartao_credito" ? Number(payment.installments) : null,
           dueDate: ["boleto", "faturamento_empresa"].includes(payment.paymentMethod) ? payment.dueDate || null : null,
           deliveryDate: payment.deliveryDate || null, deliveryMode: payment.deliveryMode,
+          deliveryTime: payment.deliveryDate && payment.deliveryTime ? payment.deliveryTime : null,
         } : {}),
       };
     const { ok, status, data } = await postJson<{ id?: string; orderStatus?: string; message?: string; preview?: Preview[] }>(
-      isOrder ? "/api/backoffice/pedido-editor" : quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
+      editingOrder ? `/api/backoffice/pedido-editor/${orderId}` : isOrder ? "/api/backoffice/pedido-editor" : quoteId ? `/api/backoffice/orcamento-editor/${quoteId}` : "/api/backoffice/orcamento-editor",
       body,
-      quoteId ? "PUT" : "POST",
+      docId ? "PUT" : "POST",
     );
     setSaving(false);
     if (ok) {
-      if (isOrder) {
-        router.push(data.orderStatus === "aguardando_pagamento" ? "/equipe?aba=orcamentos" : "/equipe?aba=pedidos");
-        router.refresh();
+      const tab = isOrder && data.orderStatus !== "aguardando_pagamento" ? "pedidos" : "orcamentos";
+      const id = data.id ?? docId;
+      if (id) {
+        setCreated({ kind: isOrder ? "order" : "quote", id, verb: docId ? "salvo" : "criado", tab });
         return;
       }
-      if (!quoteId && data.id) {
-        setCreated(data.id);
-        return;
-      }
-      router.push("/equipe?aba=orcamentos");
+      router.push(`/equipe?aba=${tab}`);
       router.refresh();
       return;
     }
@@ -302,24 +327,28 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
 
   const productLabel = (item: Item) => (item.source === "catalogo" ? products[item.publicId]?.name ?? "Produto" : item.name);
   // Cliente é opcional: sem ele o orçamento fica "Cliente a definir".
-  const paymentError = isOrder ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
-  const receivedCents = paidCents(payment.paid) ?? 0;
-  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && (!isOrder || (customer && !changingCustomer && !paymentError));
+  const paymentError = isOrder && !editingOrder ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
+  const receivedCents = editingOrder ? paidOnServer : paidCents(payment.paid) ?? 0;
+  // Pedido editado não pode ficar com total abaixo do que já foi recebido.
+  const belowPaid = editingOrder && Math.round(totals.total * 100) < paidOnServer;
+  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && !belowPaid
+    && (!isOrder || editingOrder || (customer && !changingCustomer && !paymentError));
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
 
-  if (loading) return <main className="qe-page"><p className="qe-hint">Carregando orçamento…</p></main>;
-  if (loadError) return <main className="qe-page"><p className="qe-error">{loadError}</p><Link className="qe-btn-text" href="/equipe?aba=orcamentos">Voltar aos orçamentos</Link></main>;
+  if (loading) return <main className="qe-page"><p className="qe-hint">{editingOrder ? "Carregando pedido…" : "Carregando orçamento…"}</p></main>;
+  if (loadError) return <main className="qe-page"><p className="qe-error">{loadError}</p><Link className="qe-btn-text" href={editingOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{editingOrder ? "Voltar aos pedidos" : "Voltar aos orçamentos"}</Link></main>;
 
   return (
     <main className="qe-page">
-      <div className="qe-crumb"><Link href={isOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{isOrder ? "Pedidos" : "Orçamentos"}</Link> / {quoteId ? "Editar" : "Novo"}</div>
-      <h1 className="qe-title">{isOrder ? "Novo pedido" : quoteId ? "Editar orçamento" : "Novo orçamento"}</h1>
-      {!editable ? <p className="qe-error">Este orçamento já foi fechado e não pode mais ser alterado.</p> : null}
+      <div className="qe-crumb"><Link href={isOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{isOrder ? "Pedidos" : "Orçamentos"}</Link> / {docId ? "Editar" : "Novo"}</div>
+      <h1 className="qe-title">{editingOrder ? `Editar pedido ${orderCode(orderId!)}` : isOrder ? "Novo pedido" : quoteId ? "Editar orçamento" : "Novo orçamento"}</h1>
+      {!editable ? <p className="qe-error">{editingOrder ? "Este pedido já foi concluído ou cancelado e não pode mais ser alterado." : "Este orçamento já foi fechado e não pode mais ser alterado."}</p> : null}
+      {editingOrder && editable ? <p className="qe-hint">Pagamento e entrega ficam na página do pedido. Aqui você altera itens, desconto e observação.</p> : null}
 
       <div className="qe-layout">
         <div>
           <section className="qe-card">
-            <h2>Cliente{isOrder ? <span className="qe-optional">obrigatório</span> : !fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
+            <h2>Cliente{isOrder && !editingOrder ? <span className="qe-optional">obrigatório</span> : !fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
             {fixedCustomer ? (
               <div className="qe-client">
                 <div className="qe-initials">{initials(fixedCustomer.name)}</div>
@@ -359,6 +388,9 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
               const variant = product?.variants.find((entry) => entry.label === (item.source === "catalogo" ? item.variant : ""));
               const result = preview[item.id];
               const ok = result?.ok ? result : null;
+              const photo = item.source === "avulso" ? photoFromName(item.name) : null;
+              // Foto sempre grava o preço; só é "especial" quando difere da tabela do site.
+              const specialPhotoPrice = photo && item.priceOverride ? Math.abs(parseNumber(item.priceOverride) - photoTablePrice(photo.sizeId, item.quantity)) > 0.004 : false;
               return (
                 <div className="qe-item" key={item.id}>
                   <div className="qe-line qe-line-list">
@@ -366,15 +398,15 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
                       {product ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={variant?.imageUrl || product.imageUrl} /></span>
+                      ) : photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <span className="qe-thumb qe-thumb-md"><img alt="" src={PHOTO_PRODUCT_IMAGE[sizeById(photo.sizeId).group]} /></span>
                       ) : <span className="qe-thumb qe-thumb-md qe-thumb-blank">avulso</span>}
                       <div>
                         <b>{productLabel(item)}</b>
-                        <small>{product ? `${product.fareCode} · ${product.supplierCode}` : "Fora do catálogo"}</small>
-                        <small>
-                          {ok ? `Custo ${brl(ok.productCost)}/un.` : ""}
-                          {item.costOverride ? <span className="qe-hand"> digitado</span> : null}
-                        </small>
-                        {item.gravacoes.length ? (
+                        {/* Custo fica na configuração do item e no resumo; aqui só o que identifica o item. */}
+                        <small>{product ? `${product.fareCode} · ${product.supplierCode}` : photo ? (photo.paper ? `Papel ${paperLabel(photo.paper)}` : "Papel: o cliente escolhe no link") : "Fora do catálogo"}</small>
+                        {photo ? null : item.gravacoes.length ? (
                           <ul className="qe-glist">
                             {item.gravacoes.map((gravacao, index) => {
                               const calc = ok?.gravacoes[index];
@@ -394,7 +426,7 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
                     <span className="qe-r">{item.quantity.toLocaleString("pt-BR")}</span>
                     <span className="qe-r qe-unit">
                       {ok ? brl(ok.unitPrice) : "—"}
-                      {item.priceOverride ? <small className="qe-hand qe-block">digitado</small> : null}
+                      {photo ? (specialPhotoPrice ? <small className="qe-hand qe-block">preço especial</small> : null) : item.priceOverride ? <small className="qe-hand qe-block">digitado</small> : null}
                     </span>
                     <span className="qe-r">{ok ? brl(ok.total) : "—"}</span>
                     {editable ? (
@@ -420,7 +452,7 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
             ) : null}
           </section>
 
-          {isOrder ? <DirectOrderFields onChange={setPayment} value={payment} /> : null}
+          {isOrder && !editingOrder ? <DirectOrderFields onChange={setPayment} value={payment} /> : null}
           <section className="qe-card">
             <h2>Observações internas</h2>
             <textarea disabled={!editable} onChange={(event) => setNotes(event.target.value)} placeholder="Só a equipe vê." value={notes} />
@@ -433,7 +465,7 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
             const result = preview[item.id];
             return (
               <div className="qe-sum-row" key={item.id}>
-                <span>{productLabel(item)} · {item.quantity.toLocaleString("pt-BR")} un.</span>
+                <span>{productLabel(item)} · {item.quantity.toLocaleString("pt-BR")} {item.source === "avulso" && photoFromName(item.name) ? (item.quantity === 1 ? "cópia" : "cópias") : "un."}</span>
                 <span>{result?.ok ? brl(result.total) : "—"}</span>
               </div>
             );
@@ -482,7 +514,7 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
           {isOrder ? <>
             <div className="qe-sum-row"><span>Já pago</span><span>{brl(receivedCents / 100)}</span></div>
             <div className="qe-sum-row"><span>Falta pagar</span><span className="qe-payment-debt">{brl(Math.max(0, Math.round(totals.total * 100) - receivedCents) / 100)}</span></div>
-            <div className="qe-sum-row"><span>Entrega prevista</span><span>{dateLabel(payment.deliveryDate)}</span></div>
+            {editingOrder ? null : <div className="qe-sum-row"><span>Entrega prevista</span><span>{deliveryLabel(payment.deliveryDate, payment.deliveryTime)}</span></div>}
           </> : null}
           {totals.pending ? <p className="qe-error">{totals.pending === 1 ? "1 item precisa de correção." : `${totals.pending} itens precisam de correção.`}</p> : null}
 
@@ -494,25 +526,40 @@ export function QuoteEditor({ quoteId, mode = "quote" }: { quoteId?: string; mod
 
           {!isOrder ? <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p> : null}
           {paymentError ? <p className="qe-error">{paymentError}</p> : null}
+          {belowPaid ? <p className="qe-error">O total não pode ficar menor que o já recebido ({brl(paidOnServer / 100)}).</p> : null}
           {saveError ? <p className="qe-error">{saveError}</p> : null}
           {editable ? (
             <button className="qe-btn qe-btn-primary qe-submit" disabled={!canSubmit} onClick={submit} type="button">
-              {saving ? "Salvando…" : isOrder ? "Criar pedido" : quoteId ? "Salvar alterações" : "Criar orçamento"}
+              {saving ? "Salvando…" : docId ? "Salvar alterações" : isOrder ? "Criar pedido" : "Criar orçamento"}
             </button>
           ) : null}
           {!fixedCustomer && !customer ? <p className="qe-hint qe-center">{isOrder ? "Selecione o cliente para criar o pedido." : "Sem cliente, fica como “Cliente a definir”. Dá para escolher depois."}</p> : null}
         </aside>
       </div>
 
-      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onStateChange={setPickerState} /> : null}
+      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onPickPhoto={choosePhoto} onStateChange={setPickerState} /> : null}
+      {photoModal ? (
+        <PhotoConfigModal
+          item={photoModal.item}
+          key={photoModal.item?.id ?? "nova-foto"}
+          onClose={closePhotoModal}
+          onSave={(item) => {
+            setItems((list) => (list.some((entry) => entry.id === item.id) ? list.map((entry) => (entry.id === item.id ? item : entry)) : [...list, item]));
+            setPhotoModal(null);
+          }}
+          start={photoModal.start}
+        />
+      ) : null}
       {created ? (
         <QuoteCreatedDialog
-          code={quoteCode(created)}
+          code={created.kind === "order" ? orderCode(created.id) : quoteCode(created.id)}
+          kind={created.kind}
           onClose={() => {
-            router.push(`/equipe?aba=orcamentos&novo=${encodeURIComponent(created)}`);
+            router.push(`/equipe?aba=${created.tab}&novo=${encodeURIComponent(created.id)}`);
             router.refresh();
           }}
-          quoteId={created}
+          quoteId={created.id}
+          verb={created.verb}
         />
       ) : null}
       {modal ? <ProductConfigModal key={modal.item?.id ?? (modal.kind === "catalogo" ? modal.product.publicId : "avulso")} onClose={closeModal} onSave={saveFromModal} queue={queue && queue.total > 1 ? { position: queue.total - queue.rest.length, total: queue.total, onSkip: skipQueued } : undefined} start={modal} /> : null}

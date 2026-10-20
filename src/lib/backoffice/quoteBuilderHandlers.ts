@@ -9,6 +9,9 @@ import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
 import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote } from "@/lib/quotes/repository";
+import { findOrderById } from "@/lib/orders/repository";
+import { getOrderFinance, replaceOrderItems } from "@/lib/orders/payments";
+import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 
 /** Rotas do editor de orçamentos do painel (clientes, produtos, prévia, criar e editar). */
 
@@ -226,18 +229,78 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         const catalog = await deps.catalog();
         const { items, preview } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
         if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
-        // Itens que não mudaram mantêm quem formou o preço e quando.
+        // Itens que não mudaram mantêm quem formou o preço e quando; o mockup fica com o item.
         const previous = new Map(quote.items.map((item) => [item.id, item]));
         const merged = items.map((item) => {
           const before = previous.get(item.id);
           const same = before?.costing && before.unitPrice === item.unitPrice && before.quantity === item.quantity
             && JSON.stringify(draftFromItem(before)) === JSON.stringify(draftFromItem(item));
-          return same && before.costing && item.costing ? { ...item, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : item;
+          const kept = before?.mockup ? { ...item, mockup: before.mockup } : item;
+          return same && before.costing && item.costing ? { ...kept, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : kept;
         });
         const updated = replaceQuoteItems(deps.database(), {
           quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount, owner,
         });
         return json({ id: updated.id, updatedAt: updated.updatedAt });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Não foi possível salvar.";
+        return json({ error: /outra pessoa/.test(message) ? "CONFLICT" : "INVALID_REQUEST", message }, /outra pessoa/.test(message) ? 409 : 400);
+      }
+    },
+
+    /** Pedido aberto no editor (mesmo formato do orçamento + quanto já foi recebido). */
+    async readOrder(request: Request, orderId: string) {
+      const access = await staff(deps, request);
+      if (access.error) return access.error;
+      const order = findOrderById(deps.database(), orderId);
+      if (!order) return json({ error: "ORDER_NOT_FOUND" }, 404);
+      const finance = getOrderFinance(deps.database(), orderId);
+      const items = order.items.map(draftFromItem);
+      const catalog = await deps.catalog();
+      const products: Record<string, ReturnType<typeof toEditorProduct>> = {};
+      for (const item of items) {
+        if (item.source !== "catalogo" || products[item.publicId]) continue;
+        const product = catalog.lookup(item.publicId);
+        if (product) products[item.publicId] = toEditorProduct(product);
+      }
+      return json({
+        id: order.id, status: order.status, updatedAt: order.updatedAt, createdBy: finance?.createdBy ?? null,
+        internalNotes: finance?.internalNotes ?? "", discount: order.discount, hasCustomer: true,
+        customer: { name: order.customer.name, company: order.customer.company ?? "", phone: order.customer.phone ?? "", notes: order.customer.notes ?? "" },
+        items, products, paidCents: finance?.paidCents ?? 0,
+      });
+    },
+
+    /** Salva os itens do pedido; pagamento e entrega continuam na página do pedido. */
+    async updateOrder(request: Request, orderId: string) {
+      const access = await staff(deps, request);
+      if (access.error) return access.error;
+      const rejected = financialMutationGuard(request);
+      if (rejected) return rejected;
+      const body = await readJson(request);
+      if (!body) return json({ error: "INVALID_REQUEST" }, 400);
+      const order = findOrderById(deps.database(), orderId);
+      if (!order) return json({ error: "ORDER_NOT_FOUND" }, 404);
+      try {
+        const drafts = parseDraftItems(body.items);
+        const discount = "discount" in body ? parseDiscount(body.discount) : undefined;
+        const catalog = await deps.catalog();
+        const { items, preview } = buildQuoteItems(drafts, catalog.lookup, { name: access.session.user.name });
+        if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
+        // Itens que não mudaram mantêm quem formou o preço e quando; o mockup fica com o item.
+        const previous = new Map(order.items.map((item) => [item.id, item]));
+        const merged = items.map((item) => {
+          const before = previous.get(item.id);
+          const same = before?.costing && before.unitPrice === item.unitPrice && before.quantity === item.quantity
+            && JSON.stringify(draftFromItem(before)) === JSON.stringify(draftFromItem(item));
+          const kept = before?.mockup ? { ...item, mockup: before.mockup } : item;
+          return same && before.costing && item.costing ? { ...kept, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : kept;
+        });
+        const updated = replaceOrderItems(deps.database(), {
+          orderId, items: merged, discount, expectedUpdatedAt: String(body.updatedAt ?? ""),
+          ...(typeof body.internalNotes === "string" ? { internalNotes: body.internalNotes.trim().slice(0, 2000) } : {}),
+        });
+        return json({ id: updated.id, updatedAt: updated.updatedAt, orderStatus: updated.status });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Não foi possível salvar.";
         return json({ error: /outra pessoa/.test(message) ? "CONFLICT" : "INVALID_REQUEST", message }, /outra pessoa/.test(message) ? 409 : 400);

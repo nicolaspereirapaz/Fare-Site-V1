@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 /** Área da equipe: layout próprio, sem o menu, carrinho e rodapé da loja. */
 export default function StaffRootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={`${dmSans.variable} ${outfit.variable}`}>
+    <html data-scroll-behavior="smooth" lang="pt-BR" className={`${dmSans.variable} ${outfit.variable}`}>
       <body className="staff-body">{children}</body>
     </html>
   );

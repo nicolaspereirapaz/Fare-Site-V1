@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackofficeBoard } from "@/components/BackofficeBoard";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
 const ORDER = {
   id: "order-1",
   status: "aguardando_arte" as string,
@@ -13,7 +16,7 @@ const ORDER = {
   itemCount: 2,
   total: 250,
   createdAt: "2026-09-28T12:00:00.000Z",
-  code: "FF-ORDER1",
+  code: "PED-ORDER1",
   notes: null as string | null,
   billing: null as unknown,
   history: [] as Array<{ status: string; at: string; by: string }>,
@@ -58,6 +61,7 @@ const cardOf = async (name: string) => (await screen.findByText(name)).closest("
 describe("painel: aba Pedidos", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    push.mockClear();
     vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
@@ -84,7 +88,7 @@ describe("painel: aba Pedidos", () => {
     render(<BackofficeBoard canCancel={false} />);
     const card = await cardOf("Padaria Boa Vista");
 
-    expect(within(card).getByText("#FF-ORDER1")).toBeInTheDocument();
+    expect(within(card).getByText("#PED-ORDER1")).toBeInTheDocument();
     expect(within(card).getByText("R$ 250,00")).toBeInTheDocument();
     expect(within(card).getByText("100 × Caneta Plástica · Azul + 1 item")).toBeInTheDocument();
     expect(within(card).queryByText("11988887777")).not.toBeInTheDocument();
@@ -116,32 +120,15 @@ describe("painel: aba Pedidos", () => {
     expect(card).toHaveAttribute("aria-roledescription", "cartão arrastável");
   });
 
-  it("'Etapa' no detalhe move o pedido; pular etapas grava cada passo em ordem", async () => {
-    const fetchMock = stubOrdersApi([ORDER]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    await user.click(await cardOf("Cliente Teste"));
-    const dialog = screen.getByRole("dialog", { name: "Cliente Teste" });
-
-    await user.selectOptions(within(dialog).getByLabelText("Etapa"), "em_producao");
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    const patches = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH").map(([, init]) => JSON.parse(String((init as RequestInit).body)).status);
-    expect(patches).toEqual(["criando_arte", "aguardando_producao", "em_producao"]);
-    const column = screen.getByRole("region", { name: "Em produção" });
-    expect(await within(column).findByText("Cliente Teste")).toBeInTheDocument();
+  it("clique abre a página completa, não uma janela",async()=>{
+    stubOrdersApi([ORDER]);const user=userEvent.setup();render(<BackofficeBoard canCancel={false}/>);
+    await user.click(await cardOf('Cliente Teste'));
+    expect(push).toHaveBeenCalledWith('/equipe/pedidos/order-1');expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it("voltar etapa pelo detalhe também funciona", async () => {
-    const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_retirada" }]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    await user.click(await cardOf("Cliente Teste"));
-    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "em_producao");
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backoffice/orders/order-1",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "em_producao" }) }),
-    ));
+  it("Enter também abre a consulta do pedido",async()=>{
+    stubOrdersApi([ORDER]);const user=userEvent.setup();render(<BackofficeBoard canCancel={false}/>);
+    (await cardOf('Cliente Teste')).focus();await user.keyboard('{Enter}');expect(push).toHaveBeenCalledWith('/equipe/pedidos/order-1');
   });
 
   it("finalizado há menos de 24 h fica na coluna Finalizado, com o tempo que falta", async () => {
@@ -152,84 +139,28 @@ describe("painel: aba Pedidos", () => {
     expect(within(card).getByText("Sai do quadro em 22 h")).toBeInTheDocument();
   });
 
-  it("em Aguardando feedback, 'Finalizar pedido' (no detalhe) leva para a coluna Finalizado", async () => {
-    const fetchMock = stubOrdersApi([{ ...ORDER, status: "aguardando_feedback" }]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel />);
-    await user.click(await cardOf("Cliente Teste"));
-
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Finalizar pedido/ }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backoffice/orders/order-1",
-      expect.objectContaining({ body: JSON.stringify({ status: "concluido" }) }),
-    ));
-    const column = screen.getByRole("region", { name: "Finalizado" });
-    expect(await within(column).findByText("Cliente Teste")).toBeInTheDocument();
+  it("finalizar fica na consulta, não altera o estilo/ações do cartão",async()=>{
+    stubOrdersApi([{...ORDER,status:'aguardando_feedback'}]);render(<BackofficeBoard canCancel/>);
+    const card=await cardOf('Cliente Teste');expect(within(card).queryByRole('button',{name:/Finalizar pedido/})).not.toBeInTheDocument();
   });
 
-  it("'Ver detalhes' abre uma janela no centro com contato, faturamento, itens, observações e histórico", async () => {
-    stubOrdersApi([{
-      ...ORDER,
-      billing: BILLING,
-      notes: "Entregar até dia 20",
-      history: [{ status: "aguardando_arte", at: "2026-09-28T13:10:00.000Z", by: "Joana" }],
-    }]);
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    const card = await cardOf("Cliente Teste");
-
-    await user.click(card);
-    const dialog = screen.getByRole("dialog", { name: "Cliente Teste" });
-
-    expect(within(dialog).getByText("#FF-ORDER1")).toBeInTheDocument();
-    expect(within(dialog).getByText("11988887777")).toBeInTheDocument();
-    expect(within(dialog).getByText("Padaria Boa Vista Ltda")).toBeInTheDocument();
-    expect(within(dialog).getByText(/IE 407\.123\.456\.789/)).toBeInTheDocument();
-    expect(within(dialog).getByText("100 × Caneta Plástica · Azul")).toBeInTheDocument();
-    expect(within(dialog).getByText("Sob consulta")).toBeInTheDocument();
-    expect(within(dialog).getByText("Entregar até dia 20")).toBeInTheDocument();
-    expect(within(dialog).getByText("Pagamento recebido")).toBeInTheDocument();
-    expect(within(dialog).getByText(/Joana/)).toBeInTheDocument();
-    expect(within(dialog).getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("href", expect.stringContaining("FF-ORDER1"));
-    expect(within(dialog).getByLabelText("Etapa")).toHaveValue("aguardando_arte");
-
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await user.click(card);
-    await user.click(screen.getByRole("button", { name: "Fechar" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  it("abrir detalhes não muda o status nem envia pagamento",async()=>{
+    const api=stubOrdersApi([{...ORDER,billing:BILLING,notes:'Observação original'}]);const user=userEvent.setup();render(<BackofficeBoard canCancel={false}/>);
+    await user.click(await cardOf('Cliente Teste'));expect(push).toHaveBeenCalledWith('/equipe/pedidos/order-1');
+    expect(api.mock.calls.some(([,init])=>init?.method==='PATCH'||init?.method==='POST')).toBe(false);
   });
 
-  it("cancelar fica só na janela de detalhes, só para o administrador, e pede confirmação", async () => {
-    stubOrdersApi([ORDER]);
-    const user = userEvent.setup();
-    const { unmount } = render(<BackofficeBoard canCancel={false} />);
-    let card = await cardOf("Cliente Teste");
-    expect(within(card).queryByRole("button", { name: /Cancelar/ })).not.toBeInTheDocument();
-    await user.click(card);
-    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Cancelar pedido/ })).not.toBeInTheDocument();
-    unmount();
-
-    const fetchMock = stubOrdersApi([ORDER]);
-    const confirm = vi.fn(() => false);
-    vi.stubGlobal("confirm", confirm);
-    render(<BackofficeBoard canCancel />);
-    card = await cardOf("Cliente Teste");
-    expect(within(card).queryByRole("button", { name: /Cancelar/ })).not.toBeInTheDocument();
-    await user.click(card);
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Cancelar pedido/ }));
-    expect(confirm).toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalledWith("/api/backoffice/orders/order-1", expect.anything());
+  it("cancelamento não aparece no cartão nem para administrador",async()=>{
+    stubOrdersApi([ORDER]);render(<BackofficeBoard canCancel/>);const card=await cardOf('Cliente Teste');
+    expect(within(card).queryByRole('button',{name:/Cancelar/})).not.toBeInTheDocument();
   });
 
-  it("mostra o erro da API quando a mudança é recusada", async () => {
-    stubOrdersApi([ORDER], { status: 409, body: { error: "INVALID_TRANSITION" } });
-    const user = userEvent.setup();
-    render(<BackofficeBoard canCancel={false} />);
-    await user.click(await cardOf("Cliente Teste"));
-    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Etapa"), "criando_arte");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Essa transição de status não é permitida.");
+  it("pedido recém-criado usa a mesma animação uma única vez",async()=>{
+    stubOrdersApi([ORDER]);const user=userEvent.setup();window.history.replaceState(null,'','/equipe?aba=pedidos&novo=order-1');
+    render(<BackofficeBoard canCancel={false} freshQuoteId="order-1"/>);
+    expect(await cardOf('Cliente Teste')).toHaveClass('is-new');expect(window.location.search).not.toContain('novo=');
+    await user.click(screen.getByRole('tab',{name:/Orçamentos/}));await user.click(screen.getByRole('tab',{name:/Pedidos/}));
+    expect(await cardOf('Cliente Teste')).not.toHaveClass('is-new');
   });
 
   it("mostra o erro quando o carregamento falha", async () => {

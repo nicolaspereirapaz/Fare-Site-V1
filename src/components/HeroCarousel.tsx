@@ -20,7 +20,7 @@ const slides = [
   {
     eyebrow: "Brindes para sua empresa",
     title: "Sua marca em itens que circulam.",
-    body: "Canecas, camisetas, copos e peças personalizadas para equipes, clientes e eventos.",
+    body: "Canecas, copos e peças personalizadas para equipes, clientes e eventos.",
     image: "/images/canecas-personalizadas.webp",
     imageAlt: "Canecas personalizadas com fotografias",
     href: "/produtos?categoria=Brindes%20para%20sua%20empresa",

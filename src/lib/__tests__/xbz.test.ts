@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatProductName, groupAvailableProducts, inferCategory, normalizeProduct, normalizeProducts } from "../xbz";
+import { cleanProductName, formatProductName, groupAvailableProducts, inferCategory, normalizeProduct, normalizeProducts } from "../xbz";
 
 describe("apresentação dos produtos", () => {
   it("exibe nomes em título com conectores minúsculos", () => {
     expect(formatProductName("COPO TÉRMICO 500ML")).toBe("Copo Térmico 500ml");
+    expect(cleanProductName("COPO TÉRMICO 500ML *LISO C/ ABRIDOR")).toBe("COPO TÉRMICO 500ML C/ ABRIDOR");
+    expect(cleanProductName("CANECA TÉRMICA 500ML *LISA C/ ABRIDOR")).toBe("CANECA TÉRMICA 500ML C/ ABRIDOR");
+    expect(cleanProductName("GARRAFA TÉRMICA 1 LITRO *TEXTURA")).toBe("GARRAFA TÉRMICA 1 LITRO *TEXTURA");
+    expect(cleanProductName("TÁBUA P/ CORTE C/ CANALETA 30*40CM")).toBe("TÁBUA P/ CORTE C/ CANALETA 30*40CM");
     expect(formatProductName("CADERNETA EMBORRACHADA COM PAUTA")).toBe("Caderneta Emborrachada com Pauta");
     expect(formatProductName("LUMINÁRIA DE MESA RECARREGÁVEL")).toBe("Luminária de Mesa Recarregável");
     expect(formatProductName("GARRAFA TÉRMICA INOX 500ML C/ CAPA")).toBe("Garrafa Térmica Inox 500ml c/ Capa");

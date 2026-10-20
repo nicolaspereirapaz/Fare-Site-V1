@@ -108,10 +108,20 @@ function interleaveByCategory(products: CatalogProduct[]): CatalogProduct[] {
   return result;
 }
 
+/** Só o filtro (sem ordenar): para contar produtos por categoria sem pagar a ordenação. */
+export function filterCatalog(
+  products: CatalogProduct[],
+  query: CatalogQuery,
+  searchCodeOf: (product: CatalogProduct) => string = () => "",
+): CatalogProduct[] {
+  return queryCatalog(products, query, searchCodeOf, false);
+}
+
 export function queryCatalog(
   products: CatalogProduct[],
   query: CatalogQuery,
   searchCodeOf: (product: CatalogProduct) => string = () => "",
+  sorted = true,
 ): CatalogProduct[] {
   const words = normalizeSearch(query.query).split(/\s+/).filter(Boolean);
   const priceFilter = query.pricesVisible && (query.minPrice !== null || query.maxPrice !== null);
@@ -135,6 +145,7 @@ export function queryCatalog(
     }
     return true;
   });
+  if (!sorted) return filtered;
 
   const priceOf = (product: CatalogProduct) => {
     if (!prices.has(product)) prices.set(product, unitPriceFor(product, query.quantity));

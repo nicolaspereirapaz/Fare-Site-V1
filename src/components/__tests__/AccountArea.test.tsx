@@ -44,7 +44,7 @@ describe("menu lateral da Minha conta", () => {
 
 describe("número curto do pedido", () => {
   it("é legível e estável para o mesmo pedido", () => {
-    expect(orderCode("3f7a2c9e-a9cb-44f6-8f99-1e6e13241ebf")).toBe("FF-3F7A2C");
+    expect(orderCode("3f7a2c9e-a9cb-44f6-8f99-1e6e13241ebf")).toBe("PED-3F7A2C");
     expect(orderCode("3f7a2c9e-a9cb-44f6-8f99-1e6e13241ebf")).toBe(orderCode("3f7a2c9e-0000"));
   });
 });
@@ -58,7 +58,7 @@ describe("página de pedidos", () => {
 
   it("mostra número curto, data, status, pagamento, itens com cor e total", () => {
     render(<AccountOrders orders={[ORDER]} />);
-    const order = screen.getByRole("article", { name: "Pedido #FF-3F7A2C" });
+    const order = screen.getByRole("article", { name: "Pedido #PED-3F7A2C" });
     expect(order).toHaveTextContent("27/09/2026");
     expect(order).toHaveTextContent("Pedido enviado");
     expect(order).not.toHaveTextContent("Aguardando pagamento");
@@ -72,14 +72,14 @@ describe("página de pedidos", () => {
 
   it("depois de confirmado, o status segue o andamento e some o aviso de confirmação", () => {
     render(<AccountOrders orders={[{ ...ORDER, status: "em_producao" }]} />);
-    const order = screen.getByRole("article", { name: "Pedido #FF-3F7A2C" });
+    const order = screen.getByRole("article", { name: "Pedido #PED-3F7A2C" });
     expect(order).toHaveTextContent("Em produção");
     expect(order).not.toHaveTextContent("A equipe vai confirmar");
   });
 
   it("forma de pagamento aparece como a escolhida pelo cliente, não como pagamento feito", () => {
     render(<AccountOrders orders={[ORDER]} />);
-    expect(screen.getByRole("article", { name: "Pedido #FF-3F7A2C" })).toHaveTextContent("Pagamento: Pix");
+    expect(screen.getByRole("article", { name: "Pedido #PED-3F7A2C" })).toHaveTextContent("Pagamento: Pix");
   });
 
   it("pedido vindo de orçamento com desconto mostra a linha do desconto antes do total", () => {
@@ -94,6 +94,6 @@ describe("página de pedidos", () => {
     const url = new URL(link.getAttribute("href")!);
     expect(url.hostname).toBe("wa.me");
     expect(url.pathname).toBe("/5511953147703");
-    expect(url.searchParams.get("text")).toContain("#FF-3F7A2C");
+    expect(url.searchParams.get("text")).toContain("#PED-3F7A2C");
   });
 });

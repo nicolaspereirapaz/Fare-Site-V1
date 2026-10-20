@@ -1,11 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
-import { getProducts } from "@/lib/xbz";
+import { isSiteProductVisible } from "@/lib/siteProductVisibility";
+import { getProducts, groupAvailableProducts, type Product } from "@/lib/xbz";
+import { fillXbzSpecsInBackground } from "@/lib/productSpecs";
 import {
   catalogProductCount, getCatalogDatabase, markSyncQuotaExhausted, persistInitialCatalog,
   readCatalogProducts, readSyncState, recordSyncAttempt, recordSyncResult, updateCatalogStock,
 } from "@/lib/xbzCatalogRepository";
 import { readSupplierProducts, refreshSuppliersInBackground } from "@/lib/suppliers/catalog";
-import { assignFareCodes } from "@/lib/productCodes";
+import { assignFareCodes, supplierOf } from "@/lib/productCodes";
 import { hideBrokenImages, readBrokenImages, refreshImageHealthInBackground } from "@/lib/imageHealth";
 
 const DAILY_LIMIT = 24;
@@ -86,6 +88,16 @@ function ensureScheduler(database: DatabaseSync) {
   globalSync.xbzCatalogTimer.unref?.();
 }
 
+type BuiltCatalog = { version: string; raw: Product[]; products: Product[]; fareCodes: Map<string, string> };
+// Um catálogo guardado por banco aberto (nos testes cada teste tem o seu).
+const globalCatalogCache = globalThis as typeof globalThis & { localCatalogs?: WeakMap<DatabaseSync, BuiltCatalog> };
+/** Muda a cada gravação no banco do catálogo: data_version (outras conexões) + total_changes (esta conexão). */
+export function catalogVersion(database: DatabaseSync) {
+  const dataVersion = (database.prepare("PRAGMA data_version").get() as { data_version: number }).data_version;
+  const changes = (database.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+  return `${dataVersion}:${changes}`;
+}
+
 export async function getLocalCatalog(now = new Date()) {
   const database = getCatalogDatabase();
   const empty = catalogProductCount(database) === 0;
@@ -97,15 +109,33 @@ export async function getLocalCatalog(now = new Date()) {
 
   const { date } = saoPauloParts(now);
   const state = readSyncState(database, date);
-  // XBZ + Spot + Asia Import, todos nas mesmas categorias da loja.
-  const raw = [...readCatalogProducts(database), ...readSupplierProducts(database)];
+  // Catálogo montado fica na memória até o banco do catálogo mudar (sincronização, estoque, códigos, fotos quebradas).
+  // Montar de novo levava ~1 s no oraculo e acontecia em toda página (menu, home, brindes).
+  const version = catalogVersion(database);
+  const cache = (globalCatalogCache.localCatalogs ??= new WeakMap());
+  let built = cache.get(database);
+  if (built?.version !== version) {
+    // XBZ + Spot + Asia Import, todos nas mesmas categorias da loja.
+    const raw = [...readCatalogProducts(database), ...readSupplierProducts(database)];
+    const products = hideBrokenImages(raw, readBrokenImages(database)).filter(isSiteProductVisible);
+    /** Código Fare Foto (X/S/A + número) por produto; o número de um produto nunca muda. */
+    const fareCodes = assignFareCodes(database, products);
+    // Versão lida depois de gravar os códigos novos, para a próxima visita já usar a memória.
+    built = { version: catalogVersion(database), raw, products, fareCodes };
+    cache.set(database, built);
+  }
   // Verificação diária das fotos (em segundo plano); foto que não abre não aparece na loja.
-  refreshImageHealthInBackground(database, raw, now);
-  const products = hideBrokenImages(raw, readBrokenImages(database));
+  refreshImageHealthInBackground(database, built.raw, now);
+  // Medidas XBZ de todos os produtos à venda guardadas de antemão (a página do produto abre com elas na hora).
+  const visible = built.products;
+  fillXbzSpecsInBackground(database, () => groupAvailableProducts(visible)
+    .map((product) => product.variants[0])
+    .filter((first) => first && supplierOf(first) === "xbz")
+    .map((first) => first.familyCode));
+  const { products, fareCodes } = built;
   return {
     products,
-    /** Código Fare Foto (X/S/A + número) por produto; o número de um produto nunca muda. */
-    fareCodes: assignFareCodes(database, products),
+    fareCodes,
     fetchedAt: state.lastSuccessAt ?? now.toISOString(),
     cached: true,
     sync: {

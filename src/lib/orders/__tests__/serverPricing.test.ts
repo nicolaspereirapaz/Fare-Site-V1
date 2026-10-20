@@ -25,6 +25,12 @@ describe("preço calculado no servidor", () => {
     expect(item.pricing).toEqual(CANETA);
   });
 
+  it("descarta custo e mockup vindos do navegador", () => {
+    const [item] = repriceCartItems([gift({ mockup: "00000000-0000-0000-0000-000000000000.jpg", costing: { custoProduto: 0 } as never })], lookup);
+    expect(item).not.toHaveProperty("mockup");
+    expect(item).not.toHaveProperty("costing");
+  });
+
   it("usa a quantidade do pedido (300 un. = 592 ÷ 300 = R$ 1,98, para cima)", () => {
     expect(repriceCartItems([gift({ quantity: 300 })], lookup)[0].unitPrice).toBe(1.98);
   });

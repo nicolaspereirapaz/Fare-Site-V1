@@ -57,7 +57,7 @@ export function ContactForm() {
             <textarea
               required
               rows={5}
-              placeholder="Ex.: 30 kits com caneca, camiseta e cartão..."
+              placeholder="Ex.: 30 kits com caneca, chaveiro e cartão..."
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />

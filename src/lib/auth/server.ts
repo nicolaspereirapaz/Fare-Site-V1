@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getStoreSession } from "@/lib/auth/storeSession";
 import { readVerifiedSession } from "@/lib/auth/session";
 
 export async function getCurrentSession() {
-  return readVerifiedSession(await headers(), auth.api.getSession);
+  return readVerifiedSession(await headers(), getStoreSession);
 }

@@ -34,6 +34,8 @@ export type BackofficeOrderSummary = {
   billing: QuoteBilling | null;
   items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null; codes?: QuoteCartItem["codes"] }>;
   itemCount: number;
+  /** Pedido de fotos do site (itens "fotos/…"). */
+  photos?: boolean;
   total: number;
   /** Desconto vindo do orçamento (rótulo e valor). */
   discount: { label: string; amount: number } | null;
@@ -62,6 +64,8 @@ function isStatusPedido(value: unknown): value is StatusPedido {
   return typeof value === "string" && (ORDEM_STATUS_PEDIDO as readonly string[]).includes(value);
 }
 
+const isPhotoOrder = (order: Order) => order.items.some((item) => item.slug.startsWith("fotos/"));
+
 function calculateOrderSummaryTotal(items: Order["items"]): number {
   const cents = Math.round(
     items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100,
@@ -82,6 +86,8 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     billing: order.customer.billing ?? null,
     items: order.items.map(({ productName, quantity, selections, unitPrice, codes }) => ({ productName, quantity, selections, unitPrice, codes })),
     itemCount: order.items.length,
+    // Pedido de fotos do site (itens "fotos/…"): etiqueta própria no quadro.
+    photos: isPhotoOrder(order),
     // Pedido vindo de orçamento com desconto: o total gravado já está descontado.
     total: order.discount && order.totalCents !== null ? order.totalCents / 100 : calculateOrderSummaryTotal(order.items),
     discount: discountLine(order.discount, order.items),
@@ -155,7 +161,7 @@ export function createUpdateBackofficeOrderStatusHandler(
       return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
-    const nextStatus = body.status;
+    let nextStatus = body.status;
     if (nextStatus === "cancelado" && !canCancelOrders(role)) {
       return Response.json({ error: "FORBIDDEN" }, { status: 403 });
     }
@@ -168,6 +174,10 @@ export function createUpdateBackofficeOrderStatusHandler(
     const finance = readFinance(order);
     if (finance && order.status === "aguardando_pagamento" && nextStatus === "aguardando_arte" && finance.paidCents <= 0) {
       return Response.json({ error: "INVALID_TRANSITION", message: "Registre um recebimento para liberar a arte." }, { status: 409 });
+    }
+    // "Pagamento recebido" num pedido de fotos: não há arte, segue direto para "Aguardando produção".
+    if (order.status === "aguardando_pagamento" && nextStatus === "aguardando_arte" && isPhotoOrder(order)) {
+      nextStatus = "aguardando_producao";
     }
     let updated: Order;
     try {

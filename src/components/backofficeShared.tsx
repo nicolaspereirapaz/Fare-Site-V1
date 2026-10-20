@@ -17,8 +17,9 @@ import {
 import { CheckCircle2, X } from "lucide-react";
 import { formatBillingAddress, type QuoteBilling } from "@/lib/commerce";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import { photoFromName } from "@/components/staff/photoItems";
 import type { OrderFinance } from "@/lib/orders/payments";
-import { dateLabel } from "@/components/staff/paymentFieldsShared";
+import { deliveryLabel } from "@/components/staff/paymentFieldsShared";
 
 /** Partes comuns aos quadros de pedidos e de orçamentos do painel. */
 export type BackofficeItem = {
@@ -170,8 +171,8 @@ export function KanbanCardBody({ code, total, title, summary, tag, warning, meta
       </div>
       <strong className="kb-title">{title}</strong>
       <span className="kb-summary">{summary}</span>
-      {finance && finance.balanceCents > 0 ? <span className="kb-order-debt">Cliente deve {formatCurrency(finance.balanceCents / 100)} · cobrar {finance.deliveryMode === "retirada" ? "na retirada" : "na entrega"}</span> : null}
-      {finance?.deliveryDate ? <span className="kb-order-delivery">Entrega prevista {dateLabel(finance.deliveryDate)}</span> : null}
+      {finance && finance.balanceCents > 0 ? <span className="kb-order-debt">Pagamento pendente</span> : null}
+      {finance?.deliveryDate ? <span className="kb-order-delivery">Entrega prevista {deliveryLabel(finance.deliveryDate, finance.deliveryTime)}</span> : null}
       {tag || warning || meta ? (
         <div className="kb-card-meta">
           {tag}
@@ -185,7 +186,7 @@ export function KanbanCardBody({ code, total, title, summary, tag, warning, meta
 
 /** Cartão do quadro: arrasta para outra coluna; clique (ou Enter) abre os detalhes. */
 /** fresh: cartão recém-criado (entra deslizando com brilho laranja). */
-export function KanbanCard({ id, busy = false, fresh = false, onDetails, ...props }: CardProps & { id: string; busy?: boolean; fresh?: boolean; onDetails: () => void }) {
+export function KanbanCard({ id, busy = false, fresh = false, onDetails, action, ...props }: CardProps & { id: string; busy?: boolean; fresh?: boolean; onDetails: () => void; action?: ReactNode }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled: busy });
   return (
     <article
@@ -196,12 +197,14 @@ export function KanbanCard({ id, busy = false, fresh = false, onDetails, ...prop
       className={`kb-card${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}${fresh ? " is-new" : ""}`}
       onClick={onDetails}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") onDetails();
         else listeners?.onKeyDown?.(event);
       }}
       ref={setNodeRef}
     >
       <KanbanCardBody {...props} />
+      {action ? <div className="kb-card-action" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{action}</div> : null}
     </article>
   );
 }
@@ -229,6 +232,7 @@ export function DetailsDialog({
   onClose,
   footer,
   children,
+  className,
 }: {
   title: string;
   code: string;
@@ -238,6 +242,7 @@ export function DetailsDialog({
   onClose: () => void;
   footer: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -258,7 +263,7 @@ export function DetailsDialog({
 
   return (
     <div className="kb-scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div aria-labelledby={titleId} aria-modal="true" className="kb-dialog" role="dialog">
+      <div aria-labelledby={titleId} aria-modal="true" className={`kb-dialog${className ? ` ${className}` : ''}`} role="dialog">
         <header className="kb-dialog-head">
           <div>
             <span className="kb-dialog-code"><span>#{code}</span> · {subtitle}</span>
@@ -341,7 +346,10 @@ export function DetailsSections({
                 <td>
                   {itemLine(item)}
                   {itemCodeLine(item) ? <small className="kb-item-codes">{itemCodeLine(item)}</small> : null}
-                  {item.costing ? (
+                  {/* Foto não tem gravação nem custo de fornecedor: só o preço por cópia. */}
+                  {photoFromName(item.productName) ? (
+                    <small className="kb-item-costing">venda {item.unitPrice === null ? "—" : `${formatCurrency(item.unitPrice)}/cópia`}</small>
+                  ) : item.costing ? (
                     <small className="kb-item-costing">
                       {item.costing.personalizacao ?? "Sem gravação"} · custo {formatCurrency(item.costing.custoProduto + item.costing.personalizacaoUnitaria)}/un. · venda {item.unitPrice === null ? "—" : `${formatCurrency(item.unitPrice)}/un.`}
                     </small>

@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import "@/components/staff/quoteEditor.css";
+import "@/components/staff/staffDocument.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardList, FileText, LayoutGrid, MessageCircle, Plus, RefreshCw, TriangleAlert, XCircle } from "lucide-react";
-import { COLUNAS_QUADRO_PEDIDOS, ORDEM_STATUS_PEDIDO, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
+import { ClipboardList, FileText, LayoutGrid, Plus, RefreshCw, TriangleAlert } from "lucide-react";
+import { COLUNAS_QUADRO_PEDIDOS, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { OrderHistoryEntry } from "@/lib/backoffice/access";
 import type { QuoteBilling } from "@/lib/commerce";
 import {
-  DetailsDialog,
-  DetailsSections,
-  FinalAction,
-  formatDate,
   formatDay,
   itemsSummary,
   KanbanBoard,
@@ -18,15 +17,13 @@ import {
   KanbanCardBody,
   KanbanColumn,
   messageFor,
-  StageSelect,
-  whatsAppReplyUrl,
 } from "@/components/backofficeShared";
-import { movePath, reachableColumns } from "@/lib/backoffice/boardMoves";
+import { movePath } from "@/lib/backoffice/boardMoves";
 import { horasNoQuadro, visivelNoQuadroDePedidos } from "@/lib/backoffice/finishedOrders";
 import type { PaymentMethod } from "@/lib/orders/repository";
 import { QuotesBoard } from "@/components/BackofficeQuotesBoard";
+import "@/components/staff/fotos/kanbanFotos.css";
 import type { OrderFinance } from "@/lib/orders/payments";
-import { OrderPaymentPanel } from "@/components/staff/OrderPaymentPanel";
 
 export type BackofficeOrder = {
   id: string;
@@ -40,6 +37,8 @@ export type BackofficeOrder = {
   billing: QuoteBilling | null;
   items: Array<{ productName: string; quantity: number; selections: Record<string, string>; unitPrice: number | null }>;
   itemCount: number;
+  /** Pedido de fotos do site: os arquivos estão na pasta "Pedidos". */
+  photos?: boolean;
   total: number;
   discount?: { label: string; amount: number } | null;
   createdAt: string;
@@ -73,17 +72,6 @@ export const STATUS_COLORS: Record<StatusPedido, { dot: string; bg: string; fg: 
   cancelado: { dot: "#a12a2a", bg: "#fdecec", fg: "#a12a2a" },
 };
 
-const HISTORY_LABELS: Partial<Record<StatusPedido, string>> = {
-  aguardando_arte: "Pagamento recebido",
-  criando_arte: "Arte iniciada",
-  aguardando_producao: "Arte pronta",
-  em_producao: "Produção iniciada",
-  aguardando_retirada: "Pronto para retirada",
-  aguardando_feedback: "Entregue",
-  concluido: "Finalizado",
-  cancelado: "Cancelado",
-};
-
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   pix: "Pix",
   dinheiro: "Dinheiro",
@@ -100,16 +88,10 @@ export type BackofficeBoardProps = {
 type BoardColumn = (typeof COLUNAS_QUADRO_PEDIDOS)[number];
 const isBoardColumn = (status: string): status is BoardColumn => (COLUNAS_QUADRO_PEDIDOS as readonly string[]).includes(status);
 
-/** "Pagamento recebido", "Enviado para produção"… ou "Voltou para Criando arte". */
-function historyLabel(entry: OrderHistoryEntry) {
-  if (entry.from && ORDEM_STATUS_PEDIDO.indexOf(entry.status) < ORDEM_STATUS_PEDIDO.indexOf(entry.from)) {
-    return `Voltou para ${STATUS_LABELS[entry.status]}`;
-  }
-  return HISTORY_LABELS[entry.status] ?? STATUS_LABELS[entry.status];
-}
-
 /** Quadro de pedidos: Aguardando arte | … | Aguardando feedback | Finalizado (fica 24 h e some). */
-function OrdersBoard({ canCancel }: BackofficeBoardProps) {
+function OrdersBoard({ freshOrderId, onFreshShown }: { freshOrderId?: string; onFreshShown: () => void }) {
+  const router = useRouter();
+  const [freshId, setFreshId] = useState(freshOrderId);
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +103,6 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     else busyRef.current.delete(id);
     setBusyIds(new Set(busyRef.current));
   };
-  const [openId, setOpenId] = useState<string | null>(null);
   /** Relógio do quadro: a cada minuto recalcula o que sai da coluna Finalizado. */
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -155,6 +136,17 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     };
   }, [fetchOrders]);
 
+  const freshLoaded = Boolean(freshId && orders.some(order => order.id === freshId));
+  useEffect(() => {
+    if (!freshLoaded) return;
+    onFreshShown();
+    const url = new URL(window.location.href); url.searchParams.delete('novo');
+    window.history.replaceState(null, '', url.pathname + url.search);
+    document.querySelector('.kb-card.is-new')?.scrollIntoView?.({behavior:'smooth',block:'center',inline:'center'});
+    const timer = window.setTimeout(() => setFreshId(undefined), 3200);
+    return () => window.clearTimeout(timer);
+  }, [freshLoaded, onFreshShown]);
+
   /** Grava as etapas em ordem (arrastar/pular colunas passa por cada uma). Mostra o cartão já no destino enquanto salva. */
   async function moveThrough(order: BackofficeOrder, steps: StatusPedido[]) {
     if (!steps.length) return;
@@ -176,7 +168,6 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(messageFor(payload.error));
       }
-      setOpenId(null);
     } catch (caughtError) {
       transitionError = caughtError instanceof Error ? caughtError.message : "Erro inesperado.";
     }
@@ -189,7 +180,7 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     setBusy(order.id, false);
   }
 
-  const move = (order: BackofficeOrder, next: StatusPedido) => moveThrough(order, [next]);
+
   /** Até uma coluna do quadro: passa por cada etapa no caminho. */
   function moveToColumn(order: BackofficeOrder, column: StatusPedido) {
     if (!isBoardColumn(order.status) || !isBoardColumn(column)) return;
@@ -198,18 +189,18 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
     void moveThrough(order, path);
   }
 
-  const closeDialog = useCallback(() => setOpenId(null), []);
-  const open = orders.find((order) => order.id === openId) ?? null;
   const cardProps = (order: BackofficeOrder) => ({
     code: order.code,
     summary: itemsSummary(order.items),
     title: order.customerCompany || order.customerName,
     total: order.total,
     finance: order.finance,
-    warning: order.billing ? null : "Sem dados de faturamento",
+    tag: order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : undefined,
+    warning: order.billing || order.photos ? null : "Sem dados de faturamento",
     meta: order.status === "concluido"
       ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
-      : `Pago em ${formatDay(order.history?.find((entry) => entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
+      : order.finance?.paymentOnPickup ? 'Pagamento na retirada'
+      : `Pago em ${formatDay(order.history?.find((entry) => entry.from === "aguardando_pagamento" || entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
   });
 
   return (
@@ -255,79 +246,13 @@ function OrdersBoard({ canCancel }: BackofficeBoardProps) {
                 total={column.reduce((sum, order) => sum + order.total, 0)}
               >
                 {column.map((order) => (
-                  <KanbanCard {...cardProps(order)} busy={busyIds.has(order.id)} id={order.id} key={order.id} onDetails={() => setOpenId(order.id)} />
+                  <KanbanCard {...cardProps(order)} busy={busyIds.has(order.id)} id={order.id} key={order.id} fresh={order.id === freshId} onDetails={() => router.push(`/equipe/pedidos/${order.id}`)} />
                 ))}
               </KanbanColumn>
             );
           })}
         </KanbanBoard>
       )}
-
-      {open ? (
-        <DetailsDialog
-          code={open.code}
-          footer={
-            <>
-              {isBoardColumn(open.status) ? (
-                <StageSelect
-                  busy={busyIds.has(open.id)}
-                  labels={STATUS_LABELS}
-                  onChange={(next) => moveToColumn(open, next)}
-                  options={reachableColumns(COLUNAS_QUADRO_PEDIDOS, open.status, podeTransicionarStatusPedido)}
-                  value={open.status}
-                />
-              ) : null}
-              {podeTransicionarStatusPedido(open.status, "concluido") ? (
-                <FinalAction busy={busyIds.has(open.id)} label="Finalizar pedido" onClick={() => move(open, "concluido")} />
-              ) : null}
-              {open.customerPhone ? (
-                <a className="kb-whatsapp" href={whatsAppReplyUrl(open.customerName, open.customerPhone, open.code, "pedido")} rel="noopener noreferrer" target="_blank">
-                  <MessageCircle aria-hidden="true" size={15} /> WhatsApp
-                </a>
-              ) : null}
-              {canCancel && podeTransicionarStatusPedido(open.status, "cancelado") ? (
-                <button className="kb-danger" disabled={busyIds.has(open.id)} onClick={() => move(open, "cancelado")} type="button">
-                  <XCircle aria-hidden="true" size={15} /> Cancelar pedido
-                </button>
-              ) : null}
-            </>
-          }
-          onClose={closeDialog}
-          status={STATUS_LABELS[open.status]}
-          statusColor={STATUS_COLORS[open.status]}
-          subtitle={`pedido de ${formatDay(open.createdAt)}`}
-          title={open.customerName}
-        >
-          <DetailsSections
-            billing={open.billing}
-            customerCompany={open.customerCompany}
-            customerName={open.customerName}
-            customerPhone={open.customerPhone}
-            items={open.items}
-            notes={open.notes}
-            internalNotes={open.finance?.internalNotes}
-            paymentLabel={PAYMENT_LABELS[open.paymentMethod]}
-            total={open.total}
-            discount={open.discount}
-          />
-          {open.finance ? <OrderPaymentPanel key={open.id} orderId={open.id} status={open.status} paymentMethod={open.paymentMethod} finance={open.finance} onRecorded={async () => { setOrders(await fetchOrders()); }} /> : null}
-          <section>
-            <h3>Histórico</h3>
-            <ul className="kb-history">
-              {[...(open.history ?? [])].reverse().map((entry, index) => (
-                <li key={`${entry.at}-${index}`}>
-                  <strong>{historyLabel(entry)}</strong>
-                  <span>{formatDate(entry.at)} · {entry.by}</span>
-                </li>
-              ))}
-              <li>
-                <strong>Pedido criado</strong>
-                <span>{formatDate(open.createdAt)} · {open.finance ? `feito por ${open.finance.createdBy}` : "pelo site"}</span>
-              </li>
-            </ul>
-          </section>
-        </DetailsDialog>
-      ) : null}
     </div>
   );
 }
@@ -378,7 +303,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
         ))}
       </div>
         <div className="kb-new-actions">
-        <Link className="kb-new-quote" href="/equipe/pedidos/novo"><Plus aria-hidden="true" size={16} /> Novo pedido</Link>
+        {tab === "pedidos" ? <Link className="kb-new-quote" href="/equipe/pedidos/novo"><Plus aria-hidden="true" size={16} /> Novo pedido</Link> : null}
         {tab === "orcamentos" ? (
           <Link className="kb-new-quote" href="/equipe/orcamentos/novo">
             <Plus aria-hidden="true" size={16} /> Novo orçamento
@@ -387,7 +312,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
         </div>
       </div>
 
-      {tab === "pedidos" ? <OrdersBoard canCancel={canCancel} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} />}
+      {tab === "pedidos" ? <OrdersBoard freshOrderId={freshId} onFreshShown={clearFresh} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} />}
     </div>
   );
 }

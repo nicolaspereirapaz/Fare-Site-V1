@@ -1,7 +1,7 @@
 import { groupAvailableProducts } from "@/lib/xbz";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
 import { type PublicProductsResponse } from "@/lib/publicCatalog";
-import { parseCatalogParams, queryCatalog, unitPriceFor } from "@/lib/catalogQuery";
+import { filterCatalog, parseCatalogParams, queryCatalog, unitPriceFor } from "@/lib/catalogQuery";
 import { getCurrentSession } from "@/lib/auth/server";
 import { fareCodeOf, MEMBER_PRICING_HEADERS, toGiftProduct } from "@/lib/giftPricing";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const filtered = queryCatalog(grouped, query, codeOf);
     // Contagem por categoria respeita busca, quantidade e preço (só a categoria fica livre).
     const categories = Array.from(
-      queryCatalog(grouped, { ...query, category: "", sort: "nome" }, codeOf).reduce((counts, product) => {
+      filterCatalog(grouped, { ...query, category: "" }, codeOf).reduce((counts, product) => {
         counts.set(product.category, (counts.get(product.category) ?? 0) + 1);
         return counts;
       }, new Map<string, number>()),

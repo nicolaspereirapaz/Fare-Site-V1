@@ -25,7 +25,9 @@ export default async function AccountProfilePage() {
         <p className="profile-incomplete">Complete seu cadastro para agilizar seus pedidos.</p>
       ) : null}
       <AccountProfileForm initial={{ ...profile, email: session.user.email, complete }} />
-      <ChangePasswordForm />
+      {session.user.id.startsWith("temporary-guest:")
+        ? <p>Acesso temporário neste navegador, sem senha. Seus dados e pedidos não são compartilhados com outros visitantes. Limpar os cookies perde o acesso a este histórico.</p>
+        : <ChangePasswordForm />}
     </>
   );
 }

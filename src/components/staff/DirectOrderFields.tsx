@@ -26,6 +26,7 @@ export function DirectOrderFields({ value, onChange }: { value: PaymentForm; onC
         <h2>Entrega</h2>
         <div className="qe-payment-grid">
           <label className="qe-field"><span>Data prevista de entrega</span><input onChange={(e) => set("deliveryDate", e.target.value)} type="date" value={value.deliveryDate} /></label>
+          <label className="qe-field"><span>Horário (opcional)</span><input onChange={(e) => set("deliveryTime", e.target.value)} type="time" value={value.deliveryTime} /></label>
           <label className="qe-field"><span>Forma de entrega</span><select onChange={(e) => set("deliveryMode", e.target.value as PaymentForm["deliveryMode"])} value={value.deliveryMode}><option value="retirada">Retirada na loja</option><option value="entrega">Entrega ao cliente</option></select></label>
         </div>
       </section>

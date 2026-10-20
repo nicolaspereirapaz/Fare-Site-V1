@@ -12,7 +12,7 @@ describe("CatalogGrid", () => {
     expect(
       screen.getByRole("complementary", { name: "Filtros do catálogo" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("12 produtos")).toBeInTheDocument();
+    expect(screen.getByText("11 produtos")).toBeInTheDocument();
 
     await user.type(screen.getByRole("searchbox", { name: /buscar produtos/i }), "caneca");
     expect(screen.getByRole("heading", { name: "Caneca personalizada" })).toBeInTheDocument();
@@ -20,11 +20,11 @@ describe("CatalogGrid", () => {
 
     await user.clear(screen.getByRole("searchbox", { name: /buscar produtos/i }));
     await user.click(
-      screen.getByRole("radio", { name: "Brindes para sua empresa (4)" }),
+      screen.getByRole("radio", { name: "Brindes para sua empresa (3)" }),
     );
     expect(screen.getByRole("heading", { name: "Brindes corporativos" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Caneca personalizada" })).toBeInTheDocument();
-    expect(screen.getByText("4 produtos")).toBeInTheDocument();
+    expect(screen.getByText("3 produtos")).toBeInTheDocument();
   });
 
   it("sorts the visible products by name", async () => {

@@ -1,10 +1,10 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, FileCheck2, Heart, MessageCircle, Package, Palette, ShoppingBag } from "lucide-react";
-import { HeroSpotlight } from "@/components/HeroSpotlight";
-import { publicProductId } from "@/lib/publicCatalog";
+import { ArrowRight } from "lucide-react";
+import { HomeDoors, HomeGrafica, HomeOcasioes, HomeParaVoce, HomeRibbon } from "@/components/home/HomeSections";
 import { formatProductName } from "@/lib/xbz";
+import { HowItWorksTabs } from "@/components/home/HowItWorksTabs";
 import { ContactForm } from "@/components/ContactForm";
 import { XbzProductCard } from "@/components/XbzCatalog";
 import { getCurrentSession } from "@/lib/auth/server";
@@ -18,8 +18,8 @@ import { getLocalCatalog } from "@/lib/xbzCatalogService";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Fare Foto — brindes personalizados para empresas",
-  description: "Canecas, garrafas, mochilas, kits e milhares de brindes personalizados com a sua marca, para equipes, clientes e eventos.",
+  title: "Fare Foto — revelação de fotos, gráfica e brindes personalizados em Jundiaí",
+  description: "Revelação de fotos pronta em 1 hora, gráfica e impressos sob medida e milhares de brindes personalizados com a sua marca, em Jundiaí.",
 };
 
 async function loadShowcase(): Promise<{ showcase: HomeShowcase; fareCodes?: Map<string, string> }> {
@@ -47,33 +47,33 @@ export default async function Home() {
 
   return (
     <>
-      <HeroSpotlight
+      {/* Topo com três portas: fotos, gráfica e brindes. */}
+      <HomeDoors
         badge={showcase.total >= 100 ? `${roundedTotal(showcase.total)}+` : null}
         products={showcase.hero.map((product) => ({
           id: product.id,
           name: formatProductName(product.name),
           category: product.category,
           imageUrl: product.imageUrl,
-          href: `/brindes/${publicProductId(product.internalCode)}`,
+          // A bolinha leva à lista da categoria que aparece embaixo dela, não ao produto.
+          href: categoryHref(product.category),
         }))}
-        totalLabel={showcase.total >= 100 ? `Mais de ${roundedTotal(showcase.total)} opções` : "Opções"}
+        totalLabel={showcase.total >= 100 ? `Mais de ${roundedTotal(showcase.total)} opções` : "Centenas de opções"}
         whatsAppUrl={whatsAppUrl}
       />
 
-      <section className="service-ribbon" aria-label="Diferenciais do atendimento">
-        <div className="container-shell service-ribbon-grid">
-          <div><Heart aria-hidden="true" /><span><strong>Feito com cuidado</strong> do arquivo ao acabamento</span></div>
-          <div><FileCheck2 aria-hidden="true" /><span><strong>Arte conferida</strong> antes da produção</span></div>
-          <div><MessageCircle aria-hidden="true" /><span><strong>Atendimento humano</strong> para fechar os detalhes</span></div>
-        </div>
-      </section>
+      <HomeRibbon />
+
+      <HomeParaVoce />
+
+      <HomeGrafica />
 
       {showcase.categories.length ? (
         <section className="section-space" id="categorias">
           <div className="container-shell">
             <div className="section-heading split-heading">
               <div>
-                <span className="eyebrow">Explore por categoria</span>
+                <span className="eyebrow">Brindes para sua empresa</span>
                 <h2>Encontre o brinde certo.</h2>
               </div>
               <Link className="text-link" href="/brindes">
@@ -97,6 +97,8 @@ export default async function Home() {
         </section>
       ) : null}
 
+      <HomeOcasioes />
+
       {showcase.featured.length ? (
         <section className="section-space featured-section">
           <div className="container-shell">
@@ -118,35 +120,7 @@ export default async function Home() {
         </section>
       ) : null}
 
-      <section className="section-space process-section" id="como-funciona">
-        <div className="container-shell">
-          <div className="section-heading centered-heading">
-            <span className="eyebrow">Simples e acompanhado</span>
-            <h2>Do catálogo à entrega.</h2>
-            <p>Você escolhe os brindes; a equipe confere arte, valores e prazo com você antes de produzir.</p>
-          </div>
-          <ol className="process-grid">
-            <li>
-              <span>01</span>
-              <ShoppingBag aria-hidden="true" />
-              <h3>Escolha os brindes</h3>
-              <p>Navegue pelo catálogo, compare cores e quantidades. Com seu cadastro, os preços aparecem na hora.</p>
-            </li>
-            <li>
-              <span>02</span>
-              <Package aria-hidden="true" />
-              <h3>Faça o pedido ou peça um orçamento</h3>
-              <p>Monte o carrinho com tudo o que precisa e envie. Seus dados de faturamento já vão junto.</p>
-            </li>
-            <li>
-              <span>03</span>
-              <Palette aria-hidden="true" />
-              <h3>A equipe confirma com você</h3>
-              <p>Pelo WhatsApp, combinamos a arte com o seu logo, o valor final, o prazo e a entrega.</p>
-            </li>
-          </ol>
-        </div>
-      </section>
+      <HowItWorksTabs />
 
       <ContactForm />
     </>

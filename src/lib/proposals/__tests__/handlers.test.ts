@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
+import { renderProposalHtml } from "../html";
 import { createProposalHandlers } from "@/lib/proposals/handlers";
 import { createManualQuote, findQuoteById, markProposalSent, updateQuoteStatus } from "@/lib/quotes/repository";
 
@@ -9,7 +10,7 @@ const item = { id: "a", productName: "Caneta", slug: "brindes/cf93", quantity: 1
 function setup(role = "vendedor") {
   const db = new DatabaseSync(":memory:");
   const quote = createManualQuote(db, { ownerId: "painel:p1", customer, items: [item], createdBy: "Bia", internalNotes: "", idempotencyKey: "k1" });
-  const render = vi.fn().mockResolvedValue(Buffer.from("%PDF-1.4 fake"));
+  const render = vi.fn(renderProposalHtml);
   const handlers = createProposalHandlers({
     getSession: vi.fn().mockResolvedValue(role ? { user: { id: "s1", name: "Bia Lima", role } } : null),
     database: () => db,
@@ -27,14 +28,24 @@ describe("proposta: rotas do painel", () => {
     expect((await setup("").handlers.send(new Request("http://x", { method: "POST" }), quote.id)).status).toBe(401);
   });
 
-  it("baixa o PDF com o nome do arquivo e sem cache", async () => {
+  it("baixa o HTML com o nome do arquivo e sem cache", async () => {
     const { quote, handlers, render } = setup();
     const response = await handlers.pdf(new Request("http://x"), quote.id);
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/pdf");
-    expect(response.headers.get("content-disposition")).toContain(`Proposta-${"ORC-" + quote.id.replace(/-/g, "").slice(0, 6).toUpperCase()}.pdf`);
+    expect(response.headers.get("content-type")).toBe("text/html;charset=utf-8");
+    expect(response.headers.get("content-disposition")).toContain(`Proposta-${"ORC-" + quote.id.replace(/-/g, "").slice(0, 6).toUpperCase()}.html`);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(render.mock.calls[0][0]).toMatchObject({ seller: "Bia", items: [{ name: "Caneta", code: "X10304" }] });
+  });
+
+  it("prévia HTML só fica inline com ver=1; usa renderizador real e nosniff", async () => {
+    const {quote,handlers}=setup();
+    for(const [query,disposition] of [["?ver=1","inline"],["?ver=0","attachment"],["?ver","attachment"]]){
+      const response=await handlers.pdf(new Request("http://x"+query),quote.id);
+      expect(response.headers.get("content-disposition")).toMatch(new RegExp(`^${disposition};.*\\.html"$`));
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      const html=await response.text();expect(html).toContain("<!DOCTYPE html>");expect(html).toContain("Caneta");expect(html).not.toContain("00518-AZU");
+    }
   });
 
   it("enviar: devolve a mensagem do WhatsApp e passa para Em negociação, guardando a data", async () => {

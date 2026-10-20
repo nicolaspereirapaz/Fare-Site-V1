@@ -9,7 +9,7 @@ import { queryCatalog } from "@/lib/catalogQuery";
 import { familyKey, supplierCodeOf, supplierOf } from "@/lib/productCodes";
 import { publicProductId, toPublicCatalogProduct } from "@/lib/publicCatalog";
 import { readSpotCustomizations, refreshSpotCustomizationsInBackground } from "@/lib/suppliers/spotCustomizations";
-import { staffAuth } from "@/lib/staff/auth";
+import { readStaffSession } from "@/lib/staff/server";
 import { groupAvailableProducts, type CatalogProduct } from "@/lib/xbz";
 import { getCatalogDatabase } from "@/lib/xbzCatalogRepository";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
@@ -79,7 +79,7 @@ async function catalog() {
 }
 
 const builderDeps: QuoteBuilderDeps = {
-  getSession: staffAuth.api.getSession as never,
+  getSession: readStaffSession as never,
   database: () => database,
   catalog,
   readBilling: (userId) => {

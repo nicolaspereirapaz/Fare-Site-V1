@@ -11,6 +11,8 @@ export type Product = {
   supplier?: SupplierId;
   name: string;
   description: string;
+  /** Medidas que o fornecedor manda no catálogo (hoje só a Spot; XBZ: ver lib/productSpecs). */
+  specs?: Array<{ label: string; value: string }>;
   productUrl: string;
   imageUrl: string;
   category: string;
@@ -121,6 +123,9 @@ function formatNameWord(word: string, isFirst: boolean): string {
   return lead + core.split("-").map(capitalizeWord).join("-") + trail;
 }
 
+/** Marca interna da XBZ que não ajuda o cliente: "COPO TÉRMICO 500ML *LISO C/ ABRIDOR" → sem o "*LISO" (vale para *LISA). */
+export const cleanProductName = (name: string) => name.replace(/\s*\*LIS[OA]\b/gi, "").replace(/\s+/g, " ").trim();
+
 /** Nome de produto em título: "COPO TÉRMICO 500ML" → "Copo Térmico 500ml". */
 export function formatProductName(value: string): string {
   const words = value.trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR").split(" ").filter(Boolean);
@@ -166,7 +171,7 @@ export function repairImageUrl(value: string): string {
 export function normalizeProduct(raw: RawProduct): Product {
   const id = text(raw.IdProduto ?? raw.id ?? raw.Id);
   const sku = text(raw.CodigoXbz ?? raw.codigoXbz);
-  const name = text(raw.Nome ?? raw.nome ?? raw.Descricao ?? raw.descricao) || "Produto sem nome";
+  const name = cleanProductName(text(raw.Nome ?? raw.nome ?? raw.Descricao ?? raw.descricao)) || "Produto sem nome";
   const suppliedCategory = text(raw.WebTipo ?? raw.webTipo);
   const description = text(raw.Descricao ?? raw.descricao);
 
@@ -216,7 +221,16 @@ function baseFamilyCode(code: string) {
   return code.replace(/^[A-Z][@$]/, "");
 }
 
+// Agrupar ~4 mil produtos custa caro no oraculo; o catálogo da memória (getLocalCatalog) devolve
+// a mesma lista até mudar, então o agrupamento fica guardado por lista. Cópia rasa: quem ordena não estraga o guardado.
+const groupedCache = new WeakMap<Product[], CatalogProduct[]>();
 export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
+  let grouped = groupedCache.get(products);
+  if (!grouped) groupedCache.set(products, (grouped = buildGroups(products)));
+  return grouped.slice();
+}
+
+function buildGroups(products: Product[]): CatalogProduct[] {
   const groups = new Map<string, Product[]>();
   // Fotos por família (inclusive itens sem estoque) para socorrer ponta de estoque sem foto.
   const familyImages = new Map<string, string>();
@@ -251,7 +265,8 @@ export function groupAvailableProducts(products: Product[]): CatalogProduct[] {
     return {
       id: internalCode,
       internalCode,
-      name: representative.name,
+      // Limpa também o que já está salvo no catálogo local (baixado antes desta regra).
+      name: cleanProductName(representative.name),
       description: representative.description,
       productUrl: representative.productUrl,
       imageUrl: image,

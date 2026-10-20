@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { calcularItemOrcamento, FRETE_FORNECEDOR_PRODUTO, type Tecnica } from "@/lib/backoffice/customization";
+import { photoFromName } from "@/components/staff/photoItems";
 import type { ItemCosting, QuoteCartItem } from "@/lib/commerce";
 import type { SpotCustomization } from "@/lib/suppliers/spotCustomizations";
 import type { SupplierId } from "@/lib/xbz";
@@ -165,11 +166,14 @@ export function buildQuoteItems(
       if (draft.costOverride !== undefined && !(draft.costOverride >= 0)) throw new Error("Custo do produto inválido.");
       if (draft.priceOverride !== undefined && !(cents(draft.priceOverride) > 0)) throw new Error("Preço de venda inválido.");
       const productCost = draft.costOverride ?? (variant ? variant.cost : (draft as Extract<DraftItem, { source: "avulso" }>).cost);
+      // Foto (revelação/ampliação) é feita na loja: sem frete de fornecedor.
+      const freteFornecedor = draft.source === "avulso" && photoFromName(draft.name) ? 0 : FRETE_FORNECEDOR_PRODUTO;
 
       const calc = calcularItemOrcamento({
         custoProduto: productCost,
         categoria: product?.category ?? "",
         quantidade: draft.quantity,
+        freteFornecedor,
         gravacoes: draft.gravacoes.map(({ tecnica, local, custoOverride }) => ({ tecnica: resolveTecnica(tecnica, product), local, custoOverride })),
       });
       const gravacoes = calc.gravacoes.map((gravacao, index) => ({
@@ -194,7 +198,7 @@ export function buildQuoteItems(
         detalhe: gravacoes.map((g) => g.detalhe).filter(Boolean).join(" · "),
         personalizacaoUnitaria: calc.gravacoesPorPeca,
         custoPersonalizacaoTotal: cents(gravacoes.reduce((sum, g) => sum + g.custoTotal, 0)),
-        freteFornecedor: FRETE_FORNECEDOR_PRODUTO,
+        freteFornecedor,
         tecnica: gravacoes[0]?.tecnica ?? { tipo: "nenhuma" },
         gravacoes,
         ...(Object.keys(manual).length ? { manual } : {}),

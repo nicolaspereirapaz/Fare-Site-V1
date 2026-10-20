@@ -23,6 +23,8 @@ type DetailResponse = {
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const brl = (value: number) => currency.format(value);
 
+const SIZE_LABELS = /^(altura|largura|comprimento|profundidade)/i;
+
 export function XbzProductDetail({ code }: { code: string }) {
   const router = useRouter();
   const { addItem, updateQuantity, items: cartItems } = useCart();
@@ -67,6 +69,17 @@ export function XbzProductDetail({ code }: { code: string }) {
     return () => {
       active = false;
     };
+  }, [code]);
+
+  // Medidas chegam depois do produto (a XBZ é lida do fornecedor na 1ª vez); sem medidas, a seção não aparece.
+  const [specs, setSpecs] = useState<Array<{ label: string; value: string }>>([]);
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/xbz/products/${encodeURIComponent(code)}/medidas`)
+      .then((response) => (response.ok ? response.json() : { specs: [] }))
+      .then((payload: { specs?: Array<{ label: string; value: string }> }) => { if (active) setSpecs(payload.specs ?? []); })
+      .catch(() => undefined);
+    return () => { active = false; };
   }, [code]);
 
   const product = data?.product;
@@ -221,6 +234,18 @@ export function XbzProductDetail({ code }: { code: string }) {
             <h1>{formatProductName(product.name)}</h1>
             {product.code ? <span className="product-code product-code-detail">Cód. {product.code}</span> : null}
             {product.description ? <p>{product.description}</p> : null}
+            {specs.length ? (
+              <div className="product-specs" aria-label="Medidas" role="group">
+                {/* Esquerda: altura, largura (e comprimento); direita: o resto. */}
+                {[specs.filter((spec) => SIZE_LABELS.test(spec.label)), specs.filter((spec) => !SIZE_LABELS.test(spec.label))]
+                  .filter((column) => column.length)
+                  .map((column) => (
+                    <dl key={column[0].label}>
+                      {column.map((spec) => <div key={spec.label}><dt>{spec.label}</dt><dd>{spec.value}</dd></div>)}
+                    </dl>
+                  ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="draft-notice" role="note">

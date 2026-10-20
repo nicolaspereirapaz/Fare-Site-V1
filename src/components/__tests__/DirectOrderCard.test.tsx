@@ -5,7 +5,8 @@ const finance={paidCents:2000,balanceCents:3000,createdBy:'Bia',internalNotes:''
 describe('cartão financeiro do pedido',()=>{
  it('destaca dívida e prazo sem mostrar livro financeiro',()=>{
   render(<KanbanCardBody code="FF-A1" total={50} title="Ana" summary="Banner" finance={finance} />);
-  expect(screen.getByText(/Cliente deve/)).toHaveTextContent('30,00');
+  expect(screen.getByText('Pagamento pendente')).toBeInTheDocument();
+  expect(screen.queryByText(/30,00/)).not.toBeInTheDocument();
   expect(screen.getByText(/Entrega prevista/)).toHaveTextContent('23/10/2026');
  });
  it('dívida desaparece quando quitado e não é inferida para legado',()=>{

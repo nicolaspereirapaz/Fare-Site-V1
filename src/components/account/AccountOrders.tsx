@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarDays, ClipboardList, MessageCircle, Wallet } from "lucide-react";
 import type { StatusPedido } from "@/lib/backoffice/orderStatus";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import { perUnitText, quantityText } from "@/components/staff/photoItems";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/orders/labels";
 import { orderCode } from "@/lib/orders/orderCode";
@@ -73,8 +74,8 @@ export function AccountOrders({ orders }: { orders: AccountOrder[] }) {
                     <strong>{item.productName}</strong>
                     {item.color ? <small> · {item.color}</small> : null}
                   </span>
-                  <span>{item.quantityRange ?? `${item.quantity} un.`}</span>
-                  <span>{item.unitPrice === null ? "sob consulta" : `${brl(item.unitPrice)}/un.`}</span>
+                  <span>{item.quantityRange ?? quantityText(item.productName, item.quantity)}</span>
+                  <span>{item.unitPrice === null ? "sob consulta" : `${brl(item.unitPrice)}${perUnitText(item.productName)}`}</span>
                 </li>
               ))}
             </ul>

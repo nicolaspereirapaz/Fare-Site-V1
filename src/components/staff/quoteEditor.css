@@ -378,6 +378,9 @@
 .qe-pk-det-codes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin: 0 0 22px; }
 .qe-pk-det-codes dt { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--qe-faint); }
 .qe-pk-det-codes dd { margin: 3px 0 0; color: var(--qe-ink); font-size: 16.5px; font-weight: 600; }
+.qe-pk-det-specs { gap: 10px 24px; }
+.qe-pk-det-specs dt { text-transform: none; letter-spacing: 0; }
+.qe-pk-det-specs dd { font-size: 15px; }
 .qe-pk-det-label { margin: 0 0 10px; font-size: 14.5px; font-weight: 600; color: var(--qe-muted); }
 .qe-pk-det-colors { margin: 0 0 22px; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .qe-pk-det-colors button { display: grid; grid-template-columns: 54px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center; width: 100%; padding: 8px 10px; border: 1px solid var(--qe-line-soft); border-radius: 10px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
@@ -426,11 +429,12 @@
   .qe-pk-det-colors { grid-template-columns: 1fr; }
 }
 
-/* ---------------------------------------------- prévia do PDF depois de "Criar orçamento" */
+/* ---------------------------------------------- prévia do HTML depois de "Criar orçamento" */
 .qe-done { width: min(1100px, 100%); height: calc(100vh - 48px); }
 .qe-done .qe-modal-head h2 { display: flex; align-items: center; gap: 8px; }
 .qe-done-ok { color: #22a45d; }
-.qe-done-body { flex: 1; min-height: 0; overflow-y: auto; background: #e9eaee; }
+/* A prévia ocupa toda a janela (sem faixa cinza embaixo); a rolagem é a do documento. */
+.qe-done-body { flex: 1; min-height: 0; overflow: hidden; background: #fff; }
 /* Folhas do PDF desenhadas pelo pdf.js, centralizadas, com sombra de papel. */
 .qe-pdf { position: relative; min-height: 100%; }
 .qe-pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 24px; }
@@ -454,3 +458,24 @@
   /* A regra desktop tardia da lista não pode sobrescrever as duas colunas mobile. */
   .qe-line-list { grid-template-columns: minmax(0, 1fr) 56px; }
 }
+
+/* ---------------------------------------------- abas Brindes · Fotos · Gráfica na "Escolha o produto" */
+.qe-pk-tabs { display: flex; gap: 4px; padding: 0 22px; border-bottom: 1px solid var(--qe-line); }
+.qe-pk-tabs button { padding: 11px 14px 10px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--qe-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.qe-pk-tabs button.on { border-bottom-color: var(--qe-ink); color: var(--qe-ink); }
+.qe-pk-soon { flex: 1; }
+.qe-pk-photos { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 260px)); justify-content: center; align-content: start; gap: 18px; padding: 32px 22px; }
+.qe-pk-photo-type { display: flex; flex-direction: column; gap: 3px; padding: 12px; border: 1px solid var(--qe-line); border-radius: 14px; background: #fff; font: inherit; text-align: left; color: var(--qe-text); cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.qe-pk-photo-type:hover, .qe-pk-photo-type:focus-visible { border-color: var(--qe-lilac); box-shadow: 0 6px 18px rgba(30, 36, 64, .08); outline: none; }
+.qe-pk-photo-img { display: block; overflow: hidden; aspect-ratio: 1; margin-bottom: 8px; border-radius: 10px; background: #f2f2f3; }
+.qe-pk-photo-img img { width: 100%; height: 100%; object-fit: cover; }
+.qe-pk-photo-type b { color: var(--qe-ink); font-size: 15px; }
+.qe-pk-photo-type small { color: var(--qe-muted); font-size: 12.5px; }
+.qe-pk-photo-type em { color: #1f7a4d; font-size: 12.5px; font-style: normal; font-weight: 600; }
+.qe-photo-sizes button { display: inline-flex; flex-direction: column; align-items: center; padding: 6px 12px; border-radius: 10px; font-size: 13px; }
+.qe-photo-sizes button small { font-size: 11px; opacity: .8; }
+@media (max-width: 760px) { .qe-pk-photos { grid-template-columns: minmax(0, 1fr); } }
+.qe-photo-qty { max-width: 220px; }
+.qe-photo-box { display: grid; gap: 16px; }
+.qe-photo-box .qe-seg { width: fit-content; }
+.qe-photo-box .qe-seg button { padding: 0 16px; }

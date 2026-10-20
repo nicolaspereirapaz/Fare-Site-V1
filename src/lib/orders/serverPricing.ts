@@ -17,6 +17,7 @@ export function repriceCartItems(items: QuoteCartItem[], lookup: GiftPricingLook
     const pricing = item.slug.startsWith(GIFT_PREFIX) ? lookup(item.slug.slice(GIFT_PREFIX.length)) : null;
     const rest = { ...item };
     delete rest.costing; // composição de custo é só da equipe; nunca aceita do navegador
+    delete rest.mockup; // mockup só a equipe envia pelo painel
     return {
       ...rest,
       pricing,

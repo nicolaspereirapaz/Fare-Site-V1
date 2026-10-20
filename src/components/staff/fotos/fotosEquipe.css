@@ -1,0 +1,47 @@
+/* Área da equipe: pedidos de fotos */
+.pf-page { padding-top: 28px; padding-bottom: 64px; }
+.pf-head h1, .pf-detail-head h1 { margin: 8px 0 6px; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 2rem; }
+.pf-root { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 22px; color: var(--muted); font-size: .9rem; }
+.pf-root code, .pf-folder code, .pf-line code { border-radius: 6px; background: var(--navy-soft); padding: 2px 7px; color: var(--navy-dark); font-size: .85rem; overflow-wrap: anywhere; }
+.pf-table { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; }
+.pf-row { display: grid; grid-template-columns: 1fr 1.6fr 1fr 1.6fr 1fr .8fr .9fr; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 14px 18px; color: var(--ink); font-size: .92rem; }
+.pf-row:hover { background: var(--cream); }
+.pf-row-head { border-top: 0; background: var(--navy-soft); color: var(--navy); font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.pf-row-head:hover { background: var(--navy-soft); }
+.pf-row strong { color: var(--navy); }
+.pf-row small { display: block; color: var(--muted); font-size: .8rem; }
+.pf-tag { display: inline-block; border-radius: 99px; padding: 3px 10px; font-size: .78rem; font-style: normal; font-weight: 700; }
+.pf-tag.ok { background: #e3f4ec; color: var(--success); }
+.pf-tag.gone { background: #f1f1f3; color: var(--muted); }
+.pf-empty { display: grid; justify-items: center; gap: 8px; border: 1px dashed var(--line); border-radius: var(--radius-md); padding: 48px 20px; color: var(--muted); text-align: center; }
+
+.pf-detail-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; margin: 16px 0 18px; }
+.pf-detail-head p { margin: 0; color: var(--ink); }
+.pf-detail-head .pf-muted { color: var(--muted); font-size: .9rem; }
+.pf-muted { color: var(--muted); font-size: .9rem; }
+.pf-total { display: grid; align-content: start; justify-items: end; gap: 2px; border-radius: var(--radius-md); background: var(--navy); padding: 14px 20px; color: #fff; }
+.pf-total strong { font-family: var(--font-outfit), sans-serif; font-size: 1.6rem; }
+.pf-total small { color: rgba(255, 255, 255, .75); }
+.pf-actions { display: grid; gap: 10px; margin-bottom: 12px; }
+.pf-folder { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 12px 14px; }
+.pf-folder > span { color: var(--navy); font-size: .85rem; font-weight: 700; }
+.pf-folder code { flex: 1 1 320px; }
+.pf-delete { justify-self: start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 0; color: #b42318; font: inherit; font-weight: 700; cursor: pointer; }
+.pf-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid #f3c2bd; border-radius: var(--radius-md); background: #fdf1f0; padding: 12px 14px; color: #7a1d14; font-size: .9rem; }
+.pf-danger { background: #b42318; color: #fff; }
+.pf-doc-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; color: var(--navy); font-weight: 700; }
+.pf-line { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; padding: 16px 18px; }
+.pf-line h2 { margin: 0 0 4px; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 1.15rem; }
+.pf-line header p { margin: 0 0 12px; color: var(--muted); font-size: .88rem; }
+.pf-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.pf-thumbs li { display: grid; gap: 4px; }
+.pf-thumbs a { display: grid; place-items: center; aspect-ratio: 1; overflow: hidden; border-radius: 10px; background: #ededed; }
+.pf-thumbs img { max-width: 92%; max-height: 92%; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); }
+.pf-thumbs span { color: var(--ink); font-size: .8rem; overflow-wrap: anywhere; }
+.pf-thumbs em { color: var(--orange); font-size: .78rem; font-style: normal; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .pf-row { grid-template-columns: 1fr 1fr; }
+  .pf-row-head { display: none; }
+}
+.pf-links { display: flex; flex-wrap: wrap; gap: 6px 22px; }

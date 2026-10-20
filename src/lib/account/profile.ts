@@ -142,6 +142,9 @@ export function toCustomerProfile(data: AccountProfileData): CustomerProfile {
   return { ...toStoredProfile(data), name: data.name };
 }
 
+/** Nome completo: pelo menos nome e sobrenome. */
+export const isFullName = (name: string) => name.trim().split(/\s+/).filter((part) => /\p{L}/u.test(part)).length >= 2 && name.trim().length <= LIMITS.name;
+
 export function isProfileComplete(profile: CustomerProfile) {
   return normalizeProfileInput(profile).ok;
 }
@@ -189,5 +192,29 @@ export function createProfileHandlers(getSession: SessionReader<ProfileSession>,
     return Response.json(toResponse(parsed.value, session.user.email), { headers: NO_STORE });
   }
 
-  return { GET, PUT };
+  /** Contato do cadastro (criar conta e carrinho): nome completo e WhatsApp, sem exigir CPF e endereço. */
+  async function PATCH(request: Request): Promise<Response> {
+    const session = await getSession({ headers: request.headers });
+    if (!session) return Response.json({ error: "AUTH_REQUIRED" }, { status: 401, headers: NO_STORE });
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: "INVALID_REQUEST" }, { status: 400, headers: NO_STORE });
+    }
+    const errors: ProfileErrors = {};
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+    const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : undefined;
+    if (!isBrazilianPhone(phone)) errors.phone = "Informe um WhatsApp com DDD.";
+    if (name !== undefined && !isFullName(name)) errors.name = "Informe seu nome completo (nome e sobrenome).";
+    if (Object.keys(errors).length) return Response.json({ error: "INVALID_FIELDS", errors }, { status: 400, headers: NO_STORE });
+
+    if (name !== undefined && name !== session.user.name) await deps.updateName(name, request.headers);
+    const stored = { ...deps.readProfile(session.user.id), phone: formatPhoneBR(phone) };
+    deps.saveProfile(session.user.id, stored);
+    const profile = { ...stored, name: name ?? session.user.name };
+    return Response.json(toResponse(profile, session.user.email), { headers: NO_STORE });
+  }
+
+  return { GET, PUT, PATCH };
 }

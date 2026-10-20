@@ -137,7 +137,7 @@ describe("listagem de pedidos do backoffice", () => {
       itemCount: 1,
       total: 0,
     });
-    expect(payload.orders[0].code).toBe("FF-ORDER1");
+    expect(payload.orders[0].code).toBe("PED-ORDER1");
     expect(payload.orders[0].billing).toBeNull();
     expect(payload.orders[0].items).toEqual([
       { productName: "Foto 10x15", quantity: 1, selections: {}, unitPrice: 125 },
@@ -318,6 +318,29 @@ describe("atualização de status de pedido no backoffice", () => {
       nextStatus: "criando_arte",
       actorId: "vendedor-1",
     });
+  });
+
+  it("pagamento recebido num pedido de fotos pula a arte e vai para Aguardando produção", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "vendedor-1", role: "vendedor" } });
+    const photoItem = { id: "10x15-brilho", productName: "Revelação 10x15", slug: "fotos/10x15-brilho", quantity: 3, selections: {}, unitPrice: 3.5 };
+    const findOrder = vi.fn().mockReturnValue(buildOrder({ items: [photoItem] }));
+    const changeOrderStatus = vi.fn().mockReturnValue(buildOrder({ items: [photoItem], status: "aguardando_producao" }));
+    const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, changeOrderStatus);
+
+    const response = await handler(patchRequest({ status: "aguardando_arte" }), "order-1");
+
+    expect(response.status).toBe(200);
+    expect(changeOrderStatus).toHaveBeenCalledWith({ orderId: "order-1", nextStatus: "aguardando_producao", actorId: "vendedor-1" });
+  });
+
+  it("pedido comum continua indo para Aguardando arte", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "vendedor-1", role: "vendedor" } });
+    const changeOrderStatus = vi.fn().mockReturnValue(buildOrder({ status: "aguardando_arte" }));
+    const handler = createUpdateBackofficeOrderStatusHandler(getSession, vi.fn().mockReturnValue(buildOrder()), changeOrderStatus);
+
+    await handler(patchRequest({ status: "aguardando_arte" }), "order-1");
+
+    expect(changeOrderStatus).toHaveBeenCalledWith(expect.objectContaining({ nextStatus: "aguardando_arte" }));
   });
 });
 

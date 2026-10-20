@@ -4,7 +4,7 @@ import { familyKey, supplierCodeOf, supplierOf, SUPPLIER_LABELS } from "@/lib/pr
 import { publicProductId, toPublicCatalogProduct } from "@/lib/publicCatalog";
 import { findQuoteById, priceQuoteItem } from "@/lib/quotes/repository";
 import { readSpotCustomizations, refreshSpotCustomizationsInBackground } from "@/lib/suppliers/spotCustomizations";
-import { staffAuth } from "@/lib/staff/auth";
+import { readStaffSession } from "@/lib/staff/server";
 import { groupAvailableProducts } from "@/lib/xbz";
 import { getCatalogDatabase } from "@/lib/xbzCatalogRepository";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
@@ -12,7 +12,7 @@ import { getLocalCatalog } from "@/lib/xbzCatalogService";
 export const dynamic = "force-dynamic";
 
 const handlers = createQuotePricingHandlers({
-  getSession: staffAuth.api.getSession,
+  getSession: readStaffSession,
   findQuote: (quoteId) => findQuoteById(database, quoteId),
   // Custo do produto pelo catálogo local: a cor escolhida no orçamento (ou a mais barata).
   lookupProduct: async (quote, itemIndex) => {

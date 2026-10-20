@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/xbz";
+import { spotSpecs } from "@/lib/productSpecs";
 import { categoryWithHints, decimal, fetchJson, plainText, text } from "./shared";
 
 /**
@@ -48,6 +49,7 @@ export function normalizeSpotCatalog(products: Raw[], optionals: Raw[], stocks: 
       supplier: "spot",
       name,
       description,
+      specs: spotSpecs(product),
       productUrl: "",
       imageUrl,
       // As categorias da loja são as nossas: classifica pelo nome/descrição, nunca pela do fornecedor.

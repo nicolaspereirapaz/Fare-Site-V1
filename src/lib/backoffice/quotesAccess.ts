@@ -87,6 +87,7 @@ export function createUpdateBackofficeQuoteStatusHandler(
     }
     const nextStatus = (body as { status?: unknown } | null)?.status;
     if (!isQuoteStatus(nextStatus)) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+    if (nextStatus === "virou_pedido") return Response.json({ error: "INVALID_TRANSITION", message: "Use Fechar Orçamento para informar pagamento e entrega." }, { status: 409 });
     if (!findQuote(quoteId)) return Response.json({ error: "QUOTE_NOT_FOUND" }, { status: 404 });
 
     try {

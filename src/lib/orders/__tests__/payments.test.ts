@@ -71,6 +71,14 @@ describe("financeiro de pedido direto", () => {
     expect(payments.getOrderFinance(db, order.id)).toEqual(before);
   });
 
+  it("guarda o horário da retirada (opcional) e recusa horário inválido ou sem data", () => {
+    const order = payments.createDirectOrder(db, { ...baseInput, deliveryTime: "14:30" });
+    expect(payments.getOrderFinance(db, order.id)).toMatchObject({ deliveryDate: "2026-10-30", deliveryTime: "14:30" });
+    expect(payments.getOrderFinance(db, payments.createDirectOrder(db, { ...baseInput, idempotencyKey: "direct-2" }).id)?.deliveryTime).toBeNull();
+    expect(() => payments.createDirectOrder(db, { ...baseInput, idempotencyKey: "direct-3", deliveryTime: "25:00" })).toThrow("Horário inválido");
+    expect(() => payments.createDirectOrder(db, { ...baseInput, idempotencyKey: "direct-4", deliveryDate: null, deliveryTime: "10:00" })).toThrow("data junto");
+  });
+
   it.each(["cancelado", "concluido"])("bloqueia novo recebimento em pedido %s", (status) => {
     const order = payments.createDirectOrder(db, baseInput);
     db.prepare("UPDATE fare_orders SET status = ? WHERE id = ?").run(status, order.id);
