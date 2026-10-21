@@ -169,6 +169,8 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
   customer: PhotoOrder["customer"]; delivery: PhotoOrder["delivery"]; photos: ValidPhoto[];
   uploads: Map<string, PhotoUpload>; summary: ReturnType<typeof summarize>;
   unitPrice?: (sizeId: string, table: number) => number;
+  /** Pasta já existente do orçamento/pedido (as fotos entram junto do arquivo do documento). */
+  folder?: string | null;
 }) {
   const { id, code, uploads, summary } = input;
   const data = input;
@@ -182,7 +184,7 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
   const customerName = safeFolderName(firstAndLastName(input.customer.name));
   const customer = customerNumberFor(database, input.userId, customerName);
   // Regra da loja: pasta do dia e, dentro dela, uma pasta por pedido com o nome do cliente.
-  const orderDir = path.join(ORDERS_DIR, dayFolder(), `${customerName} - ${code}`);
+  const orderDir = input.folder ?? path.join(ORDERS_DIR, dayFolder(), `${customerName} - ${code}`);
   await mkdir(path.join(orderDir, "Originais"), { recursive: true });
 
   try {

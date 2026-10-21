@@ -12,6 +12,7 @@ import { getOrderFinance } from "@/lib/orders/payments";
 import { findOrderById } from "@/lib/orders/repository";
 import { assemblePhotoFolder, PhotoOrderError, readPhotos, validatePhotos } from "@/lib/photoOrders/finalize";
 import { codeExists, ensurePhotoOrderTables } from "@/lib/photoOrders/repository";
+import { existingDocumentFolder } from "@/lib/documentFolders";
 import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME } from "@/lib/quotes/quoteCode";
 import { findQuoteById, quoteCode, replaceQuoteItems } from "@/lib/quotes/repository";
@@ -149,6 +150,11 @@ function documentTotal(items: QuoteCartItem[], discount: QuoteDiscount | null) {
 }
 
 /** Cliente enviou: monta a pasta e troca as linhas de foto do orçamento/pedido pelo que ele escolheu. */
+function documentPhotosFolder(database: DatabaseSync, id: string) {
+  const folder = existingDocumentFolder(database, id);
+  return folder ? path.join(folder, "Fotos") : null;
+}
+
 export async function submitPhotoLink(database: DatabaseSync, token: string, rawPhotos: unknown) {
   const link = findLink(database, token);
   const doc = link && loadDocument(database, link);
@@ -183,6 +189,8 @@ export async function submitPhotoLink(database: DatabaseSync, token: string, raw
     id: randomUUID(), orderId: doc.kind === "order" ? doc.id : null, code, userId: doc.userId,
     customer: { name: doc.customer.name, phone: doc.customer.phone ?? "", company: doc.customer.company ?? null },
     delivery: "retirada", photos, uploads, summary, unitPrice,
+    // 1º envio vai para "Fotos" dentro da pasta do orçamento/pedido (erro apaga só essa subpasta); envios seguintes, pasta própria.
+    folder: code === doc.code ? documentPhotosFolder(database, doc.id) : null,
   });
 
   try {
