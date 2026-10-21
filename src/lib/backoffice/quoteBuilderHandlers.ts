@@ -4,7 +4,7 @@ import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
 import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type StaffMatch } from "@/lib/backoffice/productSearch";
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
-import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers } from "@/lib/customers/repository";
+import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
@@ -109,7 +109,11 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
     async searchCustomers(request: Request) {
       const access = await staff(deps, request);
       if (access.error) return access.error;
-      const query = new URL(request.url).searchParams.get("q") ?? "";
+      const params = new URL(request.url).searchParams;
+      // ?ref= : um cadastro só (para o "Editar" do cliente)
+      const ref = params.get("ref");
+      if (ref) { const found = resolveCustomer(deps.database(), ref.slice(0, 120)); return json({ customers: found ? [found] : [] }); }
+      const query = params.get("q") ?? "";
       return json({ customers: searchCustomers(deps.database(), query.slice(0, 80)) });
     },
 
@@ -126,6 +130,24 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         return json({ customer }, 201);
       } catch (error) {
         if (error instanceof DuplicateCustomerError) return json({ error: "DUPLICATE", message: error.message, matches: error.matches }, 409);
+        return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Dados inválidos." }, 400);
+      }
+    },
+
+    /** Editar cliente cadastrado (conta do site ou do painel). */
+    async updateCustomer(request: Request) {
+      const access = await staff(deps, request);
+      if (access.error) return access.error;
+      const body = await readJson(request);
+      if (!body || typeof body.ref !== "string") return json({ error: "INVALID_REQUEST" }, 400);
+      try {
+        const customer = updateCustomer(deps.database(), body.ref, {
+          name: String(body.name ?? ""), company: String(body.company ?? ""), phone: String(body.phone ?? ""),
+          email: String(body.email ?? ""), document: String(body.document ?? ""),
+        });
+        return json({ customer });
+      } catch (error) {
+        if (error instanceof DuplicateCustomerError) return json({ error: "DUPLICATE", message: "WhatsApp, e-mail ou CPF/CNPJ já está em outro cadastro.", matches: error.matches }, 409);
         return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Dados inválidos." }, 400);
       }
     },
@@ -266,6 +288,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       return json({
         id: order.id, status: order.status, updatedAt: order.updatedAt, createdBy: finance?.createdBy ?? null,
         internalNotes: finance?.internalNotes ?? "", discount: order.discount, hasCustomer: true,
+        customerRef: order.userId === NO_CUSTOMER_OWNER ? null : order.userId.startsWith("painel:") ? order.userId : `conta:${order.userId}`,
         customer: { name: order.customer.name, company: order.customer.company ?? "", phone: order.customer.phone ?? "", notes: order.customer.notes ?? "" },
         items, products, paidCents: finance?.paidCents ?? 0,
       });
@@ -319,6 +342,7 @@ export function editorState(quote: Quote) {
     internalNotes: quote.internalNotes,
     discount: quote.discount,
     hasCustomer: quote.userId !== NO_CUSTOMER_OWNER,
+    customerRef: quote.userId === NO_CUSTOMER_OWNER ? null : quote.userId.startsWith("painel:") ? quote.userId : `conta:${quote.userId}`,
     customer: { name: quote.customer.name, company: quote.customer.company ?? "", phone: quote.customer.phone ?? "", notes: quote.customer.notes ?? "" },
     items: quote.items.map(draftFromItem),
   };

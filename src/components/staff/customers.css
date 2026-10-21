@@ -1,0 +1,15 @@
+/* Clientes cadastrados (área da equipe) */
+.cl-page { padding-block: 28px 64px; display: grid; gap: 16px; }
+.cl-page h1 { margin: 0; color: var(--navy); }
+.cl-search { display: flex; gap: 8px; max-width: 640px; }
+.cl-search input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.cl-count { margin: 0; color: var(--muted); font-size: .9rem; }
+.cl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cl-list a { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: inherit; text-decoration: none; }
+.cl-list a:hover { border-color: var(--navy); }
+.cl-list small { grid-column: 1; color: var(--muted); }
+.cl-kind { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: .8rem; color: var(--muted); }
+.cl-history { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.cl-history th, .cl-history td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.cl-history td:last-child, .cl-history th:last-child { text-align: right; }
+@media (max-width: 600px) { .cl-list a { grid-template-columns: 1fr; } .cl-kind { grid-column: 1; grid-row: auto; } }

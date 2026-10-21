@@ -6657,3 +6657,8 @@ aside.checkout-card .checkout-mode > label.active {
 .legal-updated { margin: 0 0 18px; color: var(--muted); font-size: 0.9rem; }
 .auth-privacy { margin: 0; color: var(--muted); font-size: 0.85rem; }
 .footer-bottom a, .cookie-banner a { color: inherit; text-decoration: underline; }
+/* Menu da área da equipe (Painel · Clientes cadastrados) */
+.staff-topbar-nav { display: flex; gap: 18px; margin-right: auto; margin-left: 24px; }
+.staff-topbar-nav a { color: var(--navy); font-weight: 600; font-size: .92rem; text-decoration: none; }
+.staff-topbar-nav a:hover { text-decoration: underline; }
+@media (max-width: 720px) { .staff-topbar-nav { margin-left: 12px; gap: 12px; font-size: .85rem; } }

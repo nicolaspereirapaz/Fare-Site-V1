@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
@@ -27,6 +28,10 @@ export function StaffTopbar({ name, role }: { name: string; role: string }) {
           <img alt="Fare Foto" height={50} src="/images/fare-foto-logo-slogan.svg" width={92} />
           <span>Equipe</span>
         </div>
+        <nav className="staff-topbar-nav" aria-label="Área da equipe">
+          <Link href="/equipe">Painel</Link>
+          <Link href="/equipe/clientes">Clientes cadastrados</Link>
+        </nav>
         <div className="staff-topbar-user">
           <span className="staff-topbar-name">{name}</span>
           <span className="staff-role">{ROLE_LABELS[role] ?? role}</span>

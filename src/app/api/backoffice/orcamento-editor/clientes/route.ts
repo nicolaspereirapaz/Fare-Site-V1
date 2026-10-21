@@ -4,3 +4,4 @@ export const dynamic = "force-dynamic";
 
 export const GET = (request: Request) => quoteBuilderHandlers.searchCustomers(request);
 export const POST = (request: Request) => quoteBuilderHandlers.createCustomer(request);
+export const PATCH = (request: Request) => quoteBuilderHandlers.updateCustomer(request);

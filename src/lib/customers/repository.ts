@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { formatCnpj, formatCpf, formatPhoneBR, isBrazilianPhone, isValidCnpj, isValidCpf } from "@/lib/account/documents";
+import { getCustomerProfile, saveCustomerProfile } from "@/lib/account/profileRepository";
 
 /**
  * Clientes para o orçamento do painel: contas do site (tabela `user` + cadastro) e clientes
@@ -229,4 +230,71 @@ export function accountQuoteOwners(database: DatabaseSync, userId: string): stri
   const email = normalizeEmail(account.email);
   const panel = readPanel(database).filter((row) => row.email_norm && row.email_norm === email);
   return [userId, ...panel.map((row) => `painel:${row.id}`)];
+}
+
+/**
+ * Equipe corrige o cadastro do cliente (nome, empresa, WhatsApp, e-mail, CPF/CNPJ).
+ * Conta do site: o e-mail é o login e não muda aqui. Orçamentos e pedidos em aberto desse cliente
+ * passam a mostrar os dados novos. Mesmo WhatsApp/e-mail/CPF de outro cadastro: DuplicateCustomerError.
+ */
+export function updateCustomer(database: DatabaseSync, ref: string, input: PanelCustomerInput): CustomerSummary {
+  const current = resolveCustomer(database, ref);
+  if (!current) throw new Error("Cliente não encontrado.");
+  const data = validate({ ...input, email: current.kind === "conta" ? current.email : input.email });
+  migrate(database);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const duplicates = findCustomerDuplicates(database, { phone: data.phoneNorm, email: data.email, document: data.documentNorm })
+      .filter((match) => match.ref !== ref);
+    if (duplicates.length) throw new DuplicateCustomerError(duplicates);
+    const now = new Date().toISOString();
+    if (current.kind === "painel") {
+      database.prepare(`UPDATE fare_panel_customers SET name = ?, company = ?, phone = ?, phone_norm = ?, email = ?, email_norm = ?, document = ?, document_norm = ?
+        WHERE id = ?`).run(data.name, data.company, data.phone, data.phoneNorm, data.email, data.email, data.document, data.documentNorm, ref.slice("painel:".length));
+    } else {
+      database.prepare("UPDATE user SET name = ?, updatedAt = ? WHERE id = ?").run(data.name, now, current.ownerId);
+      const profile = getCustomerProfile(database, current.ownerId);
+      saveCustomerProfile(database, current.ownerId, { ...profile, phone: data.phone, document: data.document, companyName: data.company });
+    }
+    // Documentos em aberto mostram os dados novos (pedido concluído/cancelado fica como foi).
+    const patch = (json: string) => {
+      const customer = JSON.parse(json) as Record<string, unknown>;
+      delete customer.company;
+      return JSON.stringify({ ...customer, name: data.name, phone: data.phone, ...(data.company ? { company: data.company } : {}) });
+    };
+    for (const [table, closed] of [["fare_quotes", "'virou_pedido', 'cancelado'"], ["fare_orders", "'concluido', 'cancelado'"]] as const) {
+      if (!hasTable(database, table)) continue;
+      const rows = database.prepare(`SELECT id, customer_snapshot FROM ${table} WHERE user_id = ? AND status NOT IN (${closed})`).all(current.ownerId) as Array<{ id: string; customer_snapshot: string }>;
+      // Sem mexer em updated_at: quem estiver com o orçamento aberto continua podendo salvar.
+      for (const row of rows) database.prepare(`UPDATE ${table} SET customer_snapshot = ? WHERE id = ?`).run(patch(row.customer_snapshot), row.id);
+    }
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+  return resolveCustomer(database, ref)!;
+}
+
+/** Todos os clientes (contas do site + painel), por nome; com busca, igual ao orçamento. */
+export function listCustomers(database: DatabaseSync, query = "", limit = 300): CustomerSummary[] {
+  if (query.trim()) return searchCustomers(database, query, limit);
+  return allCustomers(database).map((customer) => customer.summary).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).slice(0, limit);
+}
+
+export type CustomerHistoryEntry = { kind: "quote" | "order"; id: string; status: string; totalCents: number | null; createdAt: string };
+
+/** Orçamentos e pedidos do cliente (conta do site inclui os feitos no painel com o mesmo e-mail), mais novos primeiro. */
+export function customerHistory(database: DatabaseSync, ref: string): CustomerHistoryEntry[] {
+  const customer = resolveCustomer(database, ref);
+  if (!customer) return [];
+  const owners = customer.kind === "conta" ? accountQuoteOwners(database, customer.ownerId) : [customer.ownerId];
+  const marks = owners.map(() => "?").join(", ");
+  const entries: CustomerHistoryEntry[] = [];
+  for (const [kind, table] of [["quote", "fare_quotes"], ["order", "fare_orders"]] as const) {
+    if (!hasTable(database, table)) continue;
+    const rows = database.prepare(`SELECT id, status, total_cents, created_at FROM ${table} WHERE user_id IN (${marks})`).all(...owners) as Array<{ id: string; status: string; total_cents: number | null; created_at: string }>;
+    entries.push(...rows.map((row) => ({ kind, id: row.id, status: row.status, totalCents: row.total_cents, createdAt: row.created_at })));
+  }
+  return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

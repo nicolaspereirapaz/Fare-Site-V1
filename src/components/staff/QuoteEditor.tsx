@@ -1,5 +1,7 @@
 "use client";
 
+import { CustomerEdit } from "@/components/staff/CustomerEdit";
+import { PhotoLinkActions } from "@/components/staff/PhotoLinkActions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -165,6 +167,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paidAt: todayInBrazil() }));
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
+  const [fixedCustomerRef, setFixedCustomerRef] = useState<string | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState(false);
   /** Orçamento já salvo sem cliente: dá para escolher agora. */
   const [needsCustomer, setNeedsCustomer] = useState(false);
   const [changingCustomer, setChangingCustomer] = useState(false);
@@ -210,7 +214,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
         setNotes(payload.internalNotes ?? "");
         if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
         if (payload.hasCustomer === false) setNeedsCustomer(true);
-        else setFixedCustomer(payload.customer);
+        else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); }
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
         if (editingOrder) setPaidOnServer(payload.paidCents ?? 0);
       })
@@ -349,7 +353,17 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
         <div>
           <section className="qe-card">
             <h2>Cliente{isOrder && !editingOrder ? <span className="qe-optional">obrigatório</span> : !fixedCustomer ? <span className="qe-optional">opcional</span> : null}</h2>
-            {fixedCustomer ? (
+            {editingCustomer && (fixedCustomerRef || customer) ? (
+              <CustomerEdit
+                customerRef={fixedCustomerRef ?? customer!.ref}
+                onCancel={() => setEditingCustomer(false)}
+                onSaved={(saved) => {
+                  setEditingCustomer(false);
+                  if (fixedCustomer) setFixedCustomer({ ...fixedCustomer, name: saved.name, company: saved.company, phone: saved.phone });
+                  else setCustomer(saved);
+                }}
+              />
+            ) : fixedCustomer ? (
               <div className="qe-client">
                 <div className="qe-initials">{initials(fixedCustomer.name)}</div>
                 <div>
@@ -357,6 +371,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
                   <small>{fixedCustomer.phone || "Sem WhatsApp"}{state?.createdBy ? ` · feito por ${state.createdBy}` : " · pedido pelo site"}</small>
                   {fixedCustomer.notes ? <small>Observação do cliente: {fixedCustomer.notes}</small> : null}
                 </div>
+                {fixedCustomerRef ? <button className="qe-btn-text" onClick={() => setEditingCustomer(true)} type="button">Editar</button> : null}
               </div>
             ) : customer && !changingCustomer ? (
               <div className="qe-client">
@@ -365,6 +380,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
                   <b>{customer.name}{customer.company ? ` · ${customer.company}` : ""}</b>
                   <small>{[customer.document, customer.phone, customer.email].filter(Boolean).join(" · ")}{customer.kind === "conta" ? " · conta no site" : ""}</small>
                 </div>
+                <button className="qe-btn-text" onClick={() => setEditingCustomer(true)} type="button">Editar</button>
                 <button className="qe-btn-text" onClick={() => setChangingCustomer(true)} type="button">Trocar</button>
               </div>
             ) : (
@@ -453,6 +469,15 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
           </section>
 
           {isOrder && !editingOrder ? <DirectOrderFields onChange={setPayment} value={payment} /> : null}
+          {/* Link para o cliente mandar as fotos: já no orçamento (as fotos viram itens com o preço da tabela). */}
+          {!isOrder || editingOrder ? (
+            <section className="qe-card">
+              <h2>Fotos do cliente</h2>
+              {docId && editable ? <PhotoLinkActions kind={editingOrder ? "order" : "quote"} id={docId} />
+                : docId ? <p className="qe-fhint">Este documento não aceita mais fotos.</p>
+                : <p className="qe-fhint">Salve o orçamento para gerar o link em que o cliente envia as fotos.</p>}
+            </section>
+          ) : null}
           <section className="qe-card">
             <h2>Observações internas</h2>
             <textarea disabled={!editable} onChange={(event) => setNotes(event.target.value)} placeholder="Só a equipe vê." value={notes} />
