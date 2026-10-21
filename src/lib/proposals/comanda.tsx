@@ -1,3 +1,4 @@
+import { queuePdfForPrinting } from "@/lib/printQueue";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -220,6 +221,15 @@ export function createComandaHandler(deps: ComandaDeps) {
       pdf = await renderComandaPdf(await buildComanda(order, getOrderFinance(db, id), deps.imageOf));
     } catch (error) {
       return json({ error: "CANNOT_DOCUMENT", message: error instanceof Error ? error.message : "Não foi possível gerar a comanda." }, 409);
+    }
+    if (request.method === "POST") {
+      // Imprimir direto: vai para a fila da loja (o oraculo imprime na WF-7840, gaveta 1).
+      try {
+        const pages = await queuePdfForPrinting(pdf, `Comanda-${orderCode(order.id)}`);
+        return json({ queued: pages });
+      } catch (error) {
+        return json({ error: "PRINT_FAILED", message: error instanceof Error ? error.message : "Não foi possível imprimir." }, 503);
+      }
     }
     const inline = new URL(request.url).searchParams.get("ver") === "1";
     return new Response(new Uint8Array(pdf), {

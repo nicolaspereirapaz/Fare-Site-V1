@@ -113,3 +113,5 @@
 .sd-payment-plan { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:4px; font-size:.86rem; }
 .sd-payment-plan li { display:flex; justify-content:space-between; gap:10px; }
 .sd-payment-plan .sd-payment-due { color:#9a3412; font-weight:600; }
+.sd-comanda-print { display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.sd-comanda-pdf { font-size:.82rem; color:#5f6470; text-decoration:underline; }

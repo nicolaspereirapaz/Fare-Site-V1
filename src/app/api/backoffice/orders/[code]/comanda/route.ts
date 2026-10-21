@@ -12,3 +12,8 @@ const comanda = createComandaHandler({ getSession: readStaffSession as never, da
 export async function GET(request: Request, context: { params: Promise<{ code: string }> }) {
   return comanda(request, (await context.params).code);
 }
+
+/** Imprimir direto na loja (fila de impressão). */
+export async function POST(request: Request, context: { params: Promise<{ code: string }> }) {
+  return comanda(request, (await context.params).code);
+}

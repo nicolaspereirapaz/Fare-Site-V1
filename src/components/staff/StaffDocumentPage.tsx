@@ -101,6 +101,20 @@ function PaymentPlanList({finance}:{finance:OrderFinance}){
  return <ul className="sd-payment-plan">{plan.receipts.map((r,i)=><li key={i}><span>Pago {r.label}</span><strong>{r.amount}</strong></li>)}{plan.remainder?<li className="sd-payment-due"><span>{plan.remainder.label}</span><strong>{plan.remainder.amount}</strong></li>:null}</ul>;
 }
 
+/** Imprime a comanda direto na WF-7840 da loja (fila do oraculo); o PDF continua disponível para baixar. */
+function ComandaPrint({orderId}:{orderId:string}){
+ const [state,setState]=useState<'idle'|'sending'|'sent'|'error'>('idle');const [message,setMessage]=useState('');
+ async function print(){
+  setState('sending');setMessage('');
+  try{const response=await fetch(`/api/backoffice/orders/${orderId}/comanda`,{method:'POST'});const data=await response.json() as {queued?:number;message?:string};
+   if(!response.ok)throw new Error(data.message??'Não foi possível imprimir.');setState('sent');setMessage('Enviada para a impressora da loja.');}
+  catch(error){setState('error');setMessage(error instanceof Error?error.message:'Não foi possível imprimir.');}
+ }
+ return <span className="sd-comanda-print"><button className="kb-secondary sd-comanda" type="button" disabled={state==='sending'} onClick={print}><Printer aria-hidden="true" size={15}/> {state==='sending'?'Enviando…':'Imprimir comanda'}</button>
+  <a className="sd-comanda-pdf" download href={`/api/backoffice/orders/${orderId}/comanda`}>Baixar PDF</a>
+  {message?<small role="status" className={state==='error'?'qe-error':undefined}>{message}</small>:null}</span>;
+}
+
 export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'];id:string;canCancel:boolean}){
  const router=useRouter();const [document,setDocument]=useState<StaffDocument|null>(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [closing,setClosing]=useState(false);const [copied,setCopied]=useState(false);
  const isQuote=kind==='quote';const base=isQuote?`/api/backoffice/quotes/${id}`:`/api/backoffice/orders/${id}`;
@@ -143,7 +157,7 @@ export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'
    </dl>
    {isQuote?<div className="sd-pix"><p className="sd-muted">Pix · chave CNPJ</p><div><span>50.344.377/0001-36</span><button className="kb-secondary" type="button" onClick={async()=>{try{await navigator.clipboard.writeText('50.344.377/0001-36');setCopied(true);}catch{setError('Não foi possível copiar automaticamente. Selecione a chave para copiar.');}}}>Copiar chave</button></div>{copied?<small role="status">Chave Pix copiada.</small>:null}</div>:<><p className="sd-muted sd-method">{finance?.paymentOnPickup?(finance.paidCents===0?'Pagamento integral na retirada · forma a definir':[...new Set(finance.payments.map(receipt=>STAFF_PAYMENT_LABELS[receipt.paymentMethod]))].join(' + ')):document.paymentMethod?STAFF_PAYMENT_LABELS[document.paymentMethod]:''}{finance?.installments?` · ${finance.installments}×`:''}{finance?.dueDate?` · vence ${dateLabel(finance.dueDate)}`:''}</p>{finance?<><OrderPaymentPanel compact orderId={id} status={orderStatus} paymentMethod={document.paymentMethod!} finance={finance} onRecorded={reload}/><PaymentPlanList finance={finance}/></>:<p className="sd-muted">Recebimentos não registrados para este pedido.</p>}</>}
    </section>
-   <section className="qe-card sd-document-actions"><ProposalActions {...(isQuote?{quoteId:id,sentAt:document.proposalSentAt}:{orderId:id})} blocked={isQuote&&!openQuote?'Este orçamento já foi fechado.':document.items.some(i=>i.unitPrice===null)?'Há item sem preço. Edite o orçamento antes de gerar o documento.':null} onSent={reload}/>{isQuote?null:<a className="kb-secondary sd-comanda" download href={`/api/backoffice/orders/${id}/comanda`}><Printer aria-hidden="true" size={15}/> Baixar comanda</a>}</section>
+   <section className="qe-card sd-document-actions"><ProposalActions {...(isQuote?{quoteId:id,sentAt:document.proposalSentAt}:{orderId:id})} blocked={isQuote&&!openQuote?'Este orçamento já foi fechado.':document.items.some(i=>i.unitPrice===null)?'Há item sem preço. Edite o orçamento antes de gerar o documento.':null} onSent={reload}/>{isQuote?null:<ComandaPrint orderId={id}/>}</section>
    {document.items.some(i=>photoFromName(i.productName))&&(isQuote?openQuote:!['cancelado','concluido'].includes(orderStatus))?<section className="qe-card sd-document-actions"><PhotoLinkActions kind={isQuote?'quote':'order'} id={id}/></section>:null}
    <section className="qe-card"><h2>Cliente</h2><p className="sd-customer">{document.customer.company||document.customer.name}</p><p className="sd-muted">{document.customer.company?<>{document.customer.name}<br/></>:null}{document.customer.phone||'Telefone não informado'}</p>
    {billing?<details className="sd-billing"><summary>Dados de faturamento</summary><p>{billingDocument(billing)}<br/>{billing.companyName}<br/>{formatBillingAddress(billing.address)}</p></details>:null}</section>
