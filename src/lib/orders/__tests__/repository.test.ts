@@ -184,7 +184,7 @@ describe("repositório de pedidos", () => {
       customer: baseInput.customer,
       items: baseInput.items,
     });
-    expect(order.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(order.id).toMatch(/^0001-[0-9a-f-]{36}$/);
   });
 
   it("mantém total nulo quando algum preço está sob consulta", () => {

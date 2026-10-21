@@ -1,5 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { photoFromName, photoItemName, photoTablePrice } from "@/components/staff/photoItems";
 import { paperLabel, type Paper } from "@/components/fotos/catalog";
@@ -9,7 +11,7 @@ import { orderCode } from "@/lib/orders/orderCode";
 import { getOrderFinance } from "@/lib/orders/payments";
 import { findOrderById } from "@/lib/orders/repository";
 import { assemblePhotoFolder, PhotoOrderError, readPhotos, validatePhotos } from "@/lib/photoOrders/finalize";
-import { codeExists } from "@/lib/photoOrders/repository";
+import { codeExists, ensurePhotoOrderTables } from "@/lib/photoOrders/repository";
 import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME } from "@/lib/quotes/quoteCode";
 import { findQuoteById, quoteCode, replaceQuoteItems } from "@/lib/quotes/repository";
@@ -202,4 +204,36 @@ function saveItems(database: DatabaseSync, doc: LinkDocument, items: QuoteCartIt
   const result = database.prepare("UPDATE fare_orders SET items_snapshot = ?, total_cents = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
     .run(JSON.stringify(items), total, new Date().toISOString(), doc.id, doc.updatedAt);
   if (Number(result.changes) !== 1) throw new PhotoOrderError("O pedido foi alterado pela loja agora há pouco. Recarregue a página e envie de novo.");
+}
+
+/**
+ * Orçamento virou pedido: as pastas das fotos enviadas pelo link ("Nome - ORC-0001") passam a ser do pedido
+ * ("Nome - PED-0001", mesmo número), junto com o .html e o registro no banco. Se uma pasta não puder ser
+ * renomeada (aberta em outro programa), fica como está e o erro vai para o log — o pedido já foi criado.
+ */
+export async function movePhotoFoldersToOrder(database: DatabaseSync, quoteId: string, orderId: string) {
+  ensurePhotoLinkTables(database);
+  ensurePhotoOrderTables(database);
+  const oldBase = quoteCode(quoteId);
+  const newBase = orderCode(orderId);
+  const rows = database.prepare(`
+    SELECT p.id, p.code, p.folder FROM fare_photo_links l JOIN fare_photo_orders p ON p.id = l.photo_order_id
+    WHERE l.kind = 'quote' AND l.doc_id = ? AND p.order_id IS NULL
+  `).all(quoteId) as Array<{ id: string; code: string; folder: string }>;
+  for (const row of rows) {
+    const code = row.code.startsWith(oldBase) ? newBase + row.code.slice(oldBase.length) : row.code; // mantém " envio 2"
+    const name = path.basename(row.folder);
+    const folder = name.endsWith(row.code) ? path.join(path.dirname(row.folder), name.slice(0, -row.code.length) + code) : row.folder;
+    try {
+      if (folder !== row.folder && existsSync(row.folder) && !existsSync(folder)) await rename(row.folder, folder);
+      const oldHtml = path.join(folder, `${row.code}.html`);
+      if (code !== row.code && existsSync(oldHtml)) {
+        await writeFile(path.join(folder, `${code}.html`), (await readFile(oldHtml, "utf8")).replaceAll(row.code, code));
+        await rm(oldHtml, { force: true });
+      }
+      database.prepare("UPDATE fare_photo_orders SET code = ?, folder = ?, order_id = ? WHERE id = ?").run(code, existsSync(folder) ? folder : row.folder, orderId, row.id);
+    } catch (error) {
+      console.error(`[fotos] não foi possível passar ${row.folder} para ${code}:`, error instanceof Error ? error.message : error);
+    }
+  }
 }

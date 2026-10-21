@@ -1,3 +1,4 @@
+import { documentNumberOf, formatDocumentNumber } from "@/lib/documentNumber";
 /** Situações do orçamento (sem dependências de servidor: usado também nas telas). */
 export const QUOTE_STATUSES = [
   "aguardando_orcamento",
@@ -21,9 +22,10 @@ export const LEGACY_QUOTE_STATUSES: Record<string, QuoteStatus> = {
 export const NO_CUSTOMER_OWNER = "sem-cliente";
 export const NO_CUSTOMER_NAME = "Cliente a definir";
 
-/** Número curto do orçamento para o cliente citar (ex.: #ORC-3F7A2C). */
+/** Número do orçamento para o cliente citar (ex.: #ORC-0001; orçamentos antigos: #ORC-3F7A2C). */
 export function quoteCode(id: string): string {
-  return `ORC-${id.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase()}`;
+  const n = documentNumberOf(id);
+  return n === null ? `ORC-${id.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase()}` : `ORC-${formatDocumentNumber(n)}`;
 }
 
 /**

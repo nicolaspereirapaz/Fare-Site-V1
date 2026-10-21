@@ -63,7 +63,7 @@ describe("pedido de fotos", () => {
       });
 
       const { order } = result;
-      expect(order.code).toMatch(/^PED-[0-9A-F]{6}$/);
+      expect(order.code).toBe("PED-0001");
       expect(result.customerNumber).toBe("C0001");
       // 3 cópias de 10 × 15 (R$ 3,50) + 1 ampliação 20 × 30 (R$ 11,00)
       expect(order.totalCents).toBe(2150);

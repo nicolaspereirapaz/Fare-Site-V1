@@ -4,6 +4,7 @@ import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 import { closeQuote, CloseQuoteError, type CloseQuoteInput } from "@/lib/quotes/closeQuote";
 import { orderCode } from "@/lib/orders/orderCode";
+import { movePhotoFoldersToOrder } from "@/lib/photoLinks/links";
 
 export type CloseQuoteDeps = {
   database: () => DatabaseSync;
@@ -42,6 +43,8 @@ export function createCloseQuoteHandler(deps: CloseQuoteDeps) {
         delivery: { deliveryDate: raw.deliveryDate, deliveryMode: raw.deliveryMode, deliveryTime: raw.deliveryTime ?? null } as CloseQuoteInput["delivery"],
         paymentOnPickup: raw.paymentOnPickup === true,
       });
+      // Pasta das fotos do orçamento passa a ser do pedido; falha aqui não desfaz o pedido.
+      await movePhotoFoldersToOrder(deps.database(), quoteId, order.id).catch((error) => console.error("[fotos] pasta do orçamento", error));
       return json({ order: { id: order.id, code: orderCode(order.id), status: order.status } });
     } catch (error) {
       if (error instanceof CloseQuoteError) return json({ error: error.reason, message: error.message }, error.reason === "QUOTE_NOT_FOUND" ? 404 : error.reason === "CONFLICT" ? 409 : 400);

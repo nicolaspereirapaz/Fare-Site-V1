@@ -1,3 +1,4 @@
+import { documentNumberOf, nextDocumentNumber, numberedId } from "@/lib/documentNumber";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
@@ -316,8 +317,14 @@ function deserializeOrder(row: OrderRow): Order {
 export function createOrder(database: DatabaseSync, input: CreateOrderInput, options: CreateOrderOptions = {}): Order {
   runOrderMigrations(database);
   const initialStatus = options.initialStatus ?? "aguardando_pagamento";
-  const id = randomUUID();
   const now = new Date().toISOString();
+  const select = database.prepare("SELECT * FROM fare_orders WHERE user_id = ? AND idempotency_key = ?");
+  // Repetição do mesmo pedido: devolve o que já existe sem gastar número.
+  const repeated = select.get(input.userId, input.idempotencyKey) as OrderRow | undefined;
+  if (repeated) return deserializeOrder(repeated);
+  // Vindo de orçamento ("orc:<id>"), o pedido usa o número reservado pelo ORC; senão, o próximo livre.
+  const fromQuote = input.idempotencyKey.startsWith("orc:") ? documentNumberOf(input.idempotencyKey.slice(4)) : null;
+  const id = numberedId(fromQuote ?? nextDocumentNumber(database));
 
   database.prepare(`
     INSERT INTO fare_orders (

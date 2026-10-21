@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
+import { nextDocumentNumber, numberedId } from "@/lib/documentNumber";
 import { NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
 import type { DatabaseSync } from "node:sqlite";
 import type { QuoteCartItem, QuoteCustomer } from "@/lib/commerce";
@@ -157,7 +158,7 @@ export function createQuote(database: DatabaseSync, input: CreateQuoteInput): Qu
     INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'aguardando_orcamento', ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
-  `).run(randomUUID(), input.userId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), totalCents(input.items), now, now);
+  `).run(numberedId(nextDocumentNumber(database)), input.userId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), totalCents(input.items), now, now);
 
   const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")
     .get(input.userId, input.idempotencyKey) as QuoteRow | undefined;
@@ -194,7 +195,7 @@ export function createManualQuote(
     INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, discount_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'em_negociacao', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
-  `).run(randomUUID(), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, now, now);
+  `).run(numberedId(nextDocumentNumber(database)), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, now, now);
   const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")
     .get(input.ownerId, input.idempotencyKey) as QuoteRow | undefined;
   if (!row) throw new Error("Não foi possível salvar o orçamento.");

@@ -33,7 +33,7 @@ describe("proposta: rotas do painel", () => {
     const response = await handlers.pdf(new Request("http://x"), quote.id);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/html;charset=utf-8");
-    expect(response.headers.get("content-disposition")).toContain(`Proposta-${"ORC-" + quote.id.replace(/-/g, "").slice(0, 6).toUpperCase()}.html`);
+    expect(response.headers.get("content-disposition")).toContain("Proposta-ORC-0001.html");
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(render.mock.calls[0][0]).toMatchObject({ seller: "Bia", items: [{ name: "Caneta", code: "X10304" }] });
   });
