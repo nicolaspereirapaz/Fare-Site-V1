@@ -82,11 +82,31 @@ const JPEG = { quality: 95, chromaSubsampling: "4:4:4" } as const;
  * Foto retrô: o cartão branco vai numa folha cinza 10,2 × 15,2 (como no modelo), uma foto por folha.
  */
 export async function renderPrint(sourceFile: string, size: { width: number; height: number }, edits: PhotoEdits, output: string) {
-  const frame = sizeById(edits.sizeId).frame;
+  const printSize = sizeById(edits.sizeId);
+  const frame = printSize.frame;
   const card = await renderCard(sourceFile, size, edits);
   if (frame) return renderSheet(frame, [card.buffer], output);
+  // Tamanho digitado (revelação/ampliação): sai no papel do tamanho da tabela em que cabe, folha cinza
+  // como a da Instax, com a foto no tamanho pedido no centro (a equipe corta). Grande formato: plotter, direto.
+  if (printSize.base) return renderOnSheet(card, printSize.base.real ?? printSize.base.size, output);
   await sharp(card.buffer).withMetadata({ density: PRINT_DPI }).jpeg(JPEG).toFile(output);
   return { width: card.width, height: card.height };
+}
+
+/** Foto de tamanho digitado centralizada numa folha cinza do tamanho da tabela (na mesma orientação da foto). */
+export async function renderOnSheet(card: { buffer: Buffer; width: number; height: number }, sheetCm: { width: number; height: number }, output: string) {
+  const short = cmToPx(Math.min(sheetCm.width, sheetCm.height));
+  const long = cmToPx(Math.max(sheetCm.width, sheetCm.height));
+  const landscape = card.width > card.height;
+  // Nunca corta a foto: se por arredondamento ela passar da folha, a folha acompanha.
+  const width = Math.max(landscape ? long : short, card.width);
+  const height = Math.max(landscape ? short : long, card.height);
+  await sharp({ create: { width, height, channels: 3, background: SHEET_GREY } })
+    .composite([{ input: card.buffer, left: Math.floor((width - card.width) / 2), top: Math.floor((height - card.height) / 2) }])
+    .withMetadata({ density: PRINT_DPI })
+    .jpeg(JPEG)
+    .toFile(output);
+  return { width, height };
 }
 
 /** Folha de foto retrô: fundo cinza e um cartão em cada posição do modelo (Instax: até 2). */

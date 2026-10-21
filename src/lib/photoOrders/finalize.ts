@@ -244,7 +244,8 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
         }
         lines.push({
           sizeId: group.size.id, title: `${groupOf(group.size.group).item} ${group.size.label}`, paper: paperLabel(line.paper), folder,
-          realSize: realLabel(group.size), photos: line.photos.length, copies: line.copies,
+          // Tamanho digitado: sai na folha cinza do tamanho da tabela; a equipe recorta no tamanho pedido.
+          realSize: group.size.base ? `papel ${group.size.base.label}, recortar em ${group.size.label}` : realLabel(group.size), photos: line.photos.length, copies: line.copies,
           unitCents: Math.round(unit * 100), totalCents: Math.round(line.copies * unit * 100), files,
         });
       }
