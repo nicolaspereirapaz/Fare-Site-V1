@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CustomerEditPanel } from "@/components/staff/CustomerEditPanel";
+import { ProfessionalToggle } from "@/components/staff/ProfessionalControls";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
 import { database } from "@/lib/auth";
 import { customerHistory, resolveCustomer } from "@/lib/customers/repository";
@@ -39,7 +40,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ ref: 
         <p className="cl-count">
           {customer.kind === "conta" ? "Conta no site" : `Cadastrado por ${customer.createdBy ?? "equipe"}`} · {orders.length} {orders.length === 1 ? "pedido" : "pedidos"} · {brl(ordersTotal)} em pedidos
         </p>
-        <section className="qe-card"><h2>Dados do cliente</h2><CustomerEditPanel customer={customer} /></section>
+        <section className="qe-card">
+          <h2>Dados do cliente</h2>
+          <CustomerEditPanel customer={customer} />
+          {customer.kind === "conta" ? <ProfessionalToggle customerRef={customer.ref} professional={Boolean(customer.professional)} />
+            : <p className="cl-count">Tabela profissional: só para quem tem conta no site (mande o convite em Clientes cadastrados).</p>}
+        </section>
         <section className="qe-card">
           <h2>Orçamentos e pedidos</h2>
           {history.length ? (

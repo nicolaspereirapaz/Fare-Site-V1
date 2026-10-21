@@ -22,6 +22,8 @@ export type CustomerSummary = {
   email: string;
   document: string;
   createdBy?: string;
+  /** Conta com a tabela profissional (cadastro pelo convite). */
+  professional?: boolean;
   /** Outros cadastros com o mesmo WhatsApp ou CPF/CNPJ (o site não bloqueia; a equipe é avisada). */
   alsoUsedBy?: Array<{ name: string; by: Array<"WhatsApp" | "CPF/CNPJ"> }>;
 };
@@ -63,7 +65,7 @@ function migrate(database: DatabaseSync) {
   `);
 }
 
-type AccountRow = { id: string; name: string; email: string; verified: number; phone: string | null; document: string | null; company: string | null };
+type AccountRow = { id: string; name: string; email: string; verified: number; phone: string | null; document: string | null; company: string | null; professional?: number };
 type PanelRow = {
   id: string; name: string; company: string; phone: string; phone_norm: string; email: string; email_norm: string;
   document: string; document_norm: string; created_by_name: string;
@@ -75,6 +77,13 @@ function hasTable(database: DatabaseSync, name: string) {
 
 function readAccounts(database: DatabaseSync): AccountRow[] {
   if (!hasTable(database, "user")) return [];
+  const rows = readAccountRows(database);
+  if (!hasTable(database, "fare_professional_customers")) return rows;
+  const pros = new Set((database.prepare("SELECT user_id FROM fare_professional_customers").all() as Array<{ user_id: string }>).map((r) => r.user_id));
+  return rows.map((row) => ({ ...row, professional: pros.has(row.id) ? 1 : 0 }));
+}
+
+function readAccountRows(database: DatabaseSync): AccountRow[] {
   if (!hasTable(database, "fare_customer_profiles")) {
     return database.prepare("SELECT id, name, email, emailVerified AS verified, NULL AS phone, NULL AS document, NULL AS company FROM user").all() as unknown as AccountRow[];
   }
@@ -92,6 +101,7 @@ function readPanel(database: DatabaseSync): PanelRow[] {
 
 const accountSummary = (row: AccountRow): CustomerSummary => ({
   ref: `conta:${row.id}`, kind: "conta", name: row.name, company: row.company ?? "", phone: row.phone ?? "", email: normalizeEmail(row.email), document: row.document ?? "",
+  ...(row.professional ? { professional: true } : {}),
 });
 const panelSummary = (row: PanelRow): CustomerSummary => ({
   ref: `painel:${row.id}`, kind: "painel", name: row.name, company: row.company, phone: row.phone, email: row.email, document: row.document, createdBy: row.created_by_name,

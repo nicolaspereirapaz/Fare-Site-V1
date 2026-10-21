@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { isProfessional } from "@/lib/professional";
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
@@ -223,7 +224,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       if (access.error) return access.error;
       const quote = findQuoteById(deps.database(), quoteId);
       if (!quote) return json({ error: "QUOTE_NOT_FOUND" }, 404);
-      const state = editorState(quote);
+      const state = { ...editorState(quote), customerProfessional: isProfessional(deps.database(), quote.userId) };
       const catalog = await deps.catalog();
       const products: Record<string, ReturnType<typeof toEditorProduct>> = {};
       for (const item of state.items) {
@@ -289,6 +290,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         id: order.id, status: order.status, updatedAt: order.updatedAt, createdBy: finance?.createdBy ?? null,
         internalNotes: finance?.internalNotes ?? "", discount: order.discount, hasCustomer: true,
         customerRef: order.userId === NO_CUSTOMER_OWNER ? null : order.userId.startsWith("painel:") ? order.userId : `conta:${order.userId}`,
+        customerProfessional: isProfessional(deps.database(), order.userId),
         customer: { name: order.customer.name, company: order.customer.company ?? "", phone: order.customer.phone ?? "", notes: order.customer.notes ?? "" },
         items, products, paidCents: finance?.paidCents ?? 0,
       });

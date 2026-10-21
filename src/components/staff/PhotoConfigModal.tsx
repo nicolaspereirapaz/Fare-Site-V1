@@ -9,8 +9,10 @@ import { photoItemName, photoTablePrice, type PhotoChoice } from "@/components/s
 import { brl, moneyInput, newId, parseNumber, type Item } from "@/components/staff/quoteEditorShared";
 
 /** Foto no orçamento/pedido: quantidade de fotos e tamanho; preço da tabela do site (editável). O papel o cliente escolhe depois. */
-export function PhotoConfigModal({ start, item, onSave, onClose }: {
+export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: {
   start: PhotoChoice;
+  /** Cliente profissional: preço da tabela profissional. */
+  pro?: boolean;
   /** Item já na lista (editar); sem ele, adiciona um novo. */
   item?: Extract<Item, { source: "avulso" }>;
   onSave: (item: Item) => void;
@@ -20,11 +22,11 @@ export function PhotoConfigModal({ start, item, onSave, onClose }: {
   const [sizeId, setSizeId] = useState(start.sizeId);
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const qty = Number.parseInt(quantity, 10) || 0;
-  const table = photoTablePrice(sizeId, qty);
+  const table = photoTablePrice(sizeId, qty, pro);
   // Preço salvo diferente da tabela = digitado pela equipe; igual = segue a tabela ao mudar a quantidade.
   const [priceOverride, setPriceOverride] = useState(() => {
     const saved = item?.priceOverride ? parseNumber(item.priceOverride) : NaN;
-    return Number.isFinite(saved) && Math.abs(saved - photoTablePrice(start.sizeId, item?.quantity ?? 1)) > 1e-9 ? item!.priceOverride! : "";
+    return Number.isFinite(saved) && Math.abs(saved - photoTablePrice(start.sizeId, item?.quantity ?? 1, pro)) > 1e-9 ? item!.priceOverride! : "";
   });
   const unit = priceOverride ? parseNumber(priceOverride) : table;
   const size = sizeById(sizeId);

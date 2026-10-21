@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ProfessionalInvite } from "@/components/staff/ProfessionalControls";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
 import { database } from "@/lib/auth";
 import { listCustomers } from "@/lib/customers/repository";
@@ -21,6 +22,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       <StaffTopbar name={session.user.name} role={session.user.role} />
       <main className="container-shell cl-page">
         <h1>Clientes cadastrados</h1>
+        <ProfessionalInvite />
         <form className="cl-search" role="search">
           <input aria-label="Buscar cliente" defaultValue={q} name="q" placeholder="Nome, empresa, WhatsApp, e-mail ou CPF/CNPJ" />
           <button className="kb-secondary" type="submit">Buscar</button>
@@ -32,7 +34,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               <Link href={`/equipe/clientes/${encodeURIComponent(customer.ref)}`}>
                 <b>{customer.name}{customer.company ? ` · ${customer.company}` : ""}</b>
                 <small>{[customer.phone, customer.email, customer.document].filter(Boolean).join(" · ") || "Sem contato"}</small>
-                <span className="cl-kind">{customer.kind === "conta" ? "Conta no site" : `Cadastrado por ${customer.createdBy ?? "equipe"}`}</span>
+                <span className="cl-kind">{customer.professional ? <strong className="cl-badge">Profissional</strong> : null} {customer.kind === "conta" ? "Conta no site" : `Cadastrado por ${customer.createdBy ?? "equipe"}`}</span>
               </Link>
             </li>
           ))}

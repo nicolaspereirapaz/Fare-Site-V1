@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isProfessional } from "@/lib/professional";
 import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -101,7 +102,8 @@ const thumbnail = async (file: string) =>
  */
 export async function createPhotoOrder(database: DatabaseSync, user: { id: string }, input: PhotoOrderInput) {
   const data = validate(input);
-  const { uploads, summary } = await readPhotos(data.photos);
+  // Cliente profissional (cadastro pelo convite): tabela profissional.
+  const { uploads, summary } = await readPhotos(data.photos, isProfessional(database, user.id));
 
   const id = randomUUID();
   const deliveryText = data.delivery === "retirada" ? "Retirar na loja." : "Receber em casa (taxa combinada no WhatsApp).";
@@ -145,7 +147,7 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
 }
 
 /** Lê os envios das fotos (falta algum = erro) e calcula o resumo com as medidas reais de cada arquivo. */
-export async function readPhotos(photos: ValidPhoto[]) {
+export async function readPhotos(photos: ValidPhoto[], pro = false) {
   const uploads = new Map<string, PhotoUpload>();
   for (const photo of photos) {
     const upload = uploads.get(photo.uploadId) ?? (await readUpload(photo.uploadId));
@@ -156,7 +158,7 @@ export async function readPhotos(photos: ValidPhoto[]) {
     const upload = uploads.get(photo.uploadId)!;
     return { ...photo, id: String(index), name: upload.name, url: "", w: upload.width, h: upload.height };
   });
-  return { uploads, asPhotos, summary: summarize(asPhotos) };
+  return { uploads, asPhotos, summary: summarize(asPhotos, pro) };
 }
 
 /**

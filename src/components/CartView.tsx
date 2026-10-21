@@ -1,5 +1,6 @@
 "use client";
 
+import { useProfessional } from "@/components/fotos/useProfessional";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -79,7 +80,8 @@ export function CartView() {
   const router = useRouter();
   const { items, removeItem, updateQuantity } = useCart();
   const photoState = usePhotoState();
-  const photoOrder = summarize(photoState.inCart ? photoState.photos : []);
+  const pro = useProfessional();
+  const photoOrder = summarize(photoState.inCart ? photoState.photos : [], pro);
   const [delivery, setDelivery] = useState<Delivery>("retirada");
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");

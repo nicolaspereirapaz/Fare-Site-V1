@@ -11,6 +11,8 @@ const { push, requestCheckout, cart, updateQuantity, fetchMyProfile, saveMyConta
   saveMyContact: vi.fn(),
 }));
 
+// Tabela profissional: fora destes testes (cliente comum).
+vi.mock("@/components/fotos/useProfessional", () => ({ useProfessional: () => false }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/context/CartContext", () => ({
   useCart: () => ({ items: cart.items, removeItem: vi.fn(), updateQuantity }),

@@ -2,6 +2,7 @@
 
 // dados, cálculos e desenho compartilhados do fluxo de fotos.
 // Fluxo: envia as fotos primeiro → escolhe tamanho/papel (todas ou cada uma) e ajusta → carrinho → WhatsApp.
+import { useProfessional } from "@/components/fotos/useProfessional";
 import { useState, type ReactNode } from "react";
 import "./fotos.css";
 
@@ -10,6 +11,7 @@ import { photoStore, setPhotos } from "@/components/fotos/store";
 import {
   BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
   type FilterId, type Photo, type Size, type SizeGroup, type SizeId,
+  PRO_PRICES,
 } from "@/components/fotos/catalog";
 export * from "@/components/fotos/catalog";
 
@@ -132,7 +134,20 @@ export { retryUpload } from "@/components/fotos/upload";
  * Tabela de preços de um grupo. Com `counts` (cópias por tamanho no pedido), destaca o preço em que as fotos estão agora.
  */
 export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Record<SizeId, number> }) {
+  const pro = useProfessional();
   const count = (id: SizeId) => counts?.[id] ?? 0;
+  // Cliente profissional: tabela profissional (preço único por foto) nos tamanhos dela.
+  const proSizes = SIZES.filter((size) => size.group === group && PRO_PRICES[size.id] !== undefined);
+  if (pro && proSizes.length) {
+    return (
+      <div className="quantity-range-table">
+        <div className="fp-price-row two"><strong>Tabela profissional</strong><strong>Por foto</strong></div>
+        {proSizes.map((size) => (
+          <div className="fp-price-row two" key={size.id}><span>{size.label}</span><strong className={count(size.id) > 0 ? "fp-hit" : undefined}>{brl(PRO_PRICES[size.id])}</strong></div>
+        ))}
+      </div>
+    );
+  }
   const hit = (on: boolean) => (on ? "fp-hit" : undefined);
   const ordered = Object.keys(counts ?? {}).filter((id) => count(id) > 0).map(sizeById);
   const inTier = (tier: (typeof TIERS)[number], col: "p" | "m") =>
@@ -227,6 +242,7 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
   const [group, setGroup] = useState<SizeGroup>(valueGroup ?? "revelacao");
   // Se o tamanho escolhido mudar por fora (outra foto, "usar em todas"), a aba acompanha.
   const [seen, setSeen] = useState(valueGroup);
+  const pro = useProfessional();
   if (valueGroup !== seen) {
     setSeen(valueGroup);
     if (valueGroup) setGroup(valueGroup);
@@ -244,7 +260,7 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
       {group === "grande" ? <CustomSizeForm group={group} key={`${group}-${value ?? ""}`} onPick={onChange} value={value} /> : null}
       <div className="sp-options" role="tabpanel">
         {[...SIZES.filter((size) => size.group === group), ...(value && !isListed(value) && sizeById(value).group === group ? [sizeById(value)] : [])].map((size) => {
-          const hint = sizePriceHint(size);
+          const hint = pro && PRO_PRICES[size.id] !== undefined ? brl(PRO_PRICES[size.id]) : sizePriceHint(size);
           return (
             <button aria-pressed={value === size.id} className={value === size.id ? "active" : ""} key={size.id} onClick={() => onChange(size.id)} type="button">
               <span>{kind === "list" ? size.label : size.label.replace(" cm", "")}{size.custom ? <em className="sp-custom-tag">seu tamanho</em> : null}</span>

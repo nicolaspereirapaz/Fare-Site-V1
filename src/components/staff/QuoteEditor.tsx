@@ -168,7 +168,10 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
   const [fixedCustomerRef, setFixedCustomerRef] = useState<string | null>(null);
+  const [fixedProfessional, setFixedProfessional] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(false);
+  // Cliente profissional (cadastro pelo convite): fotos pela tabela profissional.
+  const professional = fixedCustomer ? fixedProfessional : Boolean(customer?.professional);
   /** Orçamento já salvo sem cliente: dá para escolher agora. */
   const [needsCustomer, setNeedsCustomer] = useState(false);
   const [changingCustomer, setChangingCustomer] = useState(false);
@@ -214,7 +217,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
         setNotes(payload.internalNotes ?? "");
         if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
         if (payload.hasCustomer === false) setNeedsCustomer(true);
-        else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); }
+        else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); setFixedProfessional(Boolean(payload.customerProfessional)); }
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
         if (editingOrder) setPaidOnServer(payload.paidCents ?? 0);
       })
@@ -406,7 +409,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
               const ok = result?.ok ? result : null;
               const photo = item.source === "avulso" ? photoFromName(item.name) : null;
               // Foto sempre grava o preço; só é "especial" quando difere da tabela do site.
-              const specialPhotoPrice = photo && item.priceOverride ? Math.abs(parseNumber(item.priceOverride) - photoTablePrice(photo.sizeId, item.quantity)) > 0.004 : false;
+              const specialPhotoPrice = photo && item.priceOverride ? Math.abs(parseNumber(item.priceOverride) - photoTablePrice(photo.sizeId, item.quantity, professional)) > 0.004 : false;
               return (
                 <div className="qe-item" key={item.id}>
                   <div className="qe-line qe-line-list">
@@ -565,6 +568,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
       {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onPickPhoto={choosePhoto} onStateChange={setPickerState} /> : null}
       {photoModal ? (
         <PhotoConfigModal
+          pro={professional}
           item={photoModal.item}
           key={photoModal.item?.id ?? "nova-foto"}
           onClose={closePhotoModal}

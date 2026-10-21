@@ -185,11 +185,21 @@ export function stepLabel(size: Size, i: number) {
   return to === from ? `${from} ${from === 1 ? "foto" : "fotos"}` : `${from} a ${to} fotos`;
 }
 
-/** Preço de um tamanho: cada tamanho conta a sua própria faixa. */
-export function pricing(sizeId: SizeId, total: number) {
+/**
+ * Tabela de Revelação Profissional (clientes que se cadastraram pelo convite): preço único por foto,
+ * sem faixa de quantidade. Só os tamanhos da tabela; os outros (retrô, tamanho digitado…) seguem o preço normal.
+ */
+export const PRO_PRICES: Record<string, number> = {
+  "9x12": 1, "10x15": 1, "13x18": 2, "15x21": 2, "20x25": 4.3, "20x30": 4.3, "24x30": 5.4, "30x30": 8,
+  "30x40": 14, "30x45": 14, "30x60": 30, "40x50": 58, "45x60": 58, "50x60": 65, "50x70": 74, "50x75": 74, "60x100": 120,
+};
+
+/** Preço de um tamanho: cada tamanho conta a sua própria faixa. `pro`: cliente profissional (tabela própria). */
+export function pricing(sizeId: SizeId, total: number, pro = false) {
   const size = sizeById(sizeId);
   const result = (unit: number, tier: string, nudge: { missing: number; unit: number } | null) =>
     ({ unit, tier, total: Math.round(total * unit * 100) / 100, nudge });
+  if (pro && PRO_PRICES[size.id] !== undefined) return result(PRO_PRICES[size.id], "tabela profissional", null);
   const ref = size.base ? ` · como ${size.base.label.replace(" cm", "")} + ${brl(size.extra!)}` : "";
   if (size.group === "grande") return result(size.price!, "preço fixo", null);
   if (size.steps) {
@@ -308,7 +318,7 @@ export function quality(dpi: number) {
 }
 
 /** Resumo por tamanho (cada tamanho tem sua faixa de preço), com as linhas de papel dentro. */
-export function summarize(photos: Photo[]) {
+export function summarize(photos: Photo[], pro = false) {
   // Tamanhos da lista + os digitados pelo cliente (grandes formatos).
   const ids = [...new Set([...SIZES.map((size) => size.id), ...photos.map((photo) => photo.sizeId)])];
   const sizes = ids.map(sizeById).map((size) => {
@@ -318,7 +328,7 @@ export function summarize(photos: Photo[]) {
       const ofPaper = list.filter((photo) => photo.paper === paper.id);
       return { paper: paper.id, photos: ofPaper, copies: ofPaper.reduce((sum, photo) => sum + photo.copies, 0) };
     }).filter((line) => line.copies);
-    return { size, photos: list, copies, papers, price: pricing(size.id, copies) };
+    return { size, photos: list, copies, papers, price: pricing(size.id, copies, pro) };
   }).filter((group) => group.copies);
   return { sizes, copies: sizes.reduce((sum, g) => sum + g.copies, 0), total: Math.round(sizes.reduce((sum, g) => sum + g.price.total, 0) * 100) / 100 };
 }
@@ -340,8 +350,8 @@ export function minimumIssues(photos: Photo[]) {
 }
 
 /** Texto do pedido de fotos para a mensagem do WhatsApp (uma linha por tamanho + papel). */
-export function photoOrderLines(photos: Photo[]) {
-  const summary = summarize(photos);
+export function photoOrderLines(photos: Photo[], pro = false) {
+  const summary = summarize(photos, pro);
   if (!summary.copies) return [];
   const lines = summary.sizes.flatMap((group) => group.papers.map((line) => [
     `• ${groupOf(group.size.group).item} ${group.size.label} — papel ${paperLabel(line.paper)}`,

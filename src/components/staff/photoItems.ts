@@ -36,7 +36,7 @@ export function photoFromName(name: string): PhotoChoice | null {
 }
 
 /** Preço por foto na tabela do site para essa quantidade do mesmo tamanho. */
-export const photoTablePrice = (sizeId: string, quantity: number) => pricing(sizeId, Math.max(quantity, 1)).unit;
+export const photoTablePrice = (sizeId: string, quantity: number, pro = false) => pricing(sizeId, Math.max(quantity, 1), pro).unit;
 
 const DOCUMENT_TITLE: Record<SizeGroup, string> = { revelacao: "Revelação de Fotos", retro: "Fotos Retrô", ampliacao: "Ampliação de Fotos", grande: "Fotos em Grande Formato" };
 // Mesmas informações da página da revelação (PhotoQualityBand). Grande formato: sem afirmar processo/papel que não está no site.

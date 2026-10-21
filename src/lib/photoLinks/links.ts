@@ -1,10 +1,11 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { isProfessional } from "@/lib/professional";
 import { existsSync } from "node:fs";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { photoFromName, photoItemName, photoTablePrice } from "@/components/staff/photoItems";
-import { paperLabel, type Paper } from "@/components/fotos/catalog";
+import { paperLabel, PRO_PRICES, type Paper } from "@/components/fotos/catalog";
 import { buildQuoteItems } from "@/lib/backoffice/quoteBuilder";
 import type { QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
@@ -91,15 +92,16 @@ function loadDocument(database: DatabaseSync, link: LinkRow) {
 type LinkDocument = NonNullable<ReturnType<typeof loadDocument>>;
 
 /** Preço especial da equipe por tamanho: quando o preço gravado difere da tabela para aquela quantidade. */
-function specialPrices(items: QuoteCartItem[]) {
+/** Preços que valem neste documento: os combinados pela equipe e, se o cliente é profissional, a tabela profissional. */
+function specialPrices(items: QuoteCartItem[], pro = false) {
   const bySize = new Map<string, { quantity: number; unitPrice: number | null }[]>();
   for (const item of items) {
     const photo = photoOf(item);
     if (photo) bySize.set(photo.sizeId, [...(bySize.get(photo.sizeId) ?? []), { quantity: item.quantity, unitPrice: item.unitPrice }]);
   }
-  const special: Record<string, number> = {};
+  const special: Record<string, number> = pro ? { ...PRO_PRICES } : {};
   for (const [sizeId, lines] of bySize) {
-    const table = photoTablePrice(sizeId, lines.reduce((sum, line) => sum + line.quantity, 0));
+    const table = photoTablePrice(sizeId, lines.reduce((sum, line) => sum + line.quantity, 0), pro);
     const custom = lines.find((line) => line.unitPrice !== null && Math.abs(line.unitPrice - table) > 0.004);
     if (custom) special[sizeId] = custom.unitPrice!;
   }
@@ -138,7 +140,7 @@ export function photoLinkView(database: DatabaseSync, token: string): PhotoLinkV
       const photo = photoOf(item);
       return photo ? [{ sizeId: photo.sizeId, quantity: item.quantity }] : [];
     }),
-    special: specialPrices(doc.items),
+    special: specialPrices(doc.items, isProfessional(database, doc.userId)),
     discount: doc.discount ?? null,
   };
 }
@@ -163,7 +165,7 @@ export async function submitPhotoLink(database: DatabaseSync, token: string, raw
   if (!doc.editable) throw new PhotoOrderError("Este orçamento/pedido não aceita mais alterações. Fale com a loja.");
   const photos = validatePhotos(rawPhotos);
   const { uploads, summary } = await readPhotos(photos);
-  const special = specialPrices(doc.items);
+  const special = specialPrices(doc.items, isProfessional(database, doc.userId));
   const unitPrice = (sizeId: string, table: number) => special[sizeId] ?? table;
 
   // Linhas novas do documento: uma por tamanho + papel (calculadas antes de mexer em pasta ou banco).

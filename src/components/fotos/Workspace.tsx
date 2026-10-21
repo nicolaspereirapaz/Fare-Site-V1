@@ -1,6 +1,7 @@
 "use client";
 
 // etapa 2 — tamanho e papel (todas ou cada foto), cópias e editor.
+import { useProfessional } from "@/components/fotos/useProfessional";
 import Link from "next/link";
 import { useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -21,7 +22,9 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
   const [dragOver, setDragOver] = useState(false);
   /** Foto cujo "Trocar" recebeu um arquivo que não abre (mostra o aviso no card). */
   const [replaceError, setReplaceError] = useState<string | null>(null);
-  const summary = summarize(photos);
+  // Profissional: tabela própria (no link da equipe, os preços já vêm do documento).
+  const pro = useProfessional();
+  const summary = summarize(photos, pro && !link);
   const allSize = photos.length && photos.every((p) => p.sizeId === photos[0].sizeId) ? photos[0].sizeId : null;
   const allPaper = photos.length && photos.every((p) => p.paper === photos[0].paper) ? photos[0].paper : null;
   // Preço especial da equipe não muda com a quantidade: sem o aviso "com mais fotos sai mais barato".

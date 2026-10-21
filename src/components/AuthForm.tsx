@@ -27,7 +27,8 @@ function authErrorMessage(code: string | undefined) {
   return (code && AUTH_ERRORS[code]) || "Não foi possível continuar. Tente novamente.";
 }
 
-export function AuthForm({ mode }: { mode: AuthMode }) {
+/** `invite`: convite da tabela profissional — depois de criar a conta (ou entrar), liga a tabela nesta conta. */
+export function AuthForm({ mode, invite }: { mode: AuthMode; invite?: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -57,6 +58,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     // Se falhar, o carrinho pede o telefone uma vez e salva.
     if (signingUp) await saveMyContact({ phone });
 
+    if (invite) {
+      const redeemed = await fetch("/api/account/convite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: invite }) });
+      if (!redeemed.ok) {
+        const data = await redeemed.json().catch(() => ({})) as { message?: string };
+        setError(data.message ?? "Não foi possível usar o convite. Fale com a Fare Foto.");
+        setPending(false);
+        return;
+      }
+      router.push("/produtos/revelacao-de-fotos");
+      router.refresh();
+      return;
+    }
     router.push("/minha-conta");
     router.refresh();
   }
@@ -89,7 +102,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
       <p className="auth-alternate">
         {signingUp ? "Já tem cadastro?" : "Ainda não tem conta?"}{" "}
-        <Link href={signingUp ? "/entrar" : "/cadastro"}>{signingUp ? "Entrar" : "Criar conta"}</Link>
+        <Link href={invite ? `/convite/${invite}${signingUp ? "?entrar=1" : ""}` : signingUp ? "/entrar" : "/cadastro"}>{signingUp ? "Entrar" : "Criar conta"}</Link>
       </p>
     </div>
   );

@@ -13,3 +13,9 @@
 .cl-history th, .cl-history td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
 .cl-history td:last-child, .cl-history th:last-child { text-align: right; }
 @media (max-width: 600px) { .cl-list a { grid-template-columns: 1fr; } .cl-kind { grid-column: 1; grid-row: auto; } }
+.cl-invite { display: grid; gap: 8px; justify-items: start; }
+.cl-invite-link { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; max-width: 760px; }
+.cl-invite-link input { flex: 1 1 320px; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: .85rem; }
+.cl-invite-link small { flex-basis: 100%; color: var(--muted); }
+.cl-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e8f4ec; color: #1d6b3a; font-size: .78rem; font-weight: 700; }
+.cl-pro { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0 0; }
