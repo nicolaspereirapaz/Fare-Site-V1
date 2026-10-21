@@ -2,7 +2,7 @@ import { products as localProducts } from "@/data/products";
 import type { QuoteCartItem } from "@/lib/commerce";
 import { publicProductId, toPublicCatalogProduct } from "@/lib/publicCatalog";
 import { groupAvailableProducts, type CatalogProduct } from "@/lib/xbz";
-import { specLine, tidySpecValue, xbzSpecs, type ProductSpec } from "@/lib/productSpecs";
+import { specLine, splitSpotMeasures, tidySpecValue, xbzSpecs, type ProductSpec } from "@/lib/productSpecs";
 import { supplierOf } from "@/lib/productCodes";
 import { photoFromName } from "@/components/staff/photoItems";
 import { PHOTO_PRODUCT_IMAGE, sizeById } from "@/components/fotos/catalog";
@@ -66,7 +66,7 @@ export async function catalogSpecs(product:CatalogProduct):Promise<ProductSpec[]
  if(!first)return [];
  const supplier=supplierOf(first);
  // Catálogo já baixado pode ter o "ø" antigo: arruma na leitura também.
- if(supplier==='spot')return (first.specs??[]).map(spec=>({...spec,value:tidySpecValue(spec.value)}));
+ if(supplier==='spot')return splitSpotMeasures((first.specs??[]).map(spec=>({...spec,value:tidySpecValue(spec.value)})));
  // A XBZ escreve "Diametro" sem acento.
  if(supplier==='xbz')return xbzSpecs(getCatalogDatabase(),first.familyCode).then(specs=>specs.map(spec=>({...spec,label:spec.label.replace(/^Diametro/,'Diâmetro')}))).catch(()=>[]);
  return [];

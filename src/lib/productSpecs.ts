@@ -22,6 +22,24 @@ export function spotSpecs(raw: Record<string, unknown>): ProductSpec[] {
   return [{ label: raw.IsTextil === true || raw.HasSizes === true ? "Tamanhos" : "Medidas", value: sizes }];
 }
 
+const cm = (mm: string) => `${(Number(mm.replace(",", ".")) / 10).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} cm`;
+
+/**
+ * Spot manda "250 x 420 x 180 mm" (largura x altura x profundidade) ou "diâmetro 66 x 210 mm" (diâmetro x altura).
+ * Separa em itens como a XBZ ("Altura: 21 cm"), para a página do produto ficar igual. Formato desconhecido: fica como veio.
+ */
+export function splitSpotMeasures(specs: ProductSpec[]): ProductSpec[] {
+  return specs.flatMap((spec) => {
+    if (spec.label !== "Medidas") return [spec];
+    const round = /^diâmetro\s*([\d.,]+)\s*x\s*([\d.,]+)\s*mm$/i.exec(spec.value);
+    if (round) return [{ label: "Altura", value: cm(round[2]) }, { label: "Diâmetro", value: cm(round[1]) }];
+    const box = /^([\d.,]+)\s*x\s*([\d.,]+)(?:\s*x\s*([\d.,]+))?\s*mm$/i.exec(spec.value);
+    if (!box) return [spec];
+    const parts = [{ label: "Altura", value: cm(box[2]) }, { label: "Largura", value: cm(box[1]) }];
+    return box[3] ? [...parts, { label: "Profundidade", value: cm(box[3]) }] : parts;
+  });
+}
+
 const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const decode = (text: string) => text
   .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (all, code: string) => {

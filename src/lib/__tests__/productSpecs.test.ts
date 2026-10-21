@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
-import { fillMissingXbzSpecs, parseXbzSpecs, specLine, spotSpecs, xbzSpecs } from "@/lib/productSpecs";
+import { fillMissingXbzSpecs, parseXbzSpecs, specLine, splitSpotMeasures, spotSpecs, xbzSpecs } from "@/lib/productSpecs";
 
 // Trecho real da página da XBZ (o bloco vem repetido: computador e celular).
 const block = `<p class="desc-tit">Descrição: <span class="desc-sub my-desc-sub">Espelho retangular.</span></p>
@@ -62,5 +62,16 @@ describe("medidas do produto", () => {
     expect(await xbzSpecs(database, "20000", offline as never, now)).toEqual(expected);
     expect(offline).not.toHaveBeenCalled();
     expect(await fillMissingXbzSpecs(database, ["10250", "20000", "30000"], fetcher as never, now, 0)).toBe(1);
+  });
+
+  it("Spot: medidas separadas em cm, como a XBZ", () => {
+    const m = (value: string) => splitSpotMeasures([{ label: "Medidas", value }]);
+    expect(m("diâmetro 66 x 210 mm")).toEqual([{ label: "Altura", value: "21 cm" }, { label: "Diâmetro", value: "6,6 cm" }]);
+    expect(m("143 x 211 mm")).toEqual([{ label: "Altura", value: "21,1 cm" }, { label: "Largura", value: "14,3 cm" }]);
+    expect(m("250 x 420 x 180 mm")).toEqual([
+      { label: "Altura", value: "42 cm" }, { label: "Largura", value: "25 cm" }, { label: "Profundidade", value: "18 cm" },
+    ]);
+    expect(m("P, M, G")).toEqual([{ label: "Medidas", value: "P, M, G" }]);
+    expect(splitSpotMeasures([{ label: "Tamanhos", value: "P, M" }])).toEqual([{ label: "Tamanhos", value: "P, M" }]);
   });
 });
