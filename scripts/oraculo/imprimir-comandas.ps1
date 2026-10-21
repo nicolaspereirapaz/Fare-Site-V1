@@ -1,5 +1,5 @@
 ﻿# Imprime as comandas que a equipe manda pelo site ("Imprimir comanda") na WF-7840 da loja:
-# gaveta de papel 1, 148,5 × 210 mm (definido pelo usuário), papel comum (padrão do driver).
+# gaveta 1 ("main"), 148,5 × 210 mm, papel comum ("stationery") — pedido direto à impressora por IPP.
 # Tarefa "FareFoto Impressao" (SYSTEM) a cada minuto; cada rodada confere a fila a cada 4 s por ~55 s.
 $ErrorActionPreference = "Stop"
 $dir = "C:\FareFoto\sync"
@@ -21,36 +21,23 @@ function Ssh([string[]]$command, $outFile) {
   if ($p.ExitCode -ne 0) { throw "ssh $command falhou ($($p.ExitCode)): $(Get-Content "$work\ssh-erro.txt" -Raw)" }
 }
 
+# Pela rede (IPP), direto na impressora: o driver ignorava o tamanho personalizado e saía em A4.
 Add-Type -AssemblyName System.Drawing
+. "$dir\ipp.ps1"
+$printerUri = "https://192.168.0.94:631/ipp/print"
 function Print-Image($file, $title) {
-  $doc = New-Object System.Drawing.Printing.PrintDocument
-  $doc.PrinterSettings.PrinterName = $printer
-  if (-not $doc.PrinterSettings.IsValid) { throw "impressora '$printer' não encontrada" }
-  $doc.DocumentName = $title
-  $tray = $doc.PrinterSettings.PaperSources | Where-Object { $_.SourceName -match '^Gaveta de papel 1$' } | Select-Object -First 1
-  if (-not $tray) { throw "gaveta 1 não encontrada no driver" }
-  $doc.DefaultPageSettings.PaperSource = $tray
-  # 148,5 × 210 mm em centésimos de polegada
-  $doc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize("Comanda 148,5x210", 585, 827)
-  $doc.DefaultPageSettings.Landscape = $false
-  $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+  # PNG da fila → JPEG (a Epson não aceita PNG nem PDF por IPP)
   $image = [System.Drawing.Image]::FromFile($file)
   try {
-    $doc.add_PrintPage({
-      param($sender, $e)
-      # Área imprimível (a impressora não imprime na borda): imagem inteira, sem distorcer.
-      $area = $e.Graphics.VisibleClipBounds
-      $scale = [Math]::Min($area.Width / $image.Width, $area.Height / $image.Height)
-      $w = $image.Width * $scale; $h = $image.Height * $scale
-      $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-      $e.Graphics.DrawImage($image, [single]($area.X + ($area.Width - $w) / 2), [single]($area.Y + ($area.Height - $h) / 2), [single]$w, [single]$h)
-      $e.HasMorePages = $false
-    })
-    $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
-    $doc.Print()
-  } finally { $image.Dispose(); $doc.Dispose() }
+    $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object MimeType -eq "image/jpeg"
+    $params = New-Object System.Drawing.Imaging.EncoderParameters 1
+    $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]92)
+    $jpeg = New-Object IO.MemoryStream
+    $image.Save($jpeg, $codec, $params)
+  } finally { $image.Dispose() }
+  $r = Send-IppDocument $printerUri $jpeg.ToArray() $title "image/jpeg" "main" 14850 21000 "stationery"
+  if ($r.Status -notmatch '^0x000[0-2]$') { throw "impressora recusou ($($r.Status)): $($r.Attributes['status-message'] -join ' ')" }
 }
-
 $lock = "$work\rodando.lock"
 if ((Test-Path $lock) -and ((Get-Item $lock).LastWriteTime -gt (Get-Date).AddMinutes(-5))) { exit 0 }
 Set-Content $lock (Get-Date) -Encoding ascii

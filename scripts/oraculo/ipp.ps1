@@ -1,5 +1,5 @@
 ﻿# Cliente IPP mínimo (RFC 8010) para imprimir direto na Epson pela rede, escolhendo gaveta, tamanho e papel.
-# Uso: . .\ipp.ps1; Get-IppAttributes "http://192.168.0.94:631/ipp/print"; Send-IppPdf $uri $pdfBytes "Comanda PED-0001"
+# Uso: . .\ipp.ps1; Get-IppAttributes "http://192.168.0.94:631/ipp/print"; Send-IppDocument $uri $jpegBytes "Comanda PED-0001"
 
 function New-IppWriter { New-Object System.IO.MemoryStream }
 function Write-Bytes($ms, [byte[]]$b) { $ms.Write($b, 0, $b.Length) }
@@ -62,12 +62,13 @@ function Get-IppAttributes($uri) {
   Read-IppResponse (Invoke-Ipp $uri $ms.ToArray())
 }
 
-# Imprime um PDF: gaveta (media-source), tamanho em centésimos de mm, tipo de papel (stationery = papel comum).
-function Send-IppPdf($uri, [byte[]]$pdf, [string]$jobName, [string]$source = "tray-1", [int]$width = 14850, [int]$height = 21000, [string]$type = "stationery") {
+# Imprime um documento (a Epson aceita image/jpeg, não PDF): gaveta (media-source: main = gaveta 1),
+# tamanho em centésimos de mm, tipo de papel (stationery = papel comum).
+function Send-IppDocument($uri, [byte[]]$data, [string]$jobName, [string]$format = "image/jpeg", [string]$source = "main", [int]$width = 14850, [int]$height = 21000, [string]$type = "stationery") {
   $ms = New-IppWriter; Write-Header $ms 0x0002 $uri
   Write-Attr $ms 0x42 "requesting-user-name" (Text "farefoto")
   Write-Attr $ms 0x42 "job-name" (Text $jobName)
-  Write-Attr $ms 0x49 "document-format" (Text "application/pdf")
+  Write-Attr $ms 0x49 "document-format" (Text $format)
   Write-Bytes $ms ([byte[]]@(0x02))
   Write-Attr $ms 0x34 "media-col" ([byte[]]@())
   Write-Attr $ms 0x4A "" (Text "media-size"); Write-Attr $ms 0x34 "" ([byte[]]@())
@@ -77,8 +78,8 @@ function Send-IppPdf($uri, [byte[]]$pdf, [string]$jobName, [string]$source = "tr
   Write-Attr $ms 0x4A "" (Text "media-source"); Write-Attr $ms 0x44 "" (Text $source)
   Write-Attr $ms 0x4A "" (Text "media-type"); Write-Attr $ms 0x44 "" (Text $type)
   Write-Attr $ms 0x37 "" ([byte[]]@())
-  Write-Attr $ms 0x44 "print-scaling" (Text "none")
+  Write-Attr $ms 0x44 "print-scaling" (Text "fit")
   Write-Bytes $ms ([byte[]]@(0x03))
-  Write-Bytes $ms $pdf
+  Write-Bytes $ms $data
   Read-IppResponse (Invoke-Ipp $uri $ms.ToArray())
 }
