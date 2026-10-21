@@ -39,10 +39,10 @@ describe("documento de pedido",()=>{
   const first=buildOrderDocument(order,getOrderFinance(db,order.id),options);
   expect(first.terms.find(t=>t.title==='Pagamento')?.text).toContain('retirada');
   expect(first.terms.find(t=>t.title==='Pagamento')?.text).not.toContain('Pix');
-  expect(first.finance).toEqual({paid:0,balance:29.03});
+  expect(first.finance).toMatchObject({paid:0,balance:29.03});
   recordOrderPayment(db,{orderId:order.id,idempotencyKey:'pickup-receipt',amountCents:2903,paymentMethod:'dinheiro',paidAt:'2026-10-16',actorId:'s',actorName:'Bia'});
   const paid=buildOrderDocument(findOrderById(db,order.id)!,getOrderFinance(db,order.id),options);
-  expect(paid.finance).toEqual({paid:29.03,balance:0});expect(paid.terms.find(t=>t.title==='Pagamento')?.text).toContain('Dinheiro');db.close();
+  expect(paid.finance).toMatchObject({paid:29.03,balance:0});expect(paid.terms.find(t=>t.title==='Pagamento')?.text).toContain('Dinheiro');db.close();
  });
  it("protege ambos métodos antes de ler banco ou catálogo",async()=>{
   for(const role of [null,"cliente","bogus"]){const {handlers,render}=setup(role);for(const method of ["pdf","send"] as const){const response=await handlers[method](new Request("http://x"),"missing");expect(response.status).toBe(role?403:401);expect(response.headers.get("cache-control")).toBe("no-store");}expect(render).not.toHaveBeenCalled();}

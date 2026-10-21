@@ -1,4 +1,6 @@
 "use client";
+import { paymentPlan } from '@/lib/orders/paymentPlan';
+import type { OrderFinance } from '@/lib/orders/payments';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -92,6 +94,13 @@ export function ProductSnapshot({item,index,mockup}:{item:DocumentItem;index:num
  </section>;
 }
 
+/** Cada pagamento e o que falta (pagamento em partes). */
+function PaymentPlanList({finance}:{finance:OrderFinance}){
+ const plan=paymentPlan(finance);
+ if(!plan.receipts.length&&!plan.remainder)return null;
+ return <ul className="sd-payment-plan">{plan.receipts.map((r,i)=><li key={i}><span>Pago {r.label}</span><strong>{r.amount}</strong></li>)}{plan.remainder?<li className="sd-payment-due"><span>{plan.remainder.label}</span><strong>{plan.remainder.amount}</strong></li>:null}</ul>;
+}
+
 export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'];id:string;canCancel:boolean}){
  const router=useRouter();const [document,setDocument]=useState<StaffDocument|null>(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [closing,setClosing]=useState(false);const [copied,setCopied]=useState(false);
  const isQuote=kind==='quote';const base=isQuote?`/api/backoffice/quotes/${id}`:`/api/backoffice/orders/${id}`;
@@ -132,7 +141,7 @@ export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'
     {isQuote&&document.total!==null?<div className="balance-row"><dt>Sinal mínimo (50%)</dt><dd>{brl(Math.ceil(Math.round(document.total*100)/2)/100)}</dd></div>:null}
     {!isQuote&&finance?<><div><dt>Recebido</dt><dd>{brl(finance.paidCents/100)}</dd></div><div className="balance-row"><dt>{finance.balanceCents>0?'Saldo a receber':'Quitado'}</dt><dd>{brl(finance.balanceCents/100)}</dd></div></>:null}
    </dl>
-   {isQuote?<div className="sd-pix"><p className="sd-muted">Pix · chave CNPJ</p><div><span>50.344.377/0001-36</span><button className="kb-secondary" type="button" onClick={async()=>{try{await navigator.clipboard.writeText('50.344.377/0001-36');setCopied(true);}catch{setError('Não foi possível copiar automaticamente. Selecione a chave para copiar.');}}}>Copiar chave</button></div>{copied?<small role="status">Chave Pix copiada.</small>:null}</div>:<><p className="sd-muted sd-method">{finance?.paymentOnPickup?(finance.paidCents===0?'Pagamento integral na retirada · forma a definir':[...new Set(finance.payments.map(receipt=>STAFF_PAYMENT_LABELS[receipt.paymentMethod]))].join(' + ')):document.paymentMethod?STAFF_PAYMENT_LABELS[document.paymentMethod]:''}{finance?.installments?` · ${finance.installments}×`:''}{finance?.dueDate?` · vence ${dateLabel(finance.dueDate)}`:''}</p>{finance?<OrderPaymentPanel compact orderId={id} status={orderStatus} paymentMethod={document.paymentMethod!} finance={finance} onRecorded={reload}/>:<p className="sd-muted">Recebimentos não registrados para este pedido.</p>}</>}
+   {isQuote?<div className="sd-pix"><p className="sd-muted">Pix · chave CNPJ</p><div><span>50.344.377/0001-36</span><button className="kb-secondary" type="button" onClick={async()=>{try{await navigator.clipboard.writeText('50.344.377/0001-36');setCopied(true);}catch{setError('Não foi possível copiar automaticamente. Selecione a chave para copiar.');}}}>Copiar chave</button></div>{copied?<small role="status">Chave Pix copiada.</small>:null}</div>:<><p className="sd-muted sd-method">{finance?.paymentOnPickup?(finance.paidCents===0?'Pagamento integral na retirada · forma a definir':[...new Set(finance.payments.map(receipt=>STAFF_PAYMENT_LABELS[receipt.paymentMethod]))].join(' + ')):document.paymentMethod?STAFF_PAYMENT_LABELS[document.paymentMethod]:''}{finance?.installments?` · ${finance.installments}×`:''}{finance?.dueDate?` · vence ${dateLabel(finance.dueDate)}`:''}</p>{finance?<><OrderPaymentPanel compact orderId={id} status={orderStatus} paymentMethod={document.paymentMethod!} finance={finance} onRecorded={reload}/><PaymentPlanList finance={finance}/></>:<p className="sd-muted">Recebimentos não registrados para este pedido.</p>}</>}
    </section>
    <section className="qe-card sd-document-actions"><ProposalActions {...(isQuote?{quoteId:id,sentAt:document.proposalSentAt}:{orderId:id})} blocked={isQuote&&!openQuote?'Este orçamento já foi fechado.':document.items.some(i=>i.unitPrice===null)?'Há item sem preço. Edite o orçamento antes de gerar o documento.':null} onSent={reload}/>{isQuote?null:<a className="kb-secondary sd-comanda" download href={`/api/backoffice/orders/${id}/comanda`}><Printer aria-hidden="true" size={15}/> Baixar comanda</a>}</section>
    {document.items.some(i=>photoFromName(i.productName))&&(isQuote?openQuote:!['cancelado','concluido'].includes(orderStatus))?<section className="qe-card sd-document-actions"><PhotoLinkActions kind={isQuote?'quote':'order'} id={id}/></section>:null}

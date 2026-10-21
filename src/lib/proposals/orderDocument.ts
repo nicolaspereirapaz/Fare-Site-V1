@@ -1,3 +1,4 @@
+import { paymentPlan } from "@/lib/orders/paymentPlan";
 import { buildWhatsAppUrl, formatBillingAddress, type QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import type { Order } from "@/lib/orders/repository";
@@ -10,7 +11,7 @@ import { brl, FARE_COMPANY, productDetails, type ProductDetails, type Proposal, 
 /** Documento de pedido, não uma proposta convertida: sem validade, sinal ou aprovação. */
 export type OrderDocument = Omit<Proposal, "validUntil" | "notice" | "minimumDeposit" | "pixKey"> & {
   kind: "order";
-  finance: { paid: number; balance: number } | null;
+  finance: { paid: number; balance: number; plan: ReturnType<typeof paymentPlan> } | null;
 };
 const date = (value: string) => new Intl.DateTimeFormat("pt-BR", {timeZone:"America/Sao_Paulo"}).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value));
 const paymentLabels: Record<Order["paymentMethod"], string> = {pix:"Pix",dinheiro:"Dinheiro",cartao_credito:"Cartão de crédito",cartao_debito:"Cartão de débito",boleto:"Boleto",faturamento_empresa:"Faturamento empresa"};
@@ -37,7 +38,7 @@ export function buildOrderDocument(order: Order, finance: OrderFinance | null, o
     customer:{name:order.customer.name===NO_CUSTOMER_NAME?"":order.customer.name,company:(billing?.personType==="pj"?billing.companyName||billing.tradeName:order.customer.company)||null,document:billing?`${billing.personType==="pj"?"CNPJ":"CPF"} ${billing.document}`:null,phone:order.customer.phone??"",city:billing?.address.city?`${billing.address.city} · ${billing.address.state}`:null},
     items,subtotal:applied.subtotalCents/100,discount:order.discount && applied.discountCents>0?{label:discountLabel(order.discount),amount:applied.discountCents/100}:null,
     total:order.totalCents!==null?order.totalCents/100:applied.totalCents/100,terms,company:FARE_COMPANY,
-    finance:finance?{paid:finance.paidCents/100,balance:finance.balanceCents/100}:null};
+    finance:finance?{paid:finance.paidCents/100,balance:finance.balanceCents/100,plan:paymentPlan(finance)}:null};
 }
 export function orderWhatsAppText(doc: OrderDocument): string {
  const first=doc.customer.name.trim().split(/\s+/)[0];

@@ -40,6 +40,8 @@ export type BackofficeOrderSummary = {
   /** Desconto vindo do orçamento (rótulo e valor). */
   discount: { label: string; amount: number } | null;
   createdAt: string;
+  /** Versão do pedido (fechar pedido do site recusa se mudou no meio). */
+  updatedAt: string;
   history: OrderHistoryEntry[];
   finance?: OrderFinance | null;
 };
@@ -92,6 +94,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     total: order.discount && order.totalCents !== null ? order.totalCents / 100 : calculateOrderSummaryTotal(order.items),
     discount: discountLine(order.discount, order.items),
     createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
     history,
     ...(finance ? { finance } : {}),
   };

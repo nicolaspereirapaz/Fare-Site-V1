@@ -18,7 +18,7 @@ const noImage = async () => null;
 
 describe("comanda A5", () => {
   it("mostra quanto falta, ou pago, ou pagamento não registrado", async () => {
-    expect((await buildComanda(order, finance(20000), noImage)).payment).toEqual({ total: 460, paid: 200, balance: 260, onPickup: false });
+    expect((await buildComanda(order, finance(20000), noImage)).payment).toMatchObject({ total: 460, paid: 200, balance: 260, onPickup: false });
     expect((await buildComanda(order, finance(46000), noImage)).payment?.balance).toBe(0);
     expect((await buildComanda(order, null, noImage)).payment).toBeNull();
     expect((await buildComanda(order, { ...finance(0), deliveryTime: "14:30" }, noImage)).delivery?.time).toBe("14:30");

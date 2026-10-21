@@ -224,6 +224,48 @@ export function createDirectOrder(db: DatabaseSync, input: DirectOrderInput): Or
   });
 }
 
+export type CloseSiteOrderInput = Pick<DirectOrderInput, "actorId" | "actorName" | "paymentMethod" | "deliveryDate" | "deliveryMode" | "deliveryTime"
+  | "installments" | "dueDate" | "payment" | "paymentOnPickup"> & { orderId: string; expectedUpdatedAt: string };
+
+/**
+ * Fechar pedido do site (veio do carrinho ou das fotos, sem pagamento registrado): grava forma de pagamento,
+ * entrega e o valor recebido. Com pagamento (ou "paga na retirada") vai para Pedidos; repetir não duplica.
+ */
+export function closeSiteOrder(db: DatabaseSync, input: CloseSiteOrderInput): Order {
+  migrateFinance(db);
+  return transaction(db, () => {
+    const order = findOrderById(db, input.orderId);
+    if (!order) throw new Error("Pedido não encontrado.");
+    if (getOrderFinance(db, order.id)) return order; // já fechado (clique repetido)
+    if (order.status !== "aguardando_pagamento") throw new Error("Só é possível fechar um pedido aguardando pagamento.");
+    if (order.updatedAt !== input.expectedUpdatedAt) throw new Error("O pedido foi alterado por outra pessoa. Abra de novo.");
+    validateDirectInput({ ...input, userId: order.userId, idempotencyKey: order.idempotencyKey, customer: order.customer, items: order.items,
+      discount: order.discount, internalNotes: "" });
+    requireCents(order.totalCents, true);
+    if (input.payment.amountCents > order.totalCents!) throw new Error("Pagamento acima do total do pedido.");
+    const now = new Date().toISOString();
+    const status = input.payment.amountCents > 0 || input.paymentOnPickup === true ? "aguardando_arte" : "aguardando_pagamento";
+    requireWrite(db.prepare("UPDATE fare_orders SET payment_method = ?, status = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+      .run(input.paymentMethod, status, now, order.id, input.expectedUpdatedAt));
+    requireWrite(db.prepare(`INSERT INTO fare_order_finance
+      (order_id, actor_id, actor_name, created_at, internal_notes, delivery_date, delivery_mode, installments, due_date, payment_on_pickup, delivery_time)
+      VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)`).run(order.id, input.actorId, input.actorName, now, input.deliveryDate, input.deliveryMode,
+      input.installments, input.dueDate, input.paymentOnPickup === true ? 1 : 0, input.deliveryTime ?? null));
+    if (input.payment.amountCents > 0) {
+      requireWrite(db.prepare(`INSERT INTO fare_order_payments
+        (id, order_id, idempotency_key, amount_cents, payment_method, paid_at, actor_id, actor_name, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), order.id, "initial", input.payment.amountCents,
+        input.paymentMethod, input.payment.paidAt, input.actorId, input.actorName, now));
+    }
+    if (status !== order.status) {
+      requireWrite(db.prepare(`INSERT INTO fare_order_status_history
+        (id, order_id, previous_status, next_status, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(randomUUID(), order.id, order.status, status, input.actorId, now));
+    }
+    return findOrderById(db, order.id)!;
+  });
+}
+
 /** Pedido pode ter os itens alterados enquanto não foi concluído nem cancelado. */
 export const ORDER_EDITABLE_STATUSES = [
   "aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback",

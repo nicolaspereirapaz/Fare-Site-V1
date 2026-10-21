@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CloseQuoteDialog } from "@/components/staff/CloseQuoteDialog";
+import { CloseQuoteDialog, type QuoteToClose } from "@/components/staff/CloseQuoteDialog";
 import { Camera, RefreshCw, ShoppingCart, TriangleAlert } from "lucide-react";
 import {
   formatDay,
@@ -51,7 +51,7 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
     setBusyIds(new Set(busyRef.current));
   };
   const router = useRouter();
-  const [closingQuote, setClosingQuote] = useState<BackofficeQuoteSummary | null>(null);
+  const [closingQuote, setClosingQuote] = useState<QuoteToClose | null>(null);
   /** Orçamento que acabou de ser criado no editor (?novo=<id>): aparece em destaque por alguns segundos. */
   const [freshId, setFreshId] = useState<string | null>(freshQuoteId ?? null);
 
@@ -214,7 +214,7 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
                   <KanbanCard {...quoteCard(quote)} busy={busyIds.has(quote.id)} fresh={quote.id === freshId} id={quote.id} key={quote.id} onDetails={() => router.push(`/equipe/orcamentos/${quote.id}/consulta`)} action={quote.status === "aguardando_pagamento" ? <button className="kb-close-quote" type="button" disabled={busyIds.has(quote.id)} onClick={() => setClosingQuote(quote)}>Fechar Orçamento</button> : null} />
                 ))}
                 {columnOrders.map((order) => (
-                  <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} fresh={order.id === freshId} onDetails={() => router.push(`/equipe/pedidos/${order.id}`)} />
+                  <KanbanCard {...orderCard(order)} busy id={`${ORDER_PREFIX}${order.id}`} key={order.id} fresh={order.id === freshId} onDetails={() => router.push(`/equipe/pedidos/${order.id}`)} action={order.finance ? null : <button className="kb-close-quote" type="button" onClick={() => setClosingQuote({ id: order.id, code: order.code, customerName: order.customerName, total: order.total, updatedAt: order.updatedAt, kind: "order" })}>Fechar Pedido</button>} />
                 ))}
               </KanbanColumn>
             );

@@ -42,6 +42,7 @@ export type BackofficeOrder = {
   total: number;
   discount?: { label: string; amount: number } | null;
   createdAt: string;
+  updatedAt: string;
   history?: OrderHistoryEntry[];
   finance?: OrderFinance | null;
 };

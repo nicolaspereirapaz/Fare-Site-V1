@@ -109,3 +109,7 @@
 
 /* Comanda A5 (etiqueta do pacote). */
 .sd-comanda { display:inline-flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:8px; text-decoration:none; }
+/* Pagamento em partes: cada recebimento e o que falta */
+.sd-payment-plan { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:4px; font-size:.86rem; }
+.sd-payment-plan li { display:flex; justify-content:space-between; gap:10px; }
+.sd-payment-plan .sd-payment-due { color:#9a3412; font-weight:600; }

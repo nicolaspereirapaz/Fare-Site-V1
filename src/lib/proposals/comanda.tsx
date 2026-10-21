@@ -9,6 +9,7 @@ import { mockupFileOf } from "@/lib/backoffice/mockupFiles";
 import { formatBillingAddress, type QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import { getOrderFinance, type OrderFinance } from "@/lib/orders/payments";
+import { paymentPlan } from "@/lib/orders/paymentPlan";
 import { findOrderById, type Order } from "@/lib/orders/repository";
 import { buildOrderDocument, type OrderDocument } from "./orderDocument";
 import { registerFonts } from "./pdf";
@@ -21,7 +22,7 @@ export type Comanda = {
   notes: string;
   delivery: { mode: "retirada" | "entrega"; date: string | null; time: string | null; address: string | null } | null;
   /** null = pagamento ainda não registrado. */
-  payment: { total: number; paid: number; balance: number; onPickup: boolean } | null;
+  payment: { total: number; paid: number; balance: number; onPickup: boolean; plan: ReturnType<typeof paymentPlan> } | null;
   images: Array<string | null>;
   printedAt: string;
 };
@@ -60,7 +61,7 @@ export async function buildComanda(order: Order, finance: OrderFinance | null, i
     createdBy: finance?.createdBy ?? null,
     notes: order.customer.notes?.trim() ?? "",
     delivery: finance ? { mode: finance.deliveryMode, date: finance.deliveryDate, time: finance.deliveryTime ?? null, address: finance.deliveryMode === "entrega" && billing ? formatBillingAddress(billing.address) : null } : null,
-    payment: finance ? { total: doc.total, paid: finance.paidCents / 100, balance: Math.max(0, finance.balanceCents) / 100, onPickup: Boolean(finance.paymentOnPickup) } : null,
+    payment: finance ? { total: doc.total, paid: finance.paidCents / 100, balance: Math.max(0, finance.balanceCents) / 100, onPickup: Boolean(finance.paymentOnPickup), plan: paymentPlan(finance) } : null,
     images: await Promise.all(doc.items.map((item) => thumbnail(item.imageUrl))),
     printedAt: dateTimeBR(now),
   };
@@ -113,7 +114,8 @@ function PaymentBox({ payment }: { payment: Comanda["payment"] }) {
       </View>
       <View>
         {payment ? <Text style={s.payDetail}>Total {brl(payment.total)} · Pago {brl(payment.paid)}</Text> : <Text style={s.payDetail}>Confira com o atendente.</Text>}
-        {payment?.onPickup && payment.balance > 0 ? <Text style={s.payDetail}>Pagamento na retirada</Text> : null}
+        {payment?.plan.receipts.map((r, i) => <Text key={i} style={s.payDetail}>Pago {r.label} · {r.amount}</Text>)}
+        {payment?.plan.remainder ? <Text style={s.payDetail}>{payment.plan.remainder.label} · {payment.plan.remainder.amount}</Text> : null}
       </View>
     </View>
   );

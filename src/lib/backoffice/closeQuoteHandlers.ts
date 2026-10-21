@@ -3,6 +3,7 @@ import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 import { closeQuote, CloseQuoteError, type CloseQuoteInput } from "@/lib/quotes/closeQuote";
+import { closeSiteOrder, type CloseSiteOrderInput } from "@/lib/orders/payments";
 import { orderCode } from "@/lib/orders/orderCode";
 import { movePhotoFoldersToOrder } from "@/lib/photoLinks/links";
 
@@ -51,6 +52,36 @@ export function createCloseQuoteHandler(deps: CloseQuoteDeps) {
       if (error instanceof Error && !("code" in error)) return json({ error: "INVALID_REQUEST", message: error.message }, 400);
       console.error("Falha ao fechar orçamento", error);
       return json({ error: "INTERNAL_ERROR", message: "Não foi possível fechar o orçamento. Tente novamente." }, 500);
+    }
+  };
+}
+
+/** Fechar pedido do site (carrinho/fotos): mesmos campos do "Fechar Orçamento". */
+export function createCloseSiteOrderHandler(deps: CloseQuoteDeps) {
+  return async function handle(request: Request, orderId: string): Promise<Response> {
+    const session = await deps.getSession({ headers: request.headers });
+    if (!session) return json({ error: "AUTH_REQUIRED" }, 401);
+    if (!hasBackofficeAccess(resolveUserRole(session.user))) return json({ error: "FORBIDDEN" }, 403);
+    const rejected = financialMutationGuard(request);
+    if (rejected) return rejected;
+    let raw: Record<string, unknown>;
+    try { raw = await request.json(); } catch { return json({ error: "INVALID_REQUEST" }, 400); }
+    if (!raw || typeof raw !== "object" || typeof raw.expectedUpdatedAt !== "string" || !exactObject(raw.payment, ["amountCents", "paidAt"])
+      || (raw.paymentOnPickup !== undefined && typeof raw.paymentOnPickup !== "boolean")) {
+      return json({ error: "INVALID_REQUEST", message: "Dados de fechamento inválidos." }, 400);
+    }
+    try {
+      const order = closeSiteOrder(deps.database(), {
+        orderId, expectedUpdatedAt: raw.expectedUpdatedAt, actorId: session.user.id, actorName: session.user.name,
+        paymentMethod: raw.paymentMethod, payment: raw.payment, installments: raw.installments ?? null, dueDate: raw.dueDate ?? null,
+        deliveryDate: raw.deliveryDate ?? null, deliveryMode: raw.deliveryMode, deliveryTime: raw.deliveryTime ?? null,
+        paymentOnPickup: raw.paymentOnPickup === true,
+      } as CloseSiteOrderInput);
+      return json({ order: { id: order.id, code: orderCode(order.id), status: order.status } });
+    } catch (error) {
+      if (error instanceof Error && !("code" in error)) return json({ error: "INVALID_REQUEST", message: error.message }, 400);
+      console.error("Falha ao fechar pedido do site", error);
+      return json({ error: "INTERNAL_ERROR", message: "Não foi possível fechar o pedido. Tente novamente." }, 500);
     }
   };
 }
