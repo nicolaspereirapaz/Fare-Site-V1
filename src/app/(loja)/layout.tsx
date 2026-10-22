@@ -10,6 +10,7 @@ import { analyticsIds } from "@/lib/analytics";
 import { getCurrentSession } from "@/lib/auth/server";
 import { getMenuCategories } from "@/lib/menuCategoriesServer";
 import { CAMPAIGN_SITE_HEADER } from "@/lib/siteMode";
+import { JsonLd, localBusinessJsonLd, SITE_URL } from "@/lib/seo";
 import "../globals.css";
 
 const dmSans = DM_Sans({
@@ -25,13 +26,15 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Fare Foto — impressão, fotografia e personalizados",
+    default: "Fare Foto — revelação de fotos, gráfica e brindes em Jundiaí",
     template: "%s | Fare Foto",
   },
   description:
-    "Revelação de fotos, quadros, porta-retratos, materiais gráficos e brindes personalizados em Jundiaí.",
+    "Revelação de fotos em 1 hora, impressão e ampliação de fotos, gráfica e brindes personalizados e corporativos em Jundiaí.",
   icons: { icon: "/images/fare-foto-simbolo.svg" },
+  openGraph: { type: "website", locale: "pt_BR", siteName: "Fare Foto", images: ["/images/revelacao/03-escala-tamanhos.webp"] },
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -59,6 +62,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <main>{children}</main>
           <Footer />
         </CartProvider>
+        {/* A loja em Jundiaí para o Google (endereço, contato): ajuda nas buscas locais. */}
+        <JsonLd data={localBusinessJsonLd()} />
         <Analytics {...analyticsIds()} />
       </body>
     </html>

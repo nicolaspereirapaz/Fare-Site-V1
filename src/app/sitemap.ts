@@ -6,7 +6,7 @@ import { getLocalCatalog } from "@/lib/xbzCatalogService";
 
 export const dynamic = "force-dynamic";
 
-const PAGES = ["/", "/produtos/revelacao-de-fotos", "/grafica", "/brindes", "/campanhas/outubro-rosa", "/privacidade"];
+const PAGES = ["/", "/produtos/revelacao-de-fotos", "/brindes", "/brindes/fim-de-ano", "/grafica", "/campanhas/outubro-rosa", "/privacidade"];
 
 /** Páginas da loja + cada brinde à venda (o catálogo muda: lista montada na hora). */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

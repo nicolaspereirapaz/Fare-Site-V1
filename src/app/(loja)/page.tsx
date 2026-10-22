@@ -18,8 +18,9 @@ import { getLocalCatalog } from "@/lib/xbzCatalogService";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Fare Foto — revelação de fotos, gráfica e brindes personalizados em Jundiaí",
-  description: "Revelação de fotos pronta em 1 hora, gráfica e impressos sob medida e milhares de brindes personalizados com a sua marca, em Jundiaí.",
+  title: { absolute: "Revelação de Fotos em Jundiaí, Gráfica e Brindes Personalizados | Fare Foto" },
+  description: "Revelação e impressão de fotos em 1 hora em Jundiaí, gráfica e impressos sob medida e mais de 4 mil brindes personalizados e corporativos com a sua marca.",
+  alternates: { canonical: "/" },
 };
 
 async function loadShowcase(): Promise<{ showcase: HomeShowcase; fareCodes?: Map<string, string> }> {
