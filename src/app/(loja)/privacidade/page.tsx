@@ -14,7 +14,6 @@ export default function PrivacyPage() {
   const whatsApp = buildWhatsAppUrl(FARE_FOTO_WHATSAPP, "Olá! Quero falar sobre os meus dados na Fare Foto.");
   return (
     <section className="container-shell legal-page">
-      <span className="eyebrow">LGPD</span>
       <h1>Política de privacidade</h1>
       <p className="legal-updated">Atualizada em {UPDATED}.</p>
 

@@ -50,7 +50,6 @@ export function ProductConfigurator({ product }: { product: Product }) {
   return (
     <div className="product-configurator">
       <div className="config-heading">
-        <span className="eyebrow">Configure seu produto</span>
         <h1>{product.name}</h1>
         <p>{product.shortDescription}</p>
       </div>

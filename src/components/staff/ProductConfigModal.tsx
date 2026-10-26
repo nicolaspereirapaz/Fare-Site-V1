@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { ImageUp, Plus, Trash2, X } from "lucide-react";
 import { spotChoices } from "@/lib/suppliers/spotOptionPicker";
 import {
   brl,
@@ -150,6 +150,8 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
   const [quantity, setQuantity] = useState(String(editing?.quantity ?? 100));
   const [name, setName] = useState(editing?.source === "avulso" ? editing.name : "");
   const [looseCost, setLooseCost] = useState(editing?.source === "avulso" ? moneyInput(editing.cost) : "");
+  const [mockup, setMockup] = useState(editing?.source === "avulso" ? editing.mockup ?? "" : "");
+  const [upload, setUpload] = useState<{ busy: boolean; error?: string }>({ busy: false });
   const [costOverride, setCostOverride] = useState(editing?.costOverride ?? "");
   const [priceOverride, setPriceOverride] = useState(editing?.priceOverride ?? "");
   const [engs, setEngs] = useState<EngForm[]>(() => editing?.gravacoes.map((gravacao) => engFromGravacao(gravacao, product)) ?? []);
@@ -180,7 +182,7 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
   }));
   const draft: Item = product
     ? { id, source: "catalogo", publicId: product.publicId, variant, quantity: qty, gravacoes, ...(costOverride ? { costOverride } : {}), ...(priceOverride ? { priceOverride } : {}) }
-    : { id, source: "avulso", name: name.trim(), cost: parseNumber(looseCost), quantity: qty, gravacoes, ...(priceOverride ? { priceOverride } : {}) };
+    : { id, source: "avulso", name: name.trim(), cost: parseNumber(looseCost), quantity: qty, gravacoes, ...(mockup ? { mockup } : {}), ...(priceOverride ? { priceOverride } : {}) };
   const draftKey = JSON.stringify(draft);
   const debouncedKey = useDebounced(draftKey, 300);
 
@@ -206,7 +208,22 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
     return index >= 0 ? ok?.gravacoes[index] : undefined;
   };
   const current = product?.variants.find((entry) => entry.label === variant);
-  const photo = current?.imageUrl || product?.imageUrl || "";
+  const photo = current?.imageUrl || product?.imageUrl || (mockup ? `/api/backoffice/mockups/${mockup}` : "");
+
+  async function sendImage(file: File) {
+    setUpload({ busy: true });
+    const form = new FormData();
+    form.set("file", file);
+    try {
+      const response = await fetch("/api/backoffice/mockups", { method: "POST", body: form });
+      const data = (await response.json().catch(() => ({}))) as { mockup?: string; message?: string };
+      if (!response.ok || !data.mockup) throw new Error(data.message ?? "Não foi possível enviar a imagem.");
+      setMockup(data.mockup);
+      setUpload({ busy: false });
+    } catch (error) {
+      setUpload({ busy: false, error: error instanceof Error ? error.message : "Não foi possível enviar a imagem." });
+    }
+  }
   const looseValid = product ? true : name.trim().length >= 2 && parseNumber(looseCost) >= 0;
   const canSave = qty > 0 && !incomplete && looseValid && Boolean(ok);
   const setEng = (key: string, change: Partial<EngForm>) => setEngs((list) => list.map((form) => (form.key === key ? { ...form, ...change } : form)));
@@ -394,6 +411,15 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {photo ? <img alt={product ? `${product.name} — ${variant}` : ""} src={photo} /> : <span>{product ? "Produto sem foto." : "Item fora do catálogo"}</span>}
             </div>
+            {product ? null : (
+              <>
+                <label className="qe-btn qe-btn-secondary qe-mupload">
+                  <ImageUp aria-hidden="true" size={15} /> {upload.busy ? "Enviando…" : mockup ? "Trocar imagem" : "Enviar imagem do computador"}
+                  <input accept="image/jpeg,image/png,image/webp" disabled={upload.busy} hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendImage(file); }} type="file" />
+                </label>
+                {upload.error ? <p className="qe-error" role="alert">{upload.error}</p> : null}
+              </>
+            )}
             {product ? (
               <>
                 <p className="qe-mside-name">{product.name}</p>

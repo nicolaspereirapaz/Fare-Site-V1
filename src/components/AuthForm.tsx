@@ -76,7 +76,6 @@ export function AuthForm({ mode, invite }: { mode: AuthMode; invite?: string }) 
 
   return (
     <div className="auth-card">
-      <span className="eyebrow">{signingUp ? "Nova conta" : "Área do cliente"}</span>
       <h1>{signingUp ? "Crie sua conta" : "Entre na Fare Foto"}</h1>
       <p>{signingUp ? "Cadastre-se para finalizar compras e acompanhar solicitações." : "Acesse seus pedidos, orçamentos e dados pessoais."}</p>
 

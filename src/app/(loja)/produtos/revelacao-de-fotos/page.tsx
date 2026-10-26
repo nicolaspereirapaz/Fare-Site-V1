@@ -86,7 +86,6 @@ export default async function RevelacaoPage({ searchParams }: { searchParams: Pr
       <section className="product-information">
         <div className="container-shell product-information-grid">
           <div>
-            <span className="eyebrow">Como funciona</span>
             <h2>Do seu celular para o papel, sem complicação.</h2>
             <p>Envie as fotos pelo site, escolha tamanho e papel, ajuste o corte e finalize pelo WhatsApp. As fotos chegam para a gente na qualidade original, sem a compressão do WhatsApp.</p>
             <p>O site avisa se alguma foto puder sair borrada no tamanho escolhido. Fotos de celular atuais ficam ótimas até 15 × 21 cm.</p>

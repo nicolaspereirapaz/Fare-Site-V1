@@ -81,4 +81,15 @@ describe("mockup do item", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toContain('filename="X1 - Caneta.jpg"');
   });
+
+  it("imagem de item fora do catálogo: guarda o arquivo sem mexer em orçamento", async () => {
+    const { db, quote, handlers } = setup();
+    const form = new FormData();
+    form.set("file", new Blob([await png()]), "banner.png");
+    const response = await handlers.upload(new Request("http://x/api/backoffice/mockups", { method: "POST", body: form }));
+    expect(response.status).toBe(200);
+    const { mockup } = await response.json();
+    expect(readdirSync(dir)).toContain(mockup);
+    expect(findQuoteById(db, quote.id)!.items[0].mockup).toBeUndefined();
+  });
 });

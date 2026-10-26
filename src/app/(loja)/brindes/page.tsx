@@ -27,7 +27,6 @@ export default async function BrindesPage({ searchParams }: BrindesPageProps) {
     <>
       <section className="page-hero catalog-hero">
         <div className="container-shell">
-          <span className="eyebrow">Brindes para sua empresa</span>
           <h1>Brindes que levam sua marca mais longe.</h1>
           <p>
             Encontre produtos para sua empresa, evento ou equipe e monte uma solicitação de

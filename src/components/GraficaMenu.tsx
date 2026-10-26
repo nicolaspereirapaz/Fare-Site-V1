@@ -50,7 +50,6 @@ export function GraficaMenu({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
       <div className="brindes-panel grafica-panel">
         <div className="brindes-panel-head">
-          <span className="eyebrow">Impressos</span>
           <Link className="text-link" href={GRAFICA_HREF} onClick={navigate}>
             Ver todos <ArrowRight aria-hidden="true" size={15} />
           </Link>

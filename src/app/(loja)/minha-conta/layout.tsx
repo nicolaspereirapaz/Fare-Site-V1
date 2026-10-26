@@ -11,7 +11,6 @@ export default async function AccountLayout({ children }: { children: React.Reac
       <div className="account-shell container-shell">
         <aside className="account-sidebar">
           <div className="account-hello">
-            <span className="eyebrow">Minha conta</span>
             <strong>Olá, {session.user.name.split(" ")[0]}</strong>
           </div>
           <AccountNav />

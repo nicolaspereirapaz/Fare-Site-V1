@@ -230,7 +230,6 @@ export function XbzProductDetail({ code }: { code: string }) {
 
         <div className="product-configurator">
           <div className="config-heading">
-            <span className="eyebrow">Configure seu brinde</span>
             <h1>{formatProductName(product.name)}</h1>
             {product.code ? <span className="product-code product-code-detail">Cód. {product.code}</span> : null}
             {product.description ? <p>{product.description}</p> : null}

@@ -46,7 +46,6 @@ export function HowItWorksTabs() {
     <section className="section-space process-section" id="como-funciona">
       <div className="container-shell">
         <div className="section-heading centered-heading">
-          <span className="eyebrow">Simples e acompanhado</span>
           <h2>{current.title}</h2>
           <p>{current.text}</p>
         </div>

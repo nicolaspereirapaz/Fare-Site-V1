@@ -38,7 +38,6 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
   return (
     <div className="product-configurator fp">
       <div className="config-heading">
-        <span className="eyebrow">Revelação, ampliações e grandes formatos</span>
         <h1>{name}</h1>
         <p>{shortDescription}</p>
       </div>

@@ -199,7 +199,6 @@ export function CartView() {
     return (
       <div className="empty-cart">
         <div className="empty-cart-icon"><MessageCircle aria-hidden="true" /></div>
-        <span className="eyebrow">Seu carrinho</span>
         <h1>Vamos montar seu pedido?</h1>
         <p>Escolha brindes, impressos ou envie suas fotos e finalize direto com a equipe pelo WhatsApp.</p>
         <div className="empty-cart-actions">
@@ -225,7 +224,6 @@ export function CartView() {
       <section className="cart-items" aria-labelledby="cart-title">
         <div className="cart-title-row">
           <div>
-            <span className="eyebrow">Seu carrinho</span>
             <h1 id="cart-title">Revise o seu pedido</h1>
           </div>
           <span>{lineCount} {lineCount === 1 ? "item" : "itens"}</span>
@@ -333,7 +331,6 @@ export function CartView() {
       </section>
 
       <aside className="checkout-card" id="finalizar">
-        <span className="eyebrow">Finalizar</span>
         <h2>Finalize pelo WhatsApp</h2>
         <p>O pedido vai organizado na mensagem. A equipe confirma valores e prazo com você por lá.</p>
 

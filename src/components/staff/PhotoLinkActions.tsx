@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, ImagePlus, MessageCircle } from "lucide-react";
+import { Copy, ExternalLink, ImagePlus, MessageCircle } from "lucide-react";
 
 /** Link das fotos do orçamento/pedido: o cliente anexa, recorta, escolhe papel e quantidades e envia. */
 export function PhotoLinkActions({ kind, id }: { kind: "quote" | "order"; id: string }) {
@@ -20,14 +20,18 @@ export function PhotoLinkActions({ kind, id }: { kind: "quote" | "order"; id: st
     return data;
   }
 
-  async function run(mode: "whatsapp" | "copy") {
+  async function run(mode: "whatsapp" | "copy" | "open") {
     // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois do await).
-    const tab = mode === "whatsapp" ? window.open("about:blank", "_blank") : null;
+    const tab = mode !== "copy" ? window.open("about:blank", "_blank") : null;
     setBusy(true);
     setError(null);
     setInfo(null);
     try {
       const link = await create();
+      if (mode === "open" && tab) {
+        tab.location.href = link.url;
+        return;
+      }
       if (mode === "whatsapp" && link.whatsappUrl && tab) {
         tab.location.href = link.whatsappUrl;
         return;
@@ -51,6 +55,7 @@ export function PhotoLinkActions({ kind, id }: { kind: "quote" | "order"; id: st
       </div>
       <div className="kb-proposal-actions">
         <button className="kb-secondary" disabled={busy} onClick={() => run("copy")} type="button"><Copy aria-hidden="true" size={15} /> Copiar link</button>
+        <button className="kb-secondary" disabled={busy} onClick={() => run("open")} type="button"><ExternalLink aria-hidden="true" size={15} /> Abrir link</button>
         <button className="kb-proposal-send" disabled={busy} onClick={() => run("whatsapp")} type="button"><MessageCircle aria-hidden="true" size={15} /> {busy ? "Gerando…" : "Enviar link no WhatsApp"}</button>
       </div>
       <p className="kb-proposal-hint">Quando o cliente enviar, as quantidades e o papel escolhidos atualizam este documento e as fotos vão para a pasta Pedidos.</p>

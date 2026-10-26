@@ -123,10 +123,6 @@ img {
   content: "";
 }
 
-.eyebrow-light {
-  color: #ffc0a8;
-}
-
 .button {
   display: inline-flex;
   min-height: 46px;
@@ -306,10 +302,6 @@ img {
   padding: 2px 0 10px;
 }
 
-.brindes-panel-head .eyebrow {
-  font-size: 0.72rem;
-}
-
 .brindes-panel-head .text-link {
   font-size: 0.84rem;
 }
@@ -442,10 +434,6 @@ img {
 
 .hero-orange {
   background: #efdecf;
-}
-
-.hero-navy .eyebrow {
-  color: #ffb293;
 }
 
 .hero-navy .hero-copy h1,
@@ -650,10 +638,6 @@ img {
   margin-bottom: 54px;
   margin-left: auto;
   text-align: center;
-}
-
-.centered-heading .eyebrow {
-  justify-content: center;
 }
 
 .centered-heading p {
@@ -2153,10 +2137,6 @@ img {
   padding: 32px;
   color: white;
   box-shadow: var(--shadow-md);
-}
-
-.checkout-card .eyebrow {
-  color: #ffb293;
 }
 
 .checkout-card h2 {
@@ -4725,12 +4705,6 @@ aside.checkout-card .checkout-mode > label.active {
   font-size: 0.82rem;
 }
 
-.kb-warning {
-  margin-top: 6px;
-  color: #8a5a00;
-  font-size: 0.76rem;
-}
-
 .kb-tag {
   display: inline-flex;
   align-items: center;
@@ -5049,10 +5023,6 @@ aside.checkout-card .checkout-mode > label.active {
   padding-block: 72px;
 }
 
-.home-hero-copy .eyebrow {
-  color: #f3a688;
-}
-
 .home-hero-copy h1 {
   margin: 14px 0 16px;
   font-family: var(--font-outfit), sans-serif;
@@ -5306,14 +5276,6 @@ aside.checkout-card .checkout-mode > label.active {
   gap: 48px;
   min-height: 720px;
   padding-block: 56px;
-}
-
-.hs-eyebrow {
-  color: #ffad8f;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .hs-copy h1 {
@@ -6485,8 +6447,7 @@ aside.checkout-card .checkout-mode > label.active {
   font-size: 0.74rem;
 }
 
-.kb-card-meta .kb-tag,
-.kb-card-meta .kb-warning {
+.kb-card-meta .kb-tag {
   margin-top: 0;
 }
 
@@ -6497,13 +6458,6 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-meta {
   margin-left: auto;
   color: var(--muted);
-  white-space: nowrap;
-}
-
-.kb-warning {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

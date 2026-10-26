@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CheckCircle2, Download, ExternalLink, LayoutGrid } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Download, ExternalLink, FileText, LayoutGrid } from "lucide-react";
 
 /**
  * Logo depois de salvar (criar ou editar orçamento, criar pedido): prévia do HTML que vai ao cliente,
@@ -46,6 +47,9 @@ export function QuoteCreatedDialog({ quoteId, code, onClose, kind = "quote", ver
           <a className="qe-btn qe-btn-secondary" href={base}>
             <Download aria-hidden="true" size={15} /> Baixar HTML
           </a>
+          <Link className="qe-btn qe-btn-secondary" href={kind === "order" ? `/equipe/pedidos/${quoteId}` : `/equipe/orcamentos/${quoteId}/consulta`}>
+            <FileText aria-hidden="true" size={15} /> Abrir {kind === "order" ? "pedido" : "orçamento"}
+          </Link>
           <button className="qe-btn qe-btn-primary" onClick={onClose} ref={closeRef} type="button">
             <LayoutGrid aria-hidden="true" size={15} /> Ir para o quadro
           </button>

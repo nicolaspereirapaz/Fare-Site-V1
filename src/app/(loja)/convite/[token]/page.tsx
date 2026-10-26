@@ -25,7 +25,6 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   if (session && isProfessional(database, session.user.id)) {
     return (
       <section className="auth-page container-shell"><div className="auth-card">
-        <span className="eyebrow">Revelação profissional</span>
         <h1>Sua conta já tem a tabela profissional</h1>
         <p>Os preços profissionais aparecem quando você monta o pedido de fotos.</p>
         <Link className="button button-primary" href="/produtos/revelacao-de-fotos">Enviar fotos</Link>
@@ -35,7 +34,6 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   if (state !== "valido") {
     return (
       <section className="auth-page container-shell"><div className="auth-card">
-        <span className="eyebrow">Revelação profissional</span>
         <h1>{PROBLEMS[state]}</h1>
         <p>Peça um novo convite à Fare Foto pelo WhatsApp.</p>
       </div></section>
@@ -44,7 +42,6 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
   if (session) {
     return (
       <section className="auth-page container-shell"><div className="auth-card">
-        <span className="eyebrow">Revelação profissional</span>
         <h1>Ativar a tabela profissional</h1>
         <p>Na conta <strong>{session.user.email}</strong>. Depois disso, os pedidos de fotos desta conta usam os preços profissionais.</p>
         <RedeemInvite token={token} />

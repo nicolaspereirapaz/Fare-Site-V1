@@ -233,6 +233,7 @@
 .qe-mphoto { display: grid; place-items: center; aspect-ratio: 1; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px var(--qe-line); overflow: hidden; }
 .qe-mphoto img { width: 92%; height: 92%; object-fit: contain; }
 .qe-mphoto span { color: var(--qe-faint); font-size: 13px; }
+.qe-mupload { width: 100%; margin-top: 10px; cursor: pointer; }
 .qe-mside-name { margin: 14px 0 2px; font-weight: 600; color: var(--qe-ink); line-height: 1.3; }
 .qe-mcolors { margin-top: 14px; }
 .qe-mcolors > span { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--qe-muted); }

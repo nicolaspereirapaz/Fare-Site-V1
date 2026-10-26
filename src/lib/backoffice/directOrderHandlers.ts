@@ -25,6 +25,7 @@ export function createDirectOrderHandler(deps: QuoteBuilderDeps) {
     if (!STAFF_PAYMENT_METHODS.includes(body.paymentMethod as DirectOrderInput["paymentMethod"])) return json({ error: "INVALID_REQUEST", message: "Forma de pagamento inválida." }, 400);
     const receipt = body.payment as Record<string, unknown> | undefined;
     if (!receipt || !Number.isSafeInteger(receipt.amountCents) || typeof receipt.amountCents !== "number" || receipt.amountCents < 0) return json({ error: "INVALID_REQUEST", message: "Valor pago inválido." }, 400);
+    if (body.paymentOnPickup !== undefined && typeof body.paymentOnPickup !== "boolean") return json({ error: "INVALID_REQUEST", message: "Condição de pagamento inválida." }, 400);
     try {
       const drafts = parseDraftItems(body.items);
       const discount = parseDiscount(body.discount);
@@ -40,6 +41,7 @@ export function createDirectOrderHandler(deps: QuoteBuilderDeps) {
         installments: body.installments as number | null, dueDate: body.dueDate as string | null,
         deliveryDate: body.deliveryDate as string | null, deliveryMode: body.deliveryMode as DirectOrderInput["deliveryMode"],
         deliveryTime: (body.deliveryTime ?? null) as string | null,
+        paymentOnPickup: body.paymentOnPickup === true,
       });
       return json({ id: order.id, code: orderCode(order.id), orderStatus: order.status }, 201);
     } catch (error) {

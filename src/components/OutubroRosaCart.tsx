@@ -79,7 +79,6 @@ export function OutubroRosaCart() {
       <div className="container-shell">
         <Link className={styles.backLink} href={CAMPAIGN_HOME}><ArrowLeft aria-hidden="true" size={16} /> Continuar escolhendo brindes</Link>
         <div className={styles.cartTitle}>
-          <span className="eyebrow">Seu pedido de orçamento</span>
           <h1>Carrinho Outubro Rosa</h1>
         </div>
 

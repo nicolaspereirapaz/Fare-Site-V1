@@ -74,7 +74,6 @@ export default async function Home() {
           <div className="container-shell">
             <div className="section-heading split-heading">
               <div>
-                <span className="eyebrow">Brindes para sua empresa</span>
                 <h2>Encontre o brinde certo.</h2>
               </div>
               <Link className="text-link" href="/brindes">
@@ -105,7 +104,6 @@ export default async function Home() {
           <div className="container-shell">
             <div className="section-heading split-heading">
               <div>
-                <span className="eyebrow">Brindes em destaque</span>
                 <h2>Comece por aqui.</h2>
               </div>
               <Link className="text-link" href="/brindes">

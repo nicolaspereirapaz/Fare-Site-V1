@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { calcularItemOrcamento, FRETE_FORNECEDOR_PRODUTO, type Tecnica } from "@/lib/backoffice/customization";
 import { photoFromName } from "@/components/staff/photoItems";
+import { isMockupFile } from "@/lib/backoffice/mockupFiles";
 import type { ItemCosting, QuoteCartItem } from "@/lib/commerce";
 import type { SpotCustomization } from "@/lib/suppliers/spotCustomizations";
 import type { SupplierId } from "@/lib/xbz";
@@ -31,7 +32,7 @@ export type DraftGravacao = { tecnica: Record<string, unknown> & { tipo: string 
 type ManualValues = { costOverride?: number; priceOverride?: number };
 export type DraftItem =
   | ({ id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: DraftGravacao[] } & ManualValues)
-  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: DraftGravacao[] } & ManualValues);
+  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: DraftGravacao[]; mockup?: string } & ManualValues);
 
 export type ItemPreview =
   | {
@@ -109,7 +110,9 @@ export function parseDraftItems(raw: unknown): DraftItem[] {
     const manual = { ...(costOverride === undefined ? {} : { costOverride }), ...(priceOverride === undefined ? {} : { priceOverride }) };
     if (item.source === "avulso") {
       const name = String(item.name ?? "").trim().slice(0, 120);
-      return { id, source: "avulso" as const, name, cost: toNumber(item.cost), quantity, gravacoes, ...manual };
+      // Imagem enviada do computador (arquivo em data/mockups); só aceita nome gerado pelo envio.
+      const mockup = typeof item.mockup === "string" && isMockupFile(item.mockup) ? { mockup: item.mockup } : {};
+      return { id, source: "avulso" as const, name, cost: toNumber(item.cost), quantity, gravacoes, ...mockup, ...manual };
     }
     return {
       id,
@@ -217,6 +220,7 @@ export function buildQuoteItems(
         codes: product && variant ? { fare: product.fareCode, supplier: product.supplier, supplierCode: product.supplierCode, sku: variant.sku } : null,
         gravacoes: gravacoes.map(({ descricao, local }) => ({ descricao, local })),
         costing,
+        ...(draft.source === "avulso" && draft.mockup ? { mockup: draft.mockup } : {}),
       });
       preview.push({
         id: draft.id,
@@ -266,5 +270,5 @@ export function draftFromItem(item: QuoteCartItem): DraftItem {
   }
   // Avulso: o custo já é sempre digitado (fica em "cost"); só o preço pode ser à mão.
   const { priceOverride } = manualValues as { priceOverride?: number };
-  return { id: item.id, source: "avulso", name: item.productName, cost: costing?.custoProduto ?? 0, quantity: item.quantity, gravacoes, ...(priceOverride === undefined ? {} : { priceOverride }) };
+  return { id: item.id, source: "avulso", name: item.productName, cost: costing?.custoProduto ?? 0, quantity: item.quantity, gravacoes, ...(item.mockup ? { mockup: item.mockup } : {}), ...(priceOverride === undefined ? {} : { priceOverride }) };
 }

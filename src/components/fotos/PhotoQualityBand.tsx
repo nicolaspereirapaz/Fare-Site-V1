@@ -26,7 +26,6 @@ export function PhotoQualityBand() {
           </div>
         </div>
         <div className="quality-band-text">
-          <span className="eyebrow">Revelação química Fujifilm</span>
           <h2 id="quality-band-title">Feita para atravessar gerações.</h2>
           <p>
             Cada foto é revelada no processo químico tradicional, em papel fotográfico Fujifilm, com o mesmo cuidado que

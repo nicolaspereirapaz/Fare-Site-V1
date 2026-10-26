@@ -258,7 +258,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
           const before = previous.get(item.id);
           const same = before?.costing && before.unitPrice === item.unitPrice && before.quantity === item.quantity
             && JSON.stringify(draftFromItem(before)) === JSON.stringify(draftFromItem(item));
-          const kept = before?.mockup ? { ...item, mockup: before.mockup } : item;
+          const kept = !item.mockup && before?.mockup ? { ...item, mockup: before.mockup } : item;
           return same && before.costing && item.costing ? { ...kept, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : kept;
         });
         const updated = replaceQuoteItems(deps.database(), {
@@ -318,7 +318,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
           const before = previous.get(item.id);
           const same = before?.costing && before.unitPrice === item.unitPrice && before.quantity === item.quantity
             && JSON.stringify(draftFromItem(before)) === JSON.stringify(draftFromItem(item));
-          const kept = before?.mockup ? { ...item, mockup: before.mockup } : item;
+          const kept = !item.mockup && before?.mockup ? { ...item, mockup: before.mockup } : item;
           return same && before.costing && item.costing ? { ...kept, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : kept;
         });
         const updated = replaceOrderItems(deps.database(), {

@@ -23,7 +23,6 @@ export default function GraficaPage() {
           </nav>
           <div className="grafica-hero-grid">
             <div>
-              <span className="eyebrow">Gráfica & Impressos</span>
               <h1>Impressos que causam boa impressão.</h1>
               <p>Do cartão de visita ao banner da fachada. Você manda a sua arte ou a gente cria a partir da sua marca, e você aprova a prova antes de imprimir.</p>
               <div className="home-door-actions">

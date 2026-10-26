@@ -28,7 +28,6 @@ export function ForgotPasswordForm() {
 
   return (
     <div className="auth-card">
-      <span className="eyebrow">Área do cliente</span>
       <h1>Esqueci minha senha</h1>
       <p>Informe o e-mail da sua conta. Vamos enviar um link para você criar uma nova senha.</p>
 
@@ -88,7 +87,6 @@ export function ResetPasswordForm({ token, error }: { token: string | null; erro
   if (invalid) {
     return (
       <div className="auth-card">
-        <span className="eyebrow">Área do cliente</span>
         <h1>Link inválido</h1>
         <p>Este link expirou ou já foi usado. Os links valem por 1 hora e funcionam uma vez só.</p>
         <Link className="button button-primary button-large" href="/esqueci-senha">Pedir um novo link</Link>
@@ -99,7 +97,6 @@ export function ResetPasswordForm({ token, error }: { token: string | null; erro
   if (done) {
     return (
       <div className="auth-card">
-        <span className="eyebrow">Área do cliente</span>
         <h1>Tudo certo</h1>
         <p className="auth-success" role="status">Senha redefinida. Por segurança, você saiu da conta em todos os aparelhos.</p>
         <Link className="button button-primary button-large" href="/entrar">Entrar</Link>
@@ -109,7 +106,6 @@ export function ResetPasswordForm({ token, error }: { token: string | null; erro
 
   return (
     <div className="auth-card">
-      <span className="eyebrow">Área do cliente</span>
       <h1>Criar nova senha</h1>
       <p>Escolha uma senha com pelo menos {MIN_LENGTH} caracteres.</p>
       <form className="auth-form" noValidate onSubmit={submit}>

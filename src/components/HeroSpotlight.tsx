@@ -50,7 +50,6 @@ export function HeroSpotlight({
     <section aria-label="Destaques Fare Foto" className="hs-hero">
       <div className="container-shell hs-inner">
         <div className="hs-copy">
-          <span className="hs-eyebrow hs-fade">Brindes personalizados para empresas</span>
           <h1 className="hs-fade" style={{ animationDelay: "0.12s" }}>
             Sua marca em brindes que <em>circulam.</em>
           </h1>

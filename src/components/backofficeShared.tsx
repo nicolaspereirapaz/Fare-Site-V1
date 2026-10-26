@@ -7,11 +7,13 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type CollisionDetection,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { CheckCircle2, X } from "lucide-react";
@@ -111,7 +113,7 @@ export function KanbanBoard({
   return (
     <BoardDragContext.Provider value={{ dragging, canDrop }}>
       <DndContext
-        collisionDetection={closestCorners}
+        collisionDetection={collision}
         onDragCancel={() => setDragging(null)}
         onDragEnd={(event: DragEndEvent) => {
           setDragging(null);
@@ -126,6 +128,9 @@ export function KanbanBoard({
     </BoardDragContext.Provider>
   );
 }
+
+// Coluna sob o ponteiro (no teclado, os cantos mais próximos). Só com cantos, a coluna alta perdia o cartão para a vizinha.
+const collision: CollisionDetection = (args) => { const hits = pointerWithin(args); return hits.length ? hits : closestCorners(args); };
 
 const BoardDragContext = createContext<{ dragging: string | null; canDrop: (cardId: string, columnId: string) => boolean }>({ dragging: null, canDrop: () => true });
 
@@ -155,14 +160,13 @@ type CardProps = {
   title: string;
   summary: string;
   tag?: ReactNode;
-  warning?: string | null;
   /** Rodapé discreto: data, quem fez, proposta enviada… */
   meta?: string;
   finance?: OrderFinance | null;
 };
 
 /** Conteúdo do cartão (usado no quadro e no cartão "flutuando" durante o arraste). */
-export function KanbanCardBody({ code, total, title, summary, tag, warning, meta, finance }: CardProps) {
+export function KanbanCardBody({ code, total, title, summary, tag, meta, finance }: CardProps) {
   return (
     <>
       <div className="kb-card-row">
@@ -173,10 +177,9 @@ export function KanbanCardBody({ code, total, title, summary, tag, warning, meta
       <span className="kb-summary">{summary}</span>
       {finance && finance.balanceCents > 0 ? <span className="kb-order-debt">Pagamento pendente</span> : null}
       {finance?.deliveryDate ? <span className="kb-order-delivery">Entrega prevista {deliveryLabel(finance.deliveryDate, finance.deliveryTime)}</span> : null}
-      {tag || warning || meta ? (
+      {tag || meta ? (
         <div className="kb-card-meta">
           {tag}
-          {warning ? <span className="kb-warning" title={warning}><span aria-hidden="true">⚠ </span>{warning}</span> : null}
           {meta ? <span className="kb-meta">{meta}</span> : null}
         </div>
       ) : null}

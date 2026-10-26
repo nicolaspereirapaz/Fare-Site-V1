@@ -138,11 +138,17 @@ describe("fechamento transacional de orçamento", () => {
     expect(db.prepare("SELECT count(*) n FROM fare_orders").get()).toMatchObject({ n: 1 });
     expect(getOrderFinance(db, order.id)?.payments).toHaveLength(1);
   });
+  it("fecha direto da negociação", () => {
+    const { db, input } = setup();
+    const moved = updateQuoteStatus(db, { quoteId: input.quoteId, nextStatus: "em_negociacao" });
+    expect(closeQuote(db, { ...input, expectedUpdatedAt: moved.updatedAt }).status).toBe("aguardando_arte");
+    expect(findQuoteById(db, input.quoteId)).toMatchObject({ status: "virou_pedido" });
+  });
   it("recusa versão antiga, estado indevido e reutilização global de chave", () => {
     const { db, input } = setup();
     expect(() => closeQuote(db, { ...input, expectedUpdatedAt: "old" })).toThrow(/outra pessoa/);
-    updateQuoteStatus(db, { quoteId: input.quoteId, nextStatus: "em_negociacao" });
-    expect(() => closeQuote(db, input)).toThrow(/aguardando pagamento/);
+    const closed = updateQuoteStatus(db, { quoteId: input.quoteId, nextStatus: "encerrado" });
+    expect(() => closeQuote(db, { ...input, expectedUpdatedAt: closed.updatedAt })).toThrow(/em aberto/);
     const other = setup(); closeQuote(other.db, other.input);
     expect(() => closeQuote(other.db, { ...other.input, quoteId: "another" })).toThrow(/reutilizada/);
   });

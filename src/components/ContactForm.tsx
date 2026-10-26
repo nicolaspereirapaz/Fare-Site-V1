@@ -28,7 +28,6 @@ export function ContactForm() {
     <section className="contact-section" id="contato">
       <div className="container-shell contact-grid">
         <div className="contact-copy">
-          <span className="eyebrow eyebrow-light">Atendimento humano</span>
           <h2>Tem uma ideia fora do catálogo?</h2>
           <p>
             Conte o que precisa. A equipe ajuda a escolher formato, material e acabamento antes da produção.

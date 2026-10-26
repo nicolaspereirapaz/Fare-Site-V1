@@ -187,7 +187,6 @@
 /* ===== Escala de fontes da Futura Im (Inter 13/14/30/25px) ajustada +~1px para DM Sans ===== */
 .fp .config-heading h1 { font-size: 2rem; letter-spacing: -0.03em; }
 .fp .config-heading p { font-size: 0.875rem; }
-.fp .eyebrow { font-size: 0.8125rem; }
 .fp .option-group legend, .fp .quantity-range-group > legend { font-size: 0.9375rem; }
 .fp .option-button, .fp .size-option-button { font-size: 0.875rem; }
 .fp .quantity-range-head { font-size: 0.875rem; }

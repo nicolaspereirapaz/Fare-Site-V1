@@ -41,7 +41,6 @@ export default function FimDeAnoPage() {
     <>
       <section className="page-hero catalog-hero">
         <div className="container-shell">
-          <span className="eyebrow">Brindes corporativos</span>
           <h1>Brindes de fim de ano para empresas</h1>
           <p>
             Agradeça clientes, parceiros e colaboradores com brindes personalizados com a sua marca. Mais de 4 mil opções,

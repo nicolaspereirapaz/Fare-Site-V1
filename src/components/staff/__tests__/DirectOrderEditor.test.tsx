@@ -32,8 +32,8 @@ describe('mesmo editor no modo pedido direto', () => {
   await user.click(await screen.findByRole('option', { name: /Cliente QA/ }));
   await user.click(screen.getByRole('button', { name: 'Item fora do catálogo' }));
   await user.click(screen.getByRole('button', { name: 'Adicionar item de teste' }));
-  await user.clear(screen.getByLabelText('Quanto o cliente já pagou (R$)'));
-  await user.type(screen.getByLabelText('Quanto o cliente já pagou (R$)'), '20,00');
+  await user.clear(screen.getByLabelText('Valor recebido agora'));
+  await user.type(screen.getByLabelText('Valor recebido agora'), '20,00');
   await user.type(screen.getByLabelText('Data prevista de entrega'), '2026-10-23');
   await waitFor(() => expect(screen.getByRole('button', { name: 'Criar pedido' })).toBeEnabled());
   await user.click(screen.getByRole('button', { name: 'Criar pedido' }));
@@ -50,6 +50,6 @@ describe('mesmo editor no modo pedido direto', () => {
  it('orçamento permanece sem campos de pagamento', () => {
   render(<QuoteEditor />);
   expect(screen.getByRole('heading', { name: 'Novo orçamento' })).toBeInTheDocument();
-  expect(screen.queryByLabelText('Quanto o cliente já pagou (R$)')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Valor recebido agora')).not.toBeInTheDocument();
  });
 });

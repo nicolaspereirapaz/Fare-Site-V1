@@ -18,6 +18,7 @@ import { orderCode } from "@/lib/orders/orderCode";
 /** Mesma regra do servidor (ORDER_EDITABLE_STATUSES em lib/orders/payments). */
 const ORDER_EDITABLE = ["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback"];
 import { DirectOrderFields } from "@/components/staff/DirectOrderFields";
+import type { ClosingChoice } from "@/components/staff/QuoteClosingFields";
 import { deliveryLabel, EMPTY_PAYMENT_FORM, paidCents, paymentFormError, todayInBrazil, type PaymentForm } from "@/components/staff/paymentFieldsShared";
 import {
   brl,
@@ -164,7 +165,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const isOrder = mode === "order" || editingOrder;
   const docId = quoteId ?? orderId;
   const [paidOnServer, setPaidOnServer] = useState(0);
-  const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paidAt: todayInBrazil() }));
+  const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paid: "", paidAt: todayInBrazil() }));
+  const [paymentChoice, setPaymentChoice] = useState<ClosingChoice>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
   const [fixedCustomerRef, setFixedCustomerRef] = useState<string | null>(null);
@@ -292,18 +294,20 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const skipQueued = useCallback(() => queue && openNext(queue.rest, queue.total), [queue, openNext]);
 
   async function submit() {
-    if (isOrder && !editingOrder && (!customer || paymentFormError(payment, Math.round(totals.total * 100)))) return;
+    if (isOrder && !editingOrder && (!customer || !payment.paid.trim() || paymentFormError(payment, Math.round(totals.total * 100)))) return;
+    const pickup = paymentChoice === "pickup";
     setSaving(true);
     setSaveError(null);
     const body = docId
       ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
       : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody,
         ...(isOrder ? {
-          paymentMethod: payment.paymentMethod,
+          // Mesmas regras de "Fechar Orçamento": pagar na retirada = sem recebimento agora, retirada na loja.
+          paymentMethod: pickup ? "pix" : payment.paymentMethod, paymentOnPickup: pickup,
           payment: { amountCents: paidCents(payment.paid), paidAt: (paidCents(payment.paid) ?? 0) > 0 ? payment.paidAt : null },
-          installments: payment.paymentMethod === "cartao_credito" ? Number(payment.installments) : null,
-          dueDate: ["boleto", "faturamento_empresa"].includes(payment.paymentMethod) ? payment.dueDate || null : null,
-          deliveryDate: payment.deliveryDate || null, deliveryMode: payment.deliveryMode,
+          installments: !pickup && payment.paymentMethod === "cartao_credito" ? Number(payment.installments) : null,
+          dueDate: !pickup && ["boleto", "faturamento_empresa"].includes(payment.paymentMethod) ? payment.dueDate || null : null,
+          deliveryDate: payment.deliveryDate || null, deliveryMode: pickup ? "retirada" : payment.deliveryMode,
           deliveryTime: payment.deliveryDate && payment.deliveryTime ? payment.deliveryTime : null,
         } : {}),
       };
@@ -334,12 +338,13 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
 
   const productLabel = (item: Item) => (item.source === "catalogo" ? products[item.publicId]?.name ?? "Produto" : item.name);
   // Cliente é opcional: sem ele o orçamento fica "Cliente a definir".
-  const paymentError = isOrder && !editingOrder ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
+  // Valor ainda não escolhido não é erro: o botão só fica bloqueado até escolher.
+  const paymentError = isOrder && !editingOrder && payment.paid.trim() ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
   const receivedCents = editingOrder ? paidOnServer : paidCents(payment.paid) ?? 0;
   // Pedido editado não pode ficar com total abaixo do que já foi recebido.
   const belowPaid = editingOrder && Math.round(totals.total * 100) < paidOnServer;
   const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && !belowPaid
-    && (!isOrder || editingOrder || (customer && !changingCustomer && !paymentError));
+    && (!isOrder || editingOrder || (customer && !changingCustomer && payment.paid.trim() && !paymentError));
   const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
 
   if (loading) return <main className="qe-page"><p className="qe-hint">{editingOrder ? "Carregando pedido…" : "Carregando orçamento…"}</p></main>;
@@ -420,6 +425,9 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
                       ) : photo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={PHOTO_PRODUCT_IMAGE[sizeById(photo.sizeId).group]} /></span>
+                      ) : item.source === "avulso" && item.mockup ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <span className="qe-thumb qe-thumb-md"><img alt="" src={`/api/backoffice/mockups/${item.mockup}`} /></span>
                       ) : <span className="qe-thumb qe-thumb-md qe-thumb-blank">avulso</span>}
                       <div>
                         <b>{productLabel(item)}</b>
@@ -471,7 +479,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
             ) : null}
           </section>
 
-          {isOrder && !editingOrder ? <DirectOrderFields onChange={setPayment} value={payment} /> : null}
+          {isOrder && !editingOrder ? <DirectOrderFields choice={paymentChoice} onChange={setPayment} onChoice={setPaymentChoice} total={totals.total} value={payment} /> : null}
           {/* Link para o cliente mandar as fotos: já no orçamento (as fotos viram itens com o preço da tabela). */}
           {!isOrder || editingOrder ? (
             <section className="qe-card">
@@ -561,6 +569,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
               {saving ? "Salvando…" : docId ? "Salvar alterações" : isOrder ? "Criar pedido" : "Criar orçamento"}
             </button>
           ) : null}
+          {isOrder && !editingOrder && customer && !payment.paid.trim() ? <p className="qe-hint qe-center">Escolha quanto o cliente pagou para criar o pedido.</p> : null}
           {!fixedCustomer && !customer ? <p className="qe-hint qe-center">{isOrder ? "Selecione o cliente para criar o pedido." : "Sem cliente, fica como “Cliente a definir”. Dá para escolher depois."}</p> : null}
         </aside>
       </div>

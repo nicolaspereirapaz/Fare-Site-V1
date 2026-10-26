@@ -32,6 +32,11 @@ describe('API de pedido direto',()=>{
   const {db,handler}=setup();const a=await(await handler(post(body))).json();const b=await(await handler(post(body))).json();expect(a.id).toBe(b.id);
   expect(getOrderFinance(db,a.id)?.payments).toHaveLength(1);
  });
+ it('pagar na retirada: sem recebimento agora, já segue para a arte',async()=>{
+  const {db,handler}=setup();const r=await handler(post({...body,paymentOnPickup:true,payment:{amountCents:0,paidAt:null}}));expect(r.status).toBe(201);
+  const data=await r.json();expect(data).toMatchObject({orderStatus:'aguardando_arte'});expect(getOrderFinance(db,data.id)).toMatchObject({paidCents:0,paymentOnPickup:true});
+  expect((await setup().handler(post({...body,paymentOnPickup:'sim'}))).status).toBe(400);
+ });
  it('sem recebimento entra em Aguardando pagamento',async()=>{
   const {handler}=setup();const r=await handler(post({...body,payment:{amountCents:0,paidAt:null}}));expect(r.status).toBe(201);expect(await r.json()).toMatchObject({orderStatus:'aguardando_pagamento'});
  });

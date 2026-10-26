@@ -30,7 +30,6 @@ export default function OutubroRosaPage() {
 
       <section className={styles.intro}>
         <div className="container-shell">
-          <span className="eyebrow">Campanha Outubro Rosa</span>
           <h1>Brindes que transformam cuidado em presença.</h1>
           <p>
             Encontre uma seleção especial para campanhas, equipes e eventos. Escolha os produtos,

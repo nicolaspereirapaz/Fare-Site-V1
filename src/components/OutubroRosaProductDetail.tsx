@@ -189,7 +189,6 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
 
             <div className="product-configurator">
               <div className="config-heading">
-                <span className="eyebrow">Configure seu produto</span>
                 <h1>{name}</h1>
                 <p>Brinde da seleção Outubro Rosa, personalizado pela Fare Foto para a sua campanha.</p>
               </div>
@@ -294,7 +293,6 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
       <section className="product-information">
         <div className="container-shell product-information-grid">
           <div>
-            <span className="eyebrow">Sobre o produto</span>
             <h2>Configure com liberdade. Confirme com segurança.</h2>
             {product.description ? <p>{product.description}</p> : null}
             <p>Envie o logo da sua empresa em PDF, AI, CDR ou PNG em alta resolução. A equipe confere a arte e indica a melhor forma de personalização.</p>
@@ -310,7 +308,7 @@ export function OutubroRosaProductDetail({ code }: { code: string }) {
       {data.related.length ? (
         <section className="section-space related-section">
           <div className="container-shell">
-            <div className="section-heading"><span className="eyebrow">Você também pode gostar</span><h2>Mais em {product.category}</h2></div>
+            <div className="section-heading"><h2>Mais em {product.category}</h2></div>
             <div className={styles.grid}>
               {data.related.map((item) => <OutubroRosaProductCard key={item.publicId} product={item} />)}
             </div>

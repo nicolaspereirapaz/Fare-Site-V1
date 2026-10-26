@@ -74,7 +74,9 @@ export function createMockupHandlers(deps: MockupDeps) {
       const id = String(form?.get("id") ?? "");
       const itemId = String(form?.get("item") ?? "");
       const file = form?.get("file");
-      if (!kind || !id || !itemId || !file || typeof file === "string") return json({ error: "INVALID_REQUEST", message: "Escolha a imagem do mockup." }, 400);
+      // Sem kind/id/item = imagem de item fora do catálogo ainda no editor (o item guarda o nome ao salvar).
+      const loose = !form?.get("kind") && !id && !itemId;
+      if ((!loose && (!kind || !id || !itemId)) || !file || typeof file === "string") return json({ error: "INVALID_REQUEST", message: "Escolha a imagem do mockup." }, 400);
       if (file.size > MAX_BYTES) return json({ error: "INVALID_REQUEST", message: "Imagem muito grande (máximo 30 MB)." }, 400);
       let jpeg: Buffer;
       try {
@@ -90,6 +92,8 @@ export function createMockupHandlers(deps: MockupDeps) {
       const name = `${randomUUID()}.jpg`;
       await mkdir(MOCKUPS_DIR, { recursive: true });
       await writeFile(mockupPath(name), jpeg);
+      // shortcut: imagem trocada ou nunca salva no editor fica em data/mockups; limpar órfãos se a pasta crescer.
+      if (loose || !kind) return json({ mockup: name, mockupUrl: mockupUrl(name) });
       try {
         const previous = saveMockup(deps.database(), kind, id, itemId, name);
         await dropFile(previous);

@@ -59,7 +59,6 @@ export function FotosMenu({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
       <div className="brindes-panel fotos-panel">
         <div className="brindes-panel-head">
-          <span className="eyebrow">Revelação química Fujifilm</span>
           <Link className="text-link" href={PHOTO_HREF} onClick={navigate}>
             Enviar minhas fotos <ArrowRight aria-hidden="true" size={15} />
           </Link>

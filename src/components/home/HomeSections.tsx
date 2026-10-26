@@ -16,14 +16,12 @@ export function HomeDoors({ products, badge, totalLabel, whatsAppUrl }: { produc
     <section className="home-doors" aria-labelledby="home-doors-title">
       <div className="container-shell">
         <div className="home-doors-head">
-          <span className="eyebrow">Fare Foto · Jundiaí</span>
           <h1 id="home-doors-title">Suas fotos, seus impressos, sua marca.</h1>
           <p>Revelação de fotos, gráfica e brindes personalizados, feitos com o cuidado de quem imprime memórias.</p>
         </div>
         <div className="home-doors-grid">
           <article className="home-door home-door-fotos">
             <div className="home-door-copy">
-              <span className="home-door-tag"><Camera aria-hidden="true" size={15} /> Fotos</span>
               <h2>Suas fotos reveladas em 1 hora.</h2>
               <p>Revelação química Fujifilm, ampliações e grandes formatos. Envie do celular e retire na loja.</p>
               <div className="home-door-actions">
@@ -38,7 +36,6 @@ export function HomeDoors({ products, badge, totalLabel, whatsAppUrl }: { produc
 
           <article className="home-door home-door-grafica">
             <div className="home-door-copy">
-              <span className="home-door-tag"><Printer aria-hidden="true" size={15} /> Gráfica & Impressos</span>
               <h2>Impressos que causam boa impressão.</h2>
               <p>Cartões de visita, panfletos, banners, convites, tags e adesivos para o seu negócio ou a sua festa.</p>
               <div className="home-door-actions">
@@ -57,7 +54,6 @@ export function HomeDoors({ products, badge, totalLabel, whatsAppUrl }: { produc
 
           <article className="home-door home-door-brindes">
             <div className="home-door-copy">
-              <span className="home-door-tag"><Building2 aria-hidden="true" size={15} /> Brindes</span>
               <h2>Brindes com a sua marca.</h2>
               <p>{totalLabel} para equipes, clientes e eventos. A gente confere a arte e combina valor e prazo.</p>
               <div className="home-door-actions">
@@ -101,7 +97,6 @@ export function HomeParaVoce() {
       <div className="container-shell">
         <div className="section-heading split-heading">
           <div>
-            <span className="eyebrow">Fotos</span>
             <h2>Fotos para guardar, presentear e pendurar.</h2>
           </div>
           <Link className="text-link" href={PHOTO_HREF}>Enviar minhas fotos <ArrowRight aria-hidden="true" size={18} /></Link>
@@ -144,7 +139,6 @@ export function HomeOcasioes() {
     <section className="section-space home-ocasioes" id="ocasioes">
       <div className="container-shell">
         <div className="section-heading centered-heading">
-          <span className="eyebrow">Ocasiões</span>
           <h2>Uma data, tudo impresso num lugar só.</h2>
           <p>Fotos para quem você ama, impressos para a festa e brindes para quem trabalha com você.</p>
         </div>
@@ -184,7 +178,6 @@ export function HomeGrafica() {
       <div className="container-shell">
         <div className="section-heading split-heading">
           <div>
-            <span className="eyebrow">Gráfica & Impressos</span>
             <h2>Do cartão de visita ao banner.</h2>
           </div>
           <Link className="text-link" href={GRAFICA_HREF}>Ver todos os impressos <ArrowRight aria-hidden="true" size={18} /></Link>

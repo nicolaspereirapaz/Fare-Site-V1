@@ -8,7 +8,6 @@ import { useCallback, useEffect, useState } from "react";
 
 const slides = [
   {
-    eyebrow: "Fotografias, álbuns e molduras",
     title: "Suas histórias merecem sair da tela.",
     body: "Revelações, fotoálbuns, quadros e porta-retratos produzidos com atenção a cada detalhe.",
     image: "/images/hero-farefoto.webp",
@@ -18,7 +17,6 @@ const slides = [
     tone: "cream",
   },
   {
-    eyebrow: "Brindes para sua empresa",
     title: "Sua marca em itens que circulam.",
     body: "Canecas, copos e peças personalizadas para equipes, clientes e eventos.",
     image: "/images/canecas-personalizadas.webp",
@@ -28,7 +26,6 @@ const slides = [
     tone: "navy",
   },
   {
-    eyebrow: "Gráfica",
     title: "Sua comunicação impressa com presença.",
     body: "Cartões, folders, tags e adesivos produzidos para apresentar seu negócio com consistência.",
     image: "/images/cartao-visita.webp",
@@ -72,7 +69,6 @@ export function HeroCarousel() {
             <article className={`hero-slide hero-${slide.tone}`} key={slide.title}>
               <div className="container-shell hero-slide-inner">
                 <div className="hero-copy">
-                  <span className="eyebrow">{slide.eyebrow}</span>
                   <h1>{slide.title}</h1>
                   <p>{slide.body}</p>
                   <div className="hero-actions">

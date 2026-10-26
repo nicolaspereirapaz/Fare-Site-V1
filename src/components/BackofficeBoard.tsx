@@ -197,7 +197,6 @@ function OrdersBoard({ freshOrderId, onFreshShown }: { freshOrderId?: string; on
     total: order.total,
     finance: order.finance,
     tag: order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : undefined,
-    warning: order.billing || order.photos ? null : "Sem dados de faturamento",
     meta: order.status === "concluido"
       ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
       : order.finance?.paymentOnPickup ? 'Pagamento na retirada'

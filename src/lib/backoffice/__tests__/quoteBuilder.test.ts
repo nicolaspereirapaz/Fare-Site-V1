@@ -197,3 +197,18 @@ describe("precisão dos valores digitados (revisão)", () => {
     expect(preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
   });
 });
+
+describe("imagem do item fora do catálogo", () => {
+  it("só aceita nome de arquivo do envio, vai para o item e volta ao rascunho", () => {
+    const file = "0b3c1a2e-1111-4222-8333-944455556666.jpg";
+    const drafts = parseDraftItems([
+      { id: "b", source: "avulso", name: "Banner", cost: 38, quantity: 2, mockup: file },
+      { id: "c", source: "avulso", name: "Banner", cost: 38, quantity: 2, mockup: "../../.env" },
+    ]);
+    expect(drafts[0]).toMatchObject({ mockup: file });
+    expect(drafts[1]).not.toHaveProperty("mockup");
+    const { items } = buildQuoteItems(drafts, () => null, { name: "Bia" });
+    expect(items[0].mockup).toBe(file);
+    expect(draftFromItem(items[0])).toMatchObject({ source: "avulso", mockup: file });
+  });
+});

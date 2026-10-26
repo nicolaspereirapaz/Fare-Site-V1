@@ -16,7 +16,7 @@ import {
 import { movePath } from "@/lib/backoffice/boardMoves";
 import { type BackofficeOrder } from "@/components/BackofficeBoard";
 import type { BackofficeQuoteSummary } from "@/lib/backoffice/quotesAccess";
-import { canTransitionQuote, NO_CUSTOMER_NAME, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS } from "@/lib/quotes/quoteCode";
+import { canTransitionQuote, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS } from "@/lib/quotes/quoteCode";
 
 type Column = (typeof QUOTE_BOARD_COLUMNS)[number];
 
@@ -146,7 +146,6 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
     tag: <span className="kb-origin">{quote.createdBy ? `Feito por ${quote.createdBy}` : "Site"}</span>,
     title: quote.customerCompany || quote.customerName,
     total: quote.total,
-    warning: quote.billing || quote.createdBy || quote.customerName === NO_CUSTOMER_NAME ? null : "Sem dados de faturamento",
     meta: quote.proposalSentAt ? `Proposta enviada ${formatDay(quote.proposalSentAt)}` : `Criado ${formatDay(quote.createdAt)}`,
   });
   const orderCard = (order: BackofficeOrder) => ({
@@ -157,8 +156,6 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
       : <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
     title: order.customerCompany || order.customerName,
     total: order.total,
-    // Fotos são de pessoa física: não pedem dados de faturamento.
-    warning: order.billing || order.photos ? null : "Sem dados de faturamento",
     meta: `Pedido ${formatDay(order.createdAt)}`,
     finance: order.finance,
   });

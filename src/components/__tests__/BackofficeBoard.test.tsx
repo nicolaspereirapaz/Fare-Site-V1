@@ -92,7 +92,7 @@ describe("painel: aba Pedidos", () => {
     expect(within(card).getByText("R$ 250,00")).toBeInTheDocument();
     expect(within(card).getByText("100 × Caneta Plástica · Azul + 1 item")).toBeInTheDocument();
     expect(within(card).queryByText("11988887777")).not.toBeInTheDocument();
-    expect(within(card).getByText("Sem dados de faturamento")).toBeInTheDocument();
+    expect(within(card).queryByText("Sem dados de faturamento")).not.toBeInTheDocument();
   });
 
   it("pedido aguardando pagamento, cancelado ou finalizado sem data/há mais de 24 h não aparece no quadro de pedidos", async () => {

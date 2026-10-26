@@ -81,7 +81,6 @@ export function BrindesMenu({ categories, onNavigate }: { categories: MenuCatego
       {categories.length ? (
         <div className="brindes-panel">
           <div className="brindes-panel-head">
-            <span className="eyebrow">Categorias</span>
             <Link className="text-link" href="/brindes" onClick={navigate}>
               Ver todos os brindes <ArrowRight aria-hidden="true" size={15} />
             </Link>

@@ -17,6 +17,8 @@ export class CloseQuoteError extends Error {
 }
 
 /** A trava de escrita cobre leitura, versão, idempotência, pedido e financeiro. */
+const OPEN_STATUSES: string[] = ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"];
+
 export function closeQuote(db: DatabaseSync, input: CloseQuoteInput): Order {
   if (input.paymentOnPickup !== undefined && typeof input.paymentOnPickup !== 'boolean') throw new CloseQuoteError('INVALID_REQUEST', 'Condição de pagamento inválida.');
   if (typeof input.idempotencyKey !== "string" || input.idempotencyKey.length < 8 || input.idempotencyKey.length > 80
@@ -50,7 +52,8 @@ export function closeQuote(db: DatabaseSync, input: CloseQuoteInput): Order {
     }
     const quote = findQuoteById(db, input.quoteId);
     if (!quote) throw new CloseQuoteError("QUOTE_NOT_FOUND", "Orçamento não encontrado.");
-    if (quote.status !== "aguardando_pagamento" || quote.orderId) throw new CloseQuoteError("CONFLICT", "Só é possível fechar um orçamento aguardando pagamento.");
+    // Fecha de qualquer etapa aberta (também direto da negociação), não só de "aguardando pagamento".
+    if (!OPEN_STATUSES.includes(quote.status) || quote.orderId) throw new CloseQuoteError("CONFLICT", "Só é possível fechar um orçamento em aberto.");
     if (quote.updatedAt !== input.expectedUpdatedAt) throw new CloseQuoteError("CONFLICT", "O orçamento foi alterado por outra pessoa. Abra de novo.");
     if (quote.userId === NO_CUSTOMER_OWNER) throw new CloseQuoteError("INVALID_REQUEST", "Selecione o cliente antes de fechar o orçamento.");
     // Não reaproveitar pedidos legados criados pela conversão antiga sem ledger.
@@ -67,7 +70,7 @@ export function closeQuote(db: DatabaseSync, input: CloseQuoteInput): Order {
     });
     if (order.totalCents !== quote.totalCents) throw new CloseQuoteError("CONFLICT", "Total do orçamento inconsistente. Revise antes de fechar.");
     const version = new Date(Math.max(Date.now(), Date.parse(quote.updatedAt) + 1)).toISOString();
-    const updated = db.prepare("UPDATE fare_quotes SET status = 'virou_pedido', order_id = ?, updated_at = ? WHERE id = ? AND updated_at = ? AND status = 'aguardando_pagamento' AND order_id IS NULL")
+    const updated = db.prepare("UPDATE fare_quotes SET status = 'virou_pedido', order_id = ?, updated_at = ? WHERE id = ? AND updated_at = ? AND status IN ('aguardando_orcamento', 'em_negociacao', 'aguardando_pagamento') AND order_id IS NULL")
       .run(order.id, version, quote.id, input.expectedUpdatedAt);
     if (Number(updated.changes) !== 1) throw new CloseQuoteError("CONFLICT", "O orçamento mudou. Abra de novo.");
     const persisted = db.prepare("INSERT INTO fare_quote_closures (quote_id, idempotency_key, payload, order_id) VALUES (?, ?, ?, ?)")
