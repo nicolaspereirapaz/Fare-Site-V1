@@ -30,9 +30,9 @@ describe('consulta completa com snapshot do editor',()=>{
   expect(screen.getByText('R$ 1.248,00')).toBeInTheDocument();
   await user.click(screen.getByRole('button',{name:/Copiar chave/}));
   await waitFor(()=>expect(writeText).toHaveBeenCalledWith('50.344.377/0001-36'));
-  // No topo (fácil de achar) e no Andamento.
+  // Só no topo (o Andamento não repete o botão).
   const edits=screen.getAllByRole('link',{name:/Editar orçamento/});
-  expect(edits).toHaveLength(2);
+  expect(edits).toHaveLength(1);
   for(const link of edits)expect(link).toHaveAttribute('href','/equipe/orcamentos/quote1');
   expect(screen.getByRole('button',{name:'Fechar Orçamento'})).toBeInTheDocument();
  });

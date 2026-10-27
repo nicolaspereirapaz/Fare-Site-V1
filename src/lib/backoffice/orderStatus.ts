@@ -21,6 +21,19 @@ export const ORDEM_STATUS_PEDIDO = [
 
 export type StatusPedido = (typeof ORDEM_STATUS_PEDIDO)[number];
 
+/** Nomes das situações no painel interno. */
+export const ORDER_STAFF_LABELS: Record<StatusPedido, string> = {
+  aguardando_pagamento: "Aguardando pagamento",
+  aguardando_arte: "Aguardando arte",
+  criando_arte: "Criando arte",
+  aguardando_producao: "Aguardando produção",
+  em_producao: "Em produção",
+  aguardando_retirada: "Aguardando retirada",
+  aguardando_feedback: "Aguardando feedback",
+  concluido: "Finalizado",
+  cancelado: "Cancelado",
+};
+
 /** Colunas da aba Pedidos (o que está fora daqui não aparece no quadro de pedidos). */
 export const COLUNAS_QUADRO_PEDIDOS = [
   "aguardando_arte",

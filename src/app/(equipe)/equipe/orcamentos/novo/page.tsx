@@ -12,7 +12,7 @@ export default async function NewQuotePage() {
   if (!session) redirect("/equipe/entrar");
   return (
     <>
-      <StaffTopbar name={session.user.name} role={session.user.role} />
+      <StaffTopbar name={session.user.name} role={session.user.role} current="quadro" />
       <QuoteEditor />
     </>
   );

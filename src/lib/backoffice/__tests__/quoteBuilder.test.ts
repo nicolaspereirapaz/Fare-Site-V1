@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
+import { buildQuoteItems, draftFromItem, keepSavedPrices, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
 
 const CANETA: BuilderProduct = {
   publicId: "cf93", name: "Caneta Plástica c/ Det. Emborrachado", category: "Canetas e Lápis", imageUrl: "https://cdn/caneta.jpg",
@@ -210,5 +210,16 @@ describe("imagem do item fora do catálogo", () => {
     const { items } = buildQuoteItems(drafts, () => null, { name: "Bia" });
     expect(items[0].mockup).toBe(file);
     expect(draftFromItem(items[0])).toMatchObject({ source: "avulso", mockup: file });
+  });
+});
+
+describe("reabrir pedido/orçamento mantém o preço salvo", () => {
+  const draft = { id: "a", source: "catalogo" as const, publicId: "cf93", variant: "Azul", quantity: 100, gravacoes: [] };
+  it("catálogo mudou: preço salvo volta como digitado; igual: segue automático", () => {
+    const { items } = buildQuoteItems([draft], lookup, actor, NOW);
+    expect(keepSavedPrices([draft], items, lookup)).toEqual([draft]);
+    const old = [{ ...items[0], unitPrice: items[0].unitPrice! + 1 }];
+    expect(keepSavedPrices([draft], old, lookup)).toEqual([{ ...draft, priceOverride: items[0].unitPrice! + 1 }]);
+    expect(keepSavedPrices([{ ...draft, publicId: "sumiu" }], old, lookup)).toEqual([{ ...draft, publicId: "sumiu" }]);
   });
 });

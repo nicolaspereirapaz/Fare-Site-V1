@@ -45,3 +45,13 @@
   .pf-row-head { display: none; }
 }
 .pf-links { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+
+/* Fotos dentro da página do pedido */
+.pf-files { display: grid; gap: 10px; }
+.pf-files > h2 { margin: 0; }
+.pf-files > .pf-muted { margin: 0; }
+.pf-files .pf-folder code { flex: 0 1 auto; }
+.pf-files .pf-folder button { margin-left: auto; }
+.pf-files .pf-doc-link { margin-bottom: 0; }
+.pf-files .pf-line { margin-top: 4px; }
+.pf-line h3 { margin: 0 0 4px; color: var(--navy); font-family: var(--font-outfit), sans-serif; font-size: 1.05rem; }

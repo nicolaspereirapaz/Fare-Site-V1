@@ -8,5 +8,5 @@ export const metadata: Metadata = { title: "Novo pedido" };
 export default async function NewOrderPage() {
   const session = await getStaffSession();
   if (!session) redirect("/equipe/entrar");
-  return <><StaffTopbar name={session.user.name} role={session.user.role} /><QuoteEditor mode="order" /></>;
+  return <><StaffTopbar name={session.user.name} role={session.user.role} current="quadro" /><QuoteEditor mode="order" /></>;
 }

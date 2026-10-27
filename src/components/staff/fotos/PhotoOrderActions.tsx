@@ -39,7 +39,8 @@ export function PhotoOrderActions({ id, folder, deleted }: { id: string; folder:
     <div className="pf-actions">
       <div className="pf-folder">
         <span>Pasta do pedido</span>
-        <code>{folder}</code>
+        {/* Só o nome da pasta na tela; "Copiar caminho" leva o caminho inteiro. */}
+        <code title={folder}>{folder.split(/[\\/]/).pop()}</code>
         <button className="button button-secondary" onClick={copy} type="button">
           {copied ? <><Check aria-hidden="true" size={16} /> Copiado</> : <><Copy aria-hidden="true" size={16} /> Copiar caminho</>}
         </button>

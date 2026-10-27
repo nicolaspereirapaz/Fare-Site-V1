@@ -115,7 +115,22 @@
 .sd-payment-plan li { display:flex; justify-content:space-between; gap:10px; }
 .sd-payment-plan .sd-payment-due { color:#9a3412; font-weight:600; }
 .sd-comanda-print { display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.sd-comanda-pdf { font-size:.82rem; color:#5f6470; text-decoration:underline; }
 .sd-delivery-edit { display:grid; gap:8px; margin-top:10px; }
 .sd-delivery-edit label { display:grid; gap:4px; font-size:13px; color:#4b5168; }
 .sd-delivery-edit input { padding:7px 9px; border:1px solid #d6d9e4; border-radius:8px; font:inherit; }
+
+/* Mesma largura do topo da área da equipe (container-shell). */
+.sd-page { width: min(100% - 48px, 1280px); max-width: none; padding-inline: 0; }
+
+/* Comanda: "Imprimir" e "Baixar PDF" na largura do bloco, um embaixo do outro (lado a lado o texto quebrava). */
+.sd-comanda-print { display:grid; grid-template-columns:1fr; gap:9px; margin-top:9px; width:100%; }
+.sd-comanda-print .sd-comanda { margin-top:0; font-size:12px; }
+.sd-comanda-print small { grid-column:1/-1; }
+/* Consulta: valores gravados como texto (sem caixa cinza que parece campo editável). */
+.sd-page .qe-ro { background:none; padding-inline:0; min-height:0; }
+.sd-page .config-sheet .qe-ro { min-height:0; padding-block:2px; }
+.sd-page .qe-ro.qe-num { justify-content:flex-start; }
+
+/* Etapa ocupa a largura do bloco Andamento, como os botões abaixo. */
+.sd-flow .kb-stage { display:flex; width:100%; }
+.sd-flow .kb-stage select { flex:1; min-width:0; }

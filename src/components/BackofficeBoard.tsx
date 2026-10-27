@@ -6,7 +6,7 @@ import "@/components/staff/quoteEditor.css";
 import "@/components/staff/staffDocument.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardList, FileText, LayoutGrid, Plus, RefreshCw, TriangleAlert } from "lucide-react";
-import { COLUNAS_QUADRO_PEDIDOS, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
+import { COLUNAS_QUADRO_PEDIDOS, ORDER_STAFF_LABELS, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { OrderHistoryEntry } from "@/lib/backoffice/access";
 import type { QuoteBilling } from "@/lib/commerce";
 import {
@@ -48,17 +48,7 @@ export type BackofficeOrder = {
 };
 
 /** Nomes das situações no painel interno. */
-export const STATUS_LABELS: Record<StatusPedido, string> = {
-  aguardando_pagamento: "Aguardando pagamento",
-  aguardando_arte: "Aguardando arte",
-  criando_arte: "Criando arte",
-  aguardando_producao: "Aguardando produção",
-  em_producao: "Em produção",
-  aguardando_retirada: "Aguardando retirada",
-  aguardando_feedback: "Aguardando feedback",
-  concluido: "Finalizado",
-  cancelado: "Cancelado",
-};
+export const STATUS_LABELS = ORDER_STAFF_LABELS;
 
 /** Cor de cada etapa (bolinha da coluna e etiqueta nos detalhes). */
 export const STATUS_COLORS: Record<StatusPedido, { dot: string; bg: string; fg: string }> = {
@@ -196,7 +186,7 @@ function OrdersBoard({ freshOrderId, onFreshShown }: { freshOrderId?: string; on
     title: order.customerCompany || order.customerName,
     total: order.total,
     finance: order.finance,
-    tag: order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : undefined,
+    badge: order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : undefined,
     meta: order.status === "concluido"
       ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
       : order.finance?.paymentOnPickup ? 'Pagamento na retirada'

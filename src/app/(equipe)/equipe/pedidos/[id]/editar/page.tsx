@@ -13,7 +13,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   return (
     <>
-      <StaffTopbar name={session.user.name} role={session.user.role} />
+      <StaffTopbar name={session.user.name} role={session.user.role} current="quadro" />
       <QuoteEditor orderId={id} />
     </>
   );

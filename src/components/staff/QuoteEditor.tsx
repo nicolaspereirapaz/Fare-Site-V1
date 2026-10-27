@@ -1,7 +1,6 @@
 "use client";
 
 import { CustomerEdit } from "@/components/staff/CustomerEdit";
-import { PhotoLinkActions } from "@/components/staff/PhotoLinkActions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,10 +50,11 @@ function highlight(text: string, query: string) {
 
 /* ------------------------------------------------------------------ cliente */
 
-function CustomerPicker({ onPick }: { onPick: (customer: Customer) => void }) {
+/** startCreating: abre direto no cadastro (botão "Novo cliente" da página Clientes). */
+export function CustomerPicker({ onPick, startCreating = false, onCancel }: { onPick: (customer: Customer) => void; startCreating?: boolean; onCancel?: () => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(startCreating);
   const [form, setForm] = useState({ name: "", company: "", phone: "", email: "", document: "" });
   const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +122,7 @@ function CustomerPicker({ onPick }: { onPick: (customer: Customer) => void }) {
           </div>
         ) : null}
         <div className="qe-actions">
-          <button className="qe-btn qe-btn-secondary" onClick={() => setCreating(false)} type="button">Voltar</button>
+          <button className="qe-btn qe-btn-secondary" onClick={() => (onCancel ? onCancel() : setCreating(false))} type="button">{onCancel ? "Cancelar" : "Voltar"}</button>
           <button className="qe-btn qe-btn-primary" disabled={saving} onClick={save} type="button">{saving ? "Salvando…" : "Salvar cliente"}</button>
         </div>
       </div>
@@ -356,8 +356,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
 
   return (
     <main className="qe-page">
-      <div className="qe-crumb"><Link href={isOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{isOrder ? "Pedidos" : "Orçamentos"}</Link> / {docId ? "Editar" : "Novo"}</div>
-      <h1 className="qe-title">{editingOrder ? `Editar pedido ${orderCode(orderId!)}` : isOrder ? "Novo pedido" : quoteId ? "Editar orçamento" : "Novo orçamento"}</h1>
+      <div className="qe-crumb"><Link href={isOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{isOrder ? "Pedidos" : "Orçamentos"}</Link> / {docId ? <><Link href={editingOrder ? `/equipe/pedidos/${docId}` : `/equipe/orcamentos/${docId}/consulta`}>{editingOrder ? orderCode(docId) : quoteCode(docId)}</Link> / Editar</> : "Novo"}</div>
+      <h1 className="qe-title">{editingOrder ? `Editar pedido ${orderCode(orderId!)}` : isOrder ? "Novo pedido" : quoteId ? `Editar orçamento ${quoteCode(quoteId)}` : "Novo orçamento"}</h1>
       {!editable ? <p className="qe-error">{editingOrder ? "Este pedido já foi concluído ou cancelado e não pode mais ser alterado." : "Este orçamento já foi fechado e não pode mais ser alterado."}</p> : null}
       {editingOrder && editable ? <p className="qe-hint">Pagamento e entrega ficam na página do pedido. Aqui você altera itens, desconto e observação.</p> : null}
 
@@ -488,7 +488,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
           {!isOrder || editingOrder ? (
             <section className="qe-card">
               <h2>Fotos do cliente</h2>
-              {docId && editable ? <PhotoLinkActions kind={editingOrder ? "order" : "quote"} id={docId} />
+              {docId && editable ? <p className="qe-fhint">O link para o cliente enviar as fotos fica na <Link href={editingOrder ? `/equipe/pedidos/${docId}` : `/equipe/orcamentos/${docId}/consulta`}>página {editingOrder ? "do pedido" : "do orçamento"}</Link>, junto da proposta.</p>
                 : docId ? <p className="qe-fhint">Este documento não aceita mais fotos.</p>
                 : <p className="qe-fhint">Salve o orçamento para gerar o link em que o cliente envia as fotos.</p>}
             </section>

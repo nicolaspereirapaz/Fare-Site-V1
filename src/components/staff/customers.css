@@ -19,3 +19,11 @@
 .cl-invite-link small { flex-basis: 100%; color: var(--muted); }
 .cl-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e8f4ec; color: #1d6b3a; font-size: .78rem; font-weight: 700; }
 .cl-pro { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0 0; }
+
+/* Cabeçalho: título à esquerda, "Novo cliente" e convite à direita; o cadastro abre embaixo ocupando a linha. */
+.cl-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
+.cl-head .qe-title { margin: 0; }
+.cl-head-actions { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 10px; }
+.cl-head-actions:has(.cl-new) { flex-basis: 100%; justify-content: flex-start; }
+.cl-new { flex-basis: 100%; }
+.cl-page .qe-card h2 { margin-top: 0; }

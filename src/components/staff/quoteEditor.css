@@ -25,7 +25,7 @@
 .qe-btn-primary:not(:disabled):hover { background: var(--qe-orange-dark); }
 .qe-btn-secondary { background: #fff; color: var(--qe-ink); border-color: #d5d8e1; }
 .qe-btn-secondary:hover { border-color: #b9bdca; }
-.qe-btn-text { padding: 0; border: 0; background: none; color: var(--qe-lilac); font: 600 14px inherit; font-family: inherit; cursor: pointer; text-decoration: none; }
+.qe-btn-text { padding: 0; border: 0; background: none; color: var(--qe-lilac, #656fa4); font-weight: 600; font-size: 14px; font-family: inherit; cursor: pointer; text-decoration: none; }
 .qe-btn-text:hover { color: var(--qe-navy); }
 
 .qe-hint { margin: 8px 0 0; font-size: 13px; color: var(--qe-faint); }
@@ -482,3 +482,7 @@
 .qe-photo-box { display: grid; gap: 16px; }
 .qe-photo-box .qe-seg { width: fit-content; }
 .qe-photo-box .qe-seg button { padding: 0 16px; }
+
+/* Mesma largura do topo da área da equipe (container-shell). */
+.qe-page { width: min(100% - 48px, 1280px); max-width: none; padding-inline: 0; }
+.qe-fhint a { color: var(--qe-lilac); font-weight: 600; }

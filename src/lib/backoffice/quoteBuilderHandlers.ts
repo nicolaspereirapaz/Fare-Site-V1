@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { isProfessional } from "@/lib/professional";
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
-import { buildQuoteItems, draftFromItem, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
+import { buildQuoteItems, draftFromItem, keepSavedPrices, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
 import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type StaffMatch } from "@/lib/backoffice/productSearch";
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
@@ -235,8 +235,9 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       if (access.error) return access.error;
       const quote = findQuoteById(deps.database(), quoteId);
       if (!quote) return json({ error: "QUOTE_NOT_FOUND" }, 404);
-      const state = { ...editorState(quote), customerProfessional: isProfessional(deps.database(), quote.userId) };
       const catalog = await deps.catalog();
+      const base = editorState(quote);
+      const state = { ...base, items: keepSavedPrices(base.items, quote.items, catalog.lookup), customerProfessional: isProfessional(deps.database(), quote.userId) };
       const products: Record<string, ReturnType<typeof toEditorProduct>> = {};
       for (const item of state.items) {
         if (item.source !== "catalogo" || products[item.publicId]) continue;
@@ -289,8 +290,8 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       const order = findOrderById(deps.database(), orderId);
       if (!order) return json({ error: "ORDER_NOT_FOUND" }, 404);
       const finance = getOrderFinance(deps.database(), orderId);
-      const items = order.items.map(draftFromItem);
       const catalog = await deps.catalog();
+      const items = keepSavedPrices(order.items.map(draftFromItem), order.items, catalog.lookup);
       const products: Record<string, ReturnType<typeof toEditorProduct>> = {};
       for (const item of items) {
         if (item.source !== "catalogo" || products[item.publicId]) continue;

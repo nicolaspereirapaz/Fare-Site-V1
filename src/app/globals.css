@@ -6633,3 +6633,21 @@ aside.checkout-card .checkout-mode > label.active {
 .seo-ideas strong { color: var(--navy); }
 .seo-ideas span { color: var(--muted); font-size: .92rem; line-height: 1.5; }
 .seo-ideas em { display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-weight: 700; color: var(--orange); font-size: .88rem; }
+
+/* Revisão da área da equipe (27/10): menu com item ativo, selo "Equipe" e quadros com a mesma largura. */
+.staff-topbar .staff-brand { text-decoration: none; }
+.staff-topbar .staff-brand span { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.staff-topbar-nav a { border-bottom: 2px solid transparent; padding: 4px 0; }
+.staff-topbar-nav a[aria-current="page"] { border-bottom-color: #f65c2d; color: var(--navy-dark); }
+.staff-topbar-nav a:hover { text-decoration: none; border-bottom-color: var(--line); }
+.staff-topbar-nav a[aria-current="page"]:hover { border-bottom-color: #f65c2d; }
+/* Títulos de coluna inteiros (quebram em 2 linhas em vez de "Aguardando produ…"); cabeçalhos com a mesma altura. */
+.kb-column-header h2 { white-space: normal; overflow: visible; line-height: 1.2; }
+.kb-board-6 .kb-column-header { align-items: flex-start; min-height: 49px; }
+/* Etiqueta de origem (Fotos do site, Pedido do site) no topo do cartão. */
+.kb-card-tag { display: flex; margin-bottom: 6px; }
+@media (min-width: 1101px) {
+  /* Pedidos e Orçamentos ocupam a mesma largura: as abas e o botão não pulam ao trocar. */
+  .kb-toolbar-3, .kb-toolbar-6 { max-width: calc(7 * 250px + 6 * 10px); }
+  .kb-board-3 { width: 100%; max-width: calc(7 * 250px + 6 * 10px); grid-template-columns: repeat(3, minmax(250px, 1fr)); }
+}

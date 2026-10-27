@@ -6,10 +6,14 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { staffAuthClient } from "@/lib/staff/client";
 
+// Pedidos e Orçamentos são abas do Quadro; o menu não repete as abas.
+const NAV = [["quadro", "/equipe", "Quadro"], ["clientes", "/equipe/clientes", "Clientes"]] as const;
+
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", vendedor: "Vendedor" };
 
 /** Barra do topo da área da equipe: marca, quem está logado e Sair. Sem nada da loja. */
-export function StaffTopbar({ name, role }: { name: string; role: string }) {
+/** current: item do menu da página aberta (destaca e marca aria-current). */
+export function StaffTopbar({ name, role, current }: { name: string; role: string; current?: "quadro" | "clientes" }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -23,14 +27,13 @@ export function StaffTopbar({ name, role }: { name: string; role: string }) {
   return (
     <header className="staff-topbar">
       <div className="staff-topbar-inner container-shell">
-        <div className="staff-brand">
+        <Link className="staff-brand" href="/equipe">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img alt="Fare Foto" height={50} src="/images/fare-foto-logo-slogan.svg" width={92} />
           <span>Equipe</span>
-        </div>
+        </Link>
         <nav className="staff-topbar-nav" aria-label="Área da equipe">
-          <Link href="/equipe">Painel</Link>
-          <Link href="/equipe/clientes">Clientes cadastrados</Link>
+          {NAV.map(([key, href, label]) => <Link aria-current={current === key ? "page" : undefined} href={href} key={key}>{label}</Link>)}
         </nav>
         <div className="staff-topbar-user">
           <span className="staff-topbar-name">{name}</span>

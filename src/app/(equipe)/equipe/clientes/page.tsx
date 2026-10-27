@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ProfessionalInvite } from "@/components/staff/ProfessionalControls";
+import { NewCustomerButton } from "@/components/staff/NewCustomerButton";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
 import { database } from "@/lib/auth";
 import { listCustomers } from "@/lib/customers/repository";
 import { getStaffSession } from "@/lib/staff/server";
+import "@/components/staff/quoteEditor.css";
 import "@/components/staff/customers.css";
 
-export const metadata: Metadata = { title: "Clientes cadastrados" };
+export const metadata: Metadata = { title: "Clientes" };
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -19,10 +21,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const customers = listCustomers(database, q);
   return (
     <>
-      <StaffTopbar name={session.user.name} role={session.user.role} />
-      <main className="container-shell cl-page">
-        <h1>Clientes cadastrados</h1>
-        <ProfessionalInvite />
+      <StaffTopbar name={session.user.name} role={session.user.role} current="clientes" />
+      <main className="qe-page cl-page">
+        <div className="cl-head"><h1 className="qe-title">Clientes</h1><div className="cl-head-actions"><NewCustomerButton /><ProfessionalInvite /></div></div>
         <form className="cl-search" role="search">
           <input aria-label="Buscar cliente" defaultValue={q} name="q" placeholder="Nome, empresa, WhatsApp, e-mail ou CPF/CNPJ" />
           <button className="kb-secondary" type="submit">Buscar</button>

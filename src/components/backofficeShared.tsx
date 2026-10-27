@@ -148,7 +148,7 @@ export function KanbanColumn({ id, title, color, count, empty, total, children }
         <h2 id={headingId}>{title}</h2>
         <span className="kb-count">{count}</span>
       </header>
-      {total !== undefined && count > 0 ? <p className="kb-column-total">{formatCurrency(total)}</p> : null}
+      {total !== undefined ? <p className="kb-column-total">{formatCurrency(total)}</p> : null}
       <div className="kb-column-body">{count === 0 ? <p className="kb-empty">{empty}</p> : children}</div>
     </section>
   );
@@ -160,15 +160,18 @@ type CardProps = {
   title: string;
   summary: string;
   tag?: ReactNode;
+  /** Etiqueta de origem no topo do cartão (Fotos do site, Pedido do site). */
+  badge?: ReactNode;
   /** Rodapé discreto: data, quem fez, proposta enviada… */
   meta?: string;
   finance?: OrderFinance | null;
 };
 
 /** Conteúdo do cartão (usado no quadro e no cartão "flutuando" durante o arraste). */
-export function KanbanCardBody({ code, total, title, summary, tag, meta, finance }: CardProps) {
+export function KanbanCardBody({ code, total, title, summary, tag, badge, meta, finance }: CardProps) {
   return (
     <>
+      {badge ? <div className="kb-card-tag">{badge}</div> : null}
       <div className="kb-card-row">
         <span className="kb-code">#{code}</span>
         <span className="kb-value">{total === null ? "Sob consulta" : formatCurrency(total)}</span>

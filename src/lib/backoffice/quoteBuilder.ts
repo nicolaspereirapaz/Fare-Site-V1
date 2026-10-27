@@ -246,6 +246,19 @@ export function buildQuoteItems(
 }
 
 /** Item gravado → rascunho para abrir de novo no editor. */
+/**
+ * Reabrir no editor: se a regra de hoje dá outro preço (catálogo ou custo mudou), o preço salvo
+ * volta como digitado. Assim salvar não muda sozinho o total já combinado com o cliente.
+ */
+export function keepSavedPrices(drafts: DraftItem[], saved: QuoteCartItem[], lookup: (publicId: string) => BuilderProduct | null): DraftItem[] {
+  return drafts.map((draft, index) => {
+    const price = saved[index]?.unitPrice;
+    if (draft.priceOverride !== undefined || price == null) return draft;
+    const [rebuilt] = buildQuoteItems([draft], lookup, { name: "" }).items;
+    return rebuilt && rebuilt.unitPrice !== price ? { ...draft, priceOverride: price } : draft;
+  });
+}
+
 export function draftFromItem(item: QuoteCartItem): DraftItem {
   const costing = item.costing ?? null;
   let gravacoes: DraftGravacao[] = [];

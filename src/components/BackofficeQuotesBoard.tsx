@@ -151,7 +151,7 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
   const orderCard = (order: BackofficeOrder) => ({
     code: order.code,
     summary: itemsSummary(order.items),
-    tag: order.photos
+    badge: order.photos
       ? <span className="kb-tag kb-tag-photos"><Camera aria-hidden="true" size={12} /> Fotos do site</span>
       : <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
     title: order.customerCompany || order.customerName,

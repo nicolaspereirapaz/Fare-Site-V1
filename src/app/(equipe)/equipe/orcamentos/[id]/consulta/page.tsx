@@ -10,5 +10,5 @@ export const metadata:Metadata={title:'Consultar orçamento'};
 export default async function QuotePage({params}:{params:Promise<{id:string}>}){
  const session=await getStaffSession();if(!session)redirect('/equipe/entrar');
  const {id}=await params;
- return <><StaffTopbar name={session.user.name} role={session.user.role}/><StaffDocumentPage key={id} kind="quote" id={id} canCancel={canCancelOrders(session.user.role)}/></>;
+ return <><StaffTopbar name={session.user.name} role={session.user.role} current="quadro"/><StaffDocumentPage key={id} kind="quote" id={id} canCancel={canCancelOrders(session.user.role)}/></>;
 }

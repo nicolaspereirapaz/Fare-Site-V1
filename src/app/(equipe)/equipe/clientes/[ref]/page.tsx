@@ -6,7 +6,7 @@ import { ProfessionalToggle } from "@/components/staff/ProfessionalControls";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
 import { database } from "@/lib/auth";
 import { customerHistory, resolveCustomer } from "@/lib/customers/repository";
-import { ORDER_STATUS_LABELS } from "@/lib/orders/labels";
+import { ORDER_STAFF_LABELS } from "@/lib/backoffice/orderStatus";
 import { orderCode } from "@/lib/orders/orderCode";
 import { QUOTE_STATUS_LABELS, quoteCode } from "@/lib/quotes/quoteCode";
 import { getStaffSession } from "@/lib/staff/server";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const brl = (cents: number | null) => (cents === null ? "Sob consulta" : (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const day = (iso: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date(iso));
 const quoteLabels = QUOTE_STATUS_LABELS as Record<string, string>;
-const orderLabels = ORDER_STATUS_LABELS as Record<string, string>;
+const orderLabels = ORDER_STAFF_LABELS as Record<string, string>;
 
 /** Cliente: dados (com "Editar") e todo o histórico de orçamentos e pedidos. */
 export default async function CustomerPage({ params }: { params: Promise<{ ref: string }> }) {
@@ -33,10 +33,10 @@ export default async function CustomerPage({ params }: { params: Promise<{ ref: 
   const ordersTotal = orders.reduce((sum, entry) => sum + (entry.totalCents ?? 0), 0);
   return (
     <>
-      <StaffTopbar name={session.user.name} role={session.user.role} />
-      <main className="container-shell cl-page">
-        <p><Link href="/equipe/clientes">← Clientes cadastrados</Link></p>
-        <h1>{customer.name}</h1>
+      <StaffTopbar name={session.user.name} role={session.user.role} current="clientes" />
+      <main className="qe-page cl-page">
+        <div className="qe-crumb"><Link href="/equipe/clientes">Clientes</Link> / {customer.name}</div>
+        <h1 className="qe-title">{customer.name}</h1>
         <p className="cl-count">
           {customer.kind === "conta" ? "Conta no site" : `Cadastrado por ${customer.createdBy ?? "equipe"}`} · {orders.length} {orders.length === 1 ? "pedido" : "pedidos"} · {brl(ordersTotal)} em pedidos
         </p>
