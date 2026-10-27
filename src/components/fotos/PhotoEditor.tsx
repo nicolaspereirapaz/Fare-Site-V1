@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import {
   ADJUSTMENTS, BORDERS, CopiesInput, FILTERS, PAPERS, PhotoLayers, PhotoRender, SizePicker, areaInset, fitWidth, layout, paperLabel,
-  patchPhoto, realLabel, photoStore, quality, setPhotos, sizeById, type Photo,
+  ZOOM, patchPhoto, realLabel, photoStore, quality, setPhotos, sizeById, type Photo,
 } from "@/components/fotos/shared";
 import "./editor.css";
 
@@ -136,7 +136,6 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
 
   const g = layout(photo);
   const q = quality(g.dpi);
-  const canMove = photo.fit === "preencher";
 
   // Arrastar com um dedo/mouse, pinça com dois dedos.
   const paper = useRef<HTMLDivElement>(null);
@@ -148,7 +147,7 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
     gesture.current = { x: a.x, y: a.y, px: p.x, py: p.y, zoom: p.zoom, dist: b ? Math.hypot(a.x - b.x, a.y - b.y) : 0 };
   }
   function onPointerDown(event: ReactPointerEvent) {
-    if (!canMove || (event.target as HTMLElement).closest("button")) return;
+    if ((event.target as HTMLElement).closest("button")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     startGesture();
@@ -160,7 +159,7 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
     const pts = [...pointers.current.values()];
     const start = gesture.current;
     if (pts.length >= 2 && start.dist) {
-      live({ zoom: clamp((start.zoom * Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)) / start.dist, 1, 4) });
+      live({ zoom: clamp((start.zoom * Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)) / start.dist, ZOOM.min, ZOOM.max) });
       return;
     }
     const area = paper.current?.querySelector(".print-area")?.getBoundingClientRect();
@@ -168,8 +167,8 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
     const overflowW = (area.width * (g.w - 100)) / 100;
     const overflowH = (area.height * (g.h - 100)) / 100;
     live({
-      x: overflowW > 0 ? clamp(start.px - (pts[0].x - start.x) / overflowW, 0, 1) : 0.5,
-      y: overflowH > 0 ? clamp(start.py - (pts[0].y - start.y) / overflowH, 0, 1) : 0.5,
+      x: overflowW ? clamp(start.px - (pts[0].x - start.x) / overflowW, 0, 1) : 0.5,
+      y: overflowH ? clamp(start.py - (pts[0].y - start.y) / overflowH, 0, 1) : 0.5,
     });
   }
   function onPointerUp(event: ReactPointerEvent) {
@@ -192,7 +191,7 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
   }
   function moveResize(event: ReactPointerEvent) {
     const start = resize.current;
-    if (start) live({ zoom: clamp((start.zoom * Math.hypot(event.clientX - start.cx, event.clientY - start.cy)) / start.dist, 1, 4) });
+    if (start) live({ zoom: clamp((start.zoom * Math.hypot(event.clientX - start.cx, event.clientY - start.cy)) / start.dist, ZOOM.min, ZOOM.max) });
   }
   function endResize() {
     if (!resize.current) return;
@@ -205,7 +204,7 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
     const step = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05 }[event.key];
     if (!step) return;
     event.preventDefault();
-    live({ zoom: clamp(latest.current.zoom + step, 1, 4) });
+    live({ zoom: clamp(latest.current.zoom + step, ZOOM.min, ZOOM.max) });
   }
 
   const hold = {
@@ -261,12 +260,12 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
 
         <main className="ce-main">
           <div
-            className={`ce-canvas${canMove ? " movable" : ""}${dragging ? " dragging" : ""}`}
+            className={`ce-canvas movable${dragging ? " dragging" : ""}`}
             onPointerCancel={onPointerUp}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            onWheel={(event) => { if (canMove) live({ zoom: clamp(latest.current.zoom * (1 - event.deltaY * 0.0015), 1, 4) }); }}
+            onWheel={(event) => { live({ zoom: clamp(latest.current.zoom * (1 - event.deltaY * 0.0015), ZOOM.min, ZOOM.max) }); }}
           >
             {q.tone === "low" ? (
               <p className="ce-warning"><Info aria-hidden="true" size={16} /> A foto pode sair borrada neste tamanho. Diminua o zoom ou escolha um tamanho menor.</p>
@@ -278,12 +277,12 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
             <div className="ce-stage">
               <div className="ce-paper" ref={paper} style={{ aspectRatio: `${g.W} / ${g.H}`, width: fitWidth(g.W, g.H) }}>
                 {/* Fora do papel aparece clarinho o que vai ser cortado, como no Canva. */}
-                {tool === "cortar" && canMove && !comparing ? (
+                {tool === "cortar" && !comparing ? (
                   <div aria-hidden="true" className="ce-ghost" style={areaInset(photo)}><PhotoLayers photo={photo} /></div>
                 ) : null}
                 <PhotoRender original={comparing} photo={photo} />
                 {dragging ? <div aria-hidden="true" className="ce-grid" style={areaInset(photo)} /> : null}
-                {tool === "cortar" && canMove && !comparing ? (
+                {tool === "cortar" && !comparing ? (
                   <div className="ce-handles-area" style={areaInset(photo)}>
                     <div className="ce-handles" ref={box} style={{ left: `${g.left}%`, top: `${g.top}%`, width: `${g.w}%`, height: `${g.h}%` }}>
                       {(["nw", "ne", "sw", "se"] as const).map((corner) => (
@@ -306,7 +305,7 @@ export function PhotoEditor({ photos, index, onNavigate, onClose }: {
             </div>
 
             <div className="ce-canvas-foot">
-              {tool === "cortar" && canMove ? (
+              {tool === "cortar" ? (
                 <span className="ce-hint">
                   <Move aria-hidden="true" size={15} />
                   <span className="fine-pointer">Arraste a foto · puxe as quinas ou role o mouse para zoom</span>
@@ -352,7 +351,6 @@ function Thumb({ photo, filter }: { photo: Photo; filter?: Photo["filter"] }) {
 }
 
 function CropPanel({ photo, edit, live }: PanelProps) {
-  const canMove = photo.fit === "preencher";
   const reset = { zoom: 1, x: 0.5, y: 0.5 };
   return (
     <>
@@ -370,23 +368,20 @@ function CropPanel({ photo, edit, live }: PanelProps) {
       </Group>
 
       <Group aside={<output className="ce-value">{Math.round(photo.zoom * 100)}%</output>} title="Zoom">
-        <div className={`ce-zoom${canMove ? "" : " disabled"}`}>
-          <button aria-label="Diminuir zoom" disabled={!canMove || photo.zoom <= 1} onClick={() => edit({ zoom: clamp(photo.zoom - 0.25, 1, 4) })} type="button"><Minus aria-hidden="true" size={18} /></button>
-          <input aria-label="Zoom" disabled={!canMove} max={4} min={1} onChange={(e) => live({ zoom: Number(e.target.value) })} step={0.01} style={{ "--to": `${((photo.zoom - 1) / 3) * 100}%` } as React.CSSProperties} type="range" value={photo.zoom} />
-          <button aria-label="Aumentar zoom" disabled={!canMove || photo.zoom >= 4} onClick={() => edit({ zoom: clamp(photo.zoom + 0.25, 1, 4) })} type="button"><Plus aria-hidden="true" size={18} /></button>
+        <div className="ce-zoom">
+          <button aria-label="Diminuir zoom" disabled={photo.zoom <= ZOOM.min} onClick={() => edit({ zoom: clamp(photo.zoom - 0.25, ZOOM.min, ZOOM.max) })} type="button"><Minus aria-hidden="true" size={18} /></button>
+          <input aria-label="Zoom" max={ZOOM.max} min={ZOOM.min} onChange={(e) => live({ zoom: Number(e.target.value) })} step={0.01} style={{ "--to": `${((photo.zoom - ZOOM.min) / (ZOOM.max - ZOOM.min)) * 100}%` } as React.CSSProperties} type="range" value={photo.zoom} />
+          <button aria-label="Aumentar zoom" disabled={photo.zoom >= ZOOM.max} onClick={() => edit({ zoom: clamp(photo.zoom + 0.25, ZOOM.min, ZOOM.max) })} type="button"><Plus aria-hidden="true" size={18} /></button>
         </div>
-        {!canMove ? <p className="ce-note">Em “Encaixar” a foto aparece inteira. Para cortar e dar zoom, escolha “Preencher”.</p> : null}
       </Group>
 
-      {/* Foto retrô: a moldura é sempre em pé. */}
-      {sizeById(photo.sizeId).frame ? null : (
-        <Group title="Papel">
-          <div className="ce-seg">
-            <button className={!photo.landscape ? "active" : ""} onClick={() => edit({ landscape: false, x: 0.5, y: 0.5 })} type="button"><RectangleVertical aria-hidden="true" size={20} /> Em pé</button>
-            <button className={photo.landscape ? "active" : ""} onClick={() => edit({ landscape: true, x: 0.5, y: 0.5 })} type="button"><RectangleHorizontal aria-hidden="true" size={20} /> Deitado</button>
-          </div>
-        </Group>
-      )}
+      {/* Foto retrô: "Deitado" gira a moldura (foto horizontal numa Polaroid/Instax). */}
+      <Group title={sizeById(photo.sizeId).frame ? "Moldura" : "Papel"}>
+        <div className="ce-seg">
+          <button className={!photo.landscape ? "active" : ""} onClick={() => edit({ landscape: false, x: 0.5, y: 0.5 })} type="button"><RectangleVertical aria-hidden="true" size={20} /> Em pé</button>
+          <button className={photo.landscape ? "active" : ""} onClick={() => edit({ landscape: true, x: 0.5, y: 0.5 })} type="button"><RectangleHorizontal aria-hidden="true" size={20} /> Deitado</button>
+        </div>
+      </Group>
 
       <button className="ce-ghost-button" disabled={photo.zoom === 1 && photo.x === 0.5 && photo.y === 0.5} onClick={() => edit(reset)} type="button">
         <RotateCcw aria-hidden="true" size={17} /> Centralizar e tirar o zoom

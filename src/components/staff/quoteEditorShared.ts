@@ -20,7 +20,7 @@ export type Gravacao = { tecnica: Tecnica; local: string; custoOverride?: string
 type Manual = { costOverride?: string; priceOverride?: string };
 export type Item =
   | ({ id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: Gravacao[] } & Manual)
-  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: Gravacao[]; mockup?: string } & Manual);
+  | ({ id: string; source: "avulso"; name: string; cost: number; transport?: number; quantity: number; gravacoes: Gravacao[]; mockup?: string } & Manual);
 export type PreviewGravacao = { descricao: string; local: string; detalhe: string; custoUnitario: number; custoTotal: number; manual?: true };
 export type PreviewOk = { id: string; ok: true; unitPrice: number; total: number; cost: number; productCost: number; gravacoes: PreviewGravacao[]; stockWarning?: string; manual: { cost: boolean; price: boolean }; suggestedPrice: number };
 export type Preview = PreviewOk | { id: string; ok: false; error: string };

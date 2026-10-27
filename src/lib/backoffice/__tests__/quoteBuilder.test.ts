@@ -57,9 +57,14 @@ describe("itens do orçamento montados no servidor", () => {
 
   it("item fora do catálogo: nome e custo do vendedor, sem link de produto", () => {
     const { items, preview } = buildQuoteItems([
-      { id: "b", source: "avulso", name: "Banner lona 90×120 cm", cost: 38, quantity: 2, gravacoes: [] },
+      { id: "b", source: "avulso", name: "Banner lona 90×120 cm", cost: 38, transport: 100, quantity: 2, gravacoes: [] },
     ], lookup, actor, NOW);
     expect(preview[0]).toMatchObject({ ok: true, unitPrice: 126, total: 252 });
+    expect(items[0].costing?.freteFornecedor).toBe(100);
+    expect(draftFromItem(items[0])).toMatchObject({ transport: 100 });
+    // Sem transporte digitado: nada de frete fixo.
+    const semTransporte = buildQuoteItems([{ id: "b", source: "avulso", name: "Banner", cost: 38, quantity: 2, gravacoes: [] }], lookup, actor, NOW);
+    expect(semTransporte.preview[0]).toMatchObject({ ok: true, unitPrice: 76, total: 152 });
     expect(items[0]).toMatchObject({ productName: "Banner lona 90×120 cm", selections: {}, unitPrice: 126, codes: null });
     expect(items[0].slug).toMatch(/^avulso:/);
     expect(items[0].costing?.custoProduto).toBe(38);
@@ -74,7 +79,7 @@ describe("itens do orçamento montados no servidor", () => {
     expect(preview.map((item) => item.ok)).toEqual([false, false, true]);
     expect(preview[0]).toMatchObject({ error: expect.stringMatching(/largura/i) });
     expect(preview[1]).toMatchObject({ error: expect.stringMatching(/não está mais no catálogo/i) });
-    expect(totals).toMatchObject({ total: 252, pending: 2 });
+    expect(totals).toMatchObject({ total: 152, pending: 2 });
   });
 
   it("cor que não existe mais vira erro do item, não troca de cor sozinha", () => {

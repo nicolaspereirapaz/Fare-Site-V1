@@ -129,10 +129,9 @@ export async function renderCard(sourceFile: string, size: { width: number; heig
   const inset = { left: cmToPx(g.inset.left), top: cmToPx(g.inset.top), right: cmToPx(g.inset.right), bottom: cmToPx(g.inset.bottom) };
   const areaW = W - inset.left - inset.right;
   const areaH = H - inset.top - inset.bottom;
-  const fill = edits.fit === "preencher";
-  // Preencher: a foto cobre a área toda (o arredondamento nunca pode deixar uma fresta).
-  const imageW = Math.max(fill ? areaW : 1, Math.round((g.w / 100) * areaW));
-  const imageH = Math.max(fill ? areaH : 1, Math.round((g.h / 100) * areaH));
+  // Foto maior que a área: cobre a área toda (o arredondamento nunca pode deixar uma fresta).
+  const imageW = Math.max(g.w >= 100 ? areaW : 1, Math.round((g.w / 100) * areaW));
+  const imageH = Math.max(g.h >= 100 ? areaH : 1, Math.round((g.h / 100) * areaH));
   const left = Math.round((g.left / 100) * areaW);
   const top = Math.round((g.top / 100) * areaH);
 
@@ -141,23 +140,20 @@ export async function renderCard(sourceFile: string, size: { width: number; heig
   const color = photoColor(edits);
   if (!isIdentity(color)) image = image.recomb(color.m as [[number, number, number], [number, number, number], [number, number, number]]).linear([1, 1, 1], color.o.map((v) => v * 255));
 
-  let placed: Buffer;
-  let at: { left: number; top: number };
-  if (fill) {
-    // Preencher: a foto é maior que a área; recorta o pedaço que o cliente posicionou.
-    const cropLeft = Math.min(Math.max(0, -left), imageW - areaW);
-    const cropTop = Math.min(Math.max(0, -top), imageH - areaH);
-    placed = await image.extract({ left: cropLeft, top: cropTop, width: areaW, height: areaH }).toBuffer();
-    at = { left: inset.left, top: inset.top };
-  } else {
-    // Encaixar: a foto inteira cabe na área, com papel branco em volta.
-    placed = await image.toBuffer();
-    at = { left: inset.left + Math.max(0, left), top: inset.top + Math.max(0, top) };
-  }
+  // Em cada lado: foto maior que a área recorta o pedaço posicionado; menor fica inteira, com branco em volta.
+  const x = span(left, imageW, areaW);
+  const y = span(top, imageH, areaH);
+  const placed = await image.extract({ left: x.crop, top: y.crop, width: x.len, height: y.len }).toBuffer();
 
   const buffer = await sharp({ create: { width: W, height: H, channels: 3, background: "#ffffff" } })
-    .composite([{ input: placed, ...at }])
+    .composite([{ input: placed, left: inset.left + x.at, top: inset.top + y.at }])
     .png()
     .toBuffer();
+  // Retrô deitada: o cartão volta a ficar em pé na folha (faixa larga embaixo, foto de lado).
+  if (sizeById(edits.sizeId).frame && edits.landscape) return { buffer: await sharp(buffer).rotate(90).png().toBuffer(), width: H, height: W };
   return { buffer, width: W, height: H };
 }
+
+const span = (pos: number, size: number, area: number) => size >= area
+  ? { crop: Math.min(Math.max(0, -pos), size - area), len: area, at: 0 }
+  : { crop: 0, len: size, at: Math.min(Math.max(0, pos), area - size) };

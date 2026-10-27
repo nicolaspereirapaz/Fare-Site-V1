@@ -275,37 +275,35 @@ export function realLabel(size: Size) {
   return `${num(real.width)} × ${num(real.height)} cm`;
 }
 
+/** Zoom da foto: abaixo de 1 a foto fica menor que a área e sobra branco (em Preencher e em Encaixar). */
+export const ZOOM = { min: 0.5, max: 4 };
+
 export function layout(photo: Photo) {
   const size = sizeById(photo.sizeId);
   const frame = size.frame;
   const print = printSize(size);
-  // Foto retrô: cartão sempre em pé, janela fixa da moldura (sem borda escolhida).
-  const W = frame ? frame.card.width : photo.landscape ? Math.max(print.width, print.height) : Math.min(print.width, print.height);
-  const H = frame ? frame.card.height : photo.landscape ? Math.min(print.width, print.height) : Math.max(print.width, print.height);
+  const short = frame ? frame.card.width : Math.min(print.width, print.height);
+  const long = frame ? frame.card.height : Math.max(print.width, print.height);
+  const W = photo.landscape ? long : short;
+  const H = photo.landscape ? short : long;
+  // Foto retrô: janela fixa da moldura (sem borda escolhida). Deitada = cartão girado, faixa larga à direita.
   const b = frame ? 0 : photo.border;
   /** Margem branca entre o papel/cartão e a foto, em cm, em cada lado. */
-  const inset = frame
-    ? { left: frame.window.left, top: frame.window.top, right: W - frame.window.left - frame.window.width, bottom: H - frame.window.top - frame.window.height }
+  let inset = frame
+    ? { left: frame.window.left, top: frame.window.top, right: short - frame.window.left - frame.window.width, bottom: long - frame.window.top - frame.window.height }
     : { left: b, top: b, right: b, bottom: b };
+  if (frame && photo.landscape) inset = { left: inset.top, top: inset.right, right: inset.bottom, bottom: inset.left };
   const iw = W - inset.left - inset.right;
   const ih = H - inset.top - inset.bottom;
   const ai = iw / ih;
   const am = photo.w / photo.h;
-  let w: number;
-  let h: number;
-  let left: number;
-  let top: number;
-  if (photo.fit === "preencher") {
-    [w, h] = am > ai ? [(am / ai) * 100, 100] : [100, (ai / am) * 100];
-    w *= photo.zoom;
-    h *= photo.zoom;
-    left = -(w - 100) * photo.x;
-    top = -(h - 100) * photo.y;
-  } else {
-    [w, h] = am > ai ? [100, (ai / am) * 100] : [(am / ai) * 100, 100];
-    left = (100 - w) / 2;
-    top = (100 - h) / 2;
-  }
+  // Preencher cobre a área, Encaixar mostra a foto inteira; depois o zoom e a posição valem nos dois.
+  const [baseW, baseH] = (am > ai) === (photo.fit === "preencher") ? [(am / ai) * 100, 100] : [100, (ai / am) * 100];
+  const w = baseW * photo.zoom;
+  const h = baseH * photo.zoom;
+  // x/y de 0 a 1: maior que a área escolhe o pedaço visível; menor, onde a foto fica no branco.
+  const left = -(w - 100) * photo.x;
+  const top = -(h - 100) * photo.y;
   const dpi = Math.round(photo.w / (((w / 100) * iw) / 2.54));
   return { W, H, b, inset, w, h, left, top, dpi };
 }

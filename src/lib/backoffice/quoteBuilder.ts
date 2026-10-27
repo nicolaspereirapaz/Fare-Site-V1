@@ -32,7 +32,8 @@ export type DraftGravacao = { tecnica: Record<string, unknown> & { tipo: string 
 type ManualValues = { costOverride?: number; priceOverride?: number };
 export type DraftItem =
   | ({ id: string; source: "catalogo"; publicId: string; variant: string; quantity: number; gravacoes: DraftGravacao[] } & ManualValues)
-  | ({ id: string; source: "avulso"; name: string; cost: number; quantity: number; gravacoes: DraftGravacao[]; mockup?: string } & ManualValues);
+  /** transport: transporte do item fora do catálogo, valor total da quantidade (vazio = sem transporte). */
+  | ({ id: string; source: "avulso"; name: string; cost: number; transport?: number; quantity: number; gravacoes: DraftGravacao[]; mockup?: string } & ManualValues);
 
 export type ItemPreview =
   | {
@@ -112,7 +113,8 @@ export function parseDraftItems(raw: unknown): DraftItem[] {
       const name = String(item.name ?? "").trim().slice(0, 120);
       // Imagem enviada do computador (arquivo em data/mockups); só aceita nome gerado pelo envio.
       const mockup = typeof item.mockup === "string" && isMockupFile(item.mockup) ? { mockup: item.mockup } : {};
-      return { id, source: "avulso" as const, name, cost: toNumber(item.cost), quantity, gravacoes, ...mockup, ...manual };
+      const transport = optionalNumber(item.transport, `Item ${index + 1}: transporte inválido.`);
+      return { id, source: "avulso" as const, name, cost: toNumber(item.cost ?? 0), ...(transport ? { transport } : {}), quantity, gravacoes, ...mockup, ...manual };
     }
     return {
       id,
@@ -162,6 +164,7 @@ export function buildQuoteItems(
       if (draft.source === "avulso") {
         if (draft.name.length < 2) throw new Error("Informe o nome do item.");
         if (!(draft.cost >= 0)) throw new Error("Informe o custo por peça do item.");
+        if (draft.transport !== undefined && !(draft.transport >= 0)) throw new Error("Transporte inválido.");
       }
       const variant = product && draft.source === "catalogo" ? product.variants.find((entry) => entry.label === draft.variant) ?? null : null;
       // Nunca troca de cor sozinho: a cor escolhida pode ter saído do catálogo.
@@ -169,8 +172,8 @@ export function buildQuoteItems(
       if (draft.costOverride !== undefined && !(draft.costOverride >= 0)) throw new Error("Custo do produto inválido.");
       if (draft.priceOverride !== undefined && !(cents(draft.priceOverride) > 0)) throw new Error("Preço de venda inválido.");
       const productCost = draft.costOverride ?? (variant ? variant.cost : (draft as Extract<DraftItem, { source: "avulso" }>).cost);
-      // Foto (revelação/ampliação) é feita na loja: sem frete de fornecedor.
-      const freteFornecedor = draft.source === "avulso" && photoFromName(draft.name) ? 0 : FRETE_FORNECEDOR_PRODUTO;
+      // Fora do catálogo: só o transporte digitado (total da quantidade). Catálogo: frete fixo do fornecedor.
+      const freteFornecedor = draft.source === "avulso" ? draft.transport ?? 0 : FRETE_FORNECEDOR_PRODUTO;
 
       const calc = calcularItemOrcamento({
         custoProduto: productCost,
@@ -283,5 +286,7 @@ export function draftFromItem(item: QuoteCartItem): DraftItem {
   }
   // Avulso: o custo já é sempre digitado (fica em "cost"); só o preço pode ser à mão.
   const { priceOverride } = manualValues as { priceOverride?: number };
-  return { id: item.id, source: "avulso", name: item.productName, cost: costing?.custoProduto ?? 0, quantity: item.quantity, gravacoes, ...(item.mockup ? { mockup: item.mockup } : {}), ...(priceOverride === undefined ? {} : { priceOverride }) };
+  // Foto nunca tem transporte (itens antigos de foto podem ter gravado R$ 100).
+  const transport = photoFromName(item.productName) ? 0 : costing?.freteFornecedor ?? 0;
+  return { id: item.id, source: "avulso", name: item.productName, cost: costing?.custoProduto ?? 0, ...(transport ? { transport } : {}), quantity: item.quantity, gravacoes, ...(item.mockup ? { mockup: item.mockup } : {}), ...(priceOverride === undefined ? {} : { priceOverride }) };
 }

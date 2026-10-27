@@ -150,6 +150,7 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
   const [quantity, setQuantity] = useState(String(editing?.quantity ?? 100));
   const [name, setName] = useState(editing?.source === "avulso" ? editing.name : "");
   const [looseCost, setLooseCost] = useState(editing?.source === "avulso" ? moneyInput(editing.cost) : "");
+  const [transport, setTransport] = useState(editing?.source === "avulso" && editing.transport ? moneyInput(editing.transport) : "");
   const [mockup, setMockup] = useState(editing?.source === "avulso" ? editing.mockup ?? "" : "");
   const [upload, setUpload] = useState<{ busy: boolean; error?: string }>({ busy: false });
   const [costOverride, setCostOverride] = useState(editing?.costOverride ?? "");
@@ -180,9 +181,11 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
     local: form.mode === "spot" ? "" : form.local.trim(),
     ...(form.custoOverride && allowsCostOverride(form) ? { custoOverride: form.custoOverride } : {}),
   }));
+  // Custo do item fora do catálogo é opcional: em branco conta como zero.
+  const looseCostValue = looseCost.trim() ? parseNumber(looseCost) : 0;
   const draft: Item = product
     ? { id, source: "catalogo", publicId: product.publicId, variant, quantity: qty, gravacoes, ...(costOverride ? { costOverride } : {}), ...(priceOverride ? { priceOverride } : {}) }
-    : { id, source: "avulso", name: name.trim(), cost: parseNumber(looseCost), quantity: qty, gravacoes, ...(mockup ? { mockup } : {}), ...(priceOverride ? { priceOverride } : {}) };
+    : { id, source: "avulso", name: name.trim(), cost: looseCostValue, ...(transport.trim() ? { transport: parseNumber(transport) } : {}), quantity: qty, gravacoes, ...(mockup ? { mockup } : {}), ...(priceOverride ? { priceOverride } : {}) };
   const draftKey = JSON.stringify(draft);
   const debouncedKey = useDebounced(draftKey, 300);
 
@@ -224,7 +227,7 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
       setUpload({ busy: false, error: error instanceof Error ? error.message : "Não foi possível enviar a imagem." });
     }
   }
-  const looseValid = product ? true : name.trim().length >= 2 && parseNumber(looseCost) >= 0;
+  const looseValid = product ? true : name.trim().length >= 2 && looseCostValue >= 0;
   const canSave = qty > 0 && !incomplete && looseValid && Boolean(ok);
   const setEng = (key: string, change: Partial<EngForm>) => setEngs((list) => list.map((form) => (form.key === key ? { ...form, ...change } : form)));
   const margin = ok ? ok.total - ok.cost : 0;
@@ -277,8 +280,15 @@ export function ProductConfigModal({ start, onSave, onClose, queue }: { start: M
                     </label>
                   ) : (
                     <label className="qe-field">
-                      <span>Custo por peça (R$)</span>
+                      <span>Custo por peça (R$, opcional)</span>
                       <input className="qe-num" inputMode="decimal" onChange={(event) => setLooseCost(cleanMoney(event.target.value))} placeholder="0,00" value={looseCost} />
+                    </label>
+                  )}
+                  {product ? null : (
+                    <label className="qe-field">
+                      <span>Transporte (R$, total)</span>
+                      <input className="qe-num" inputMode="decimal" onChange={(event) => setTransport(cleanMoney(event.target.value))} placeholder="0,00" value={transport} />
+                      <small className="qe-fhint">da quantidade toda · se houver</small>
                     </label>
                   )}
                   <div className="qe-field">

@@ -5,7 +5,7 @@ import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import sharp from "sharp";
 import {
-  FILTERS, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
+  FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
 } from "@/components/fotos/catalog";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
@@ -58,7 +58,7 @@ export function validatePhotos(input: unknown) {
       copies: Math.round(clamp(photo.copies, 1, 9999, 1)),
       fit: (photo.fit === "encaixar" ? "encaixar" : "preencher") as Fit,
       landscape: Boolean(photo.landscape),
-      zoom: clamp(photo.zoom, 1, 4, 1),
+      zoom: clamp(photo.zoom, ZOOM.min, ZOOM.max, 1),
       x: clamp(photo.x, 0, 1, 0.5),
       y: clamp(photo.y, 0, 1, 0.5),
       border: clamp(photo.border, 0, 3, 0),
