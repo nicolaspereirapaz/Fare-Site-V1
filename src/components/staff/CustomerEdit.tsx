@@ -5,7 +5,7 @@ import "@/components/staff/quoteEditor.css";
 
 /** Editar o cadastro do cliente (conta do site: e-mail é o login e fica fixo). */
 export function CustomerEdit({ customerRef, onSaved, onCancel }: { customerRef: string; onSaved: (customer: Customer) => void; onCancel: () => void }) {
-  const [form, setForm] = useState<{ name: string; company: string; phone: string; email: string; document: string } | null>(null);
+  const [form, setForm] = useState<{ name: string; company: string; phone: string; email: string; document: string; address: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const account = customerRef.startsWith("conta:");
@@ -17,7 +17,7 @@ export function CustomerEdit({ customerRef, onSaved, onCancel }: { customerRef: 
         const found = payload.customers?.[0];
         if (!active) return;
         if (!found) return setError("Cadastro não encontrado.");
-        setForm({ name: found.name, company: found.company, phone: found.phone, email: found.email, document: found.document });
+        setForm({ name: found.name, company: found.company, phone: found.phone, email: found.email, document: found.document, address: found.address ?? "" });
       })
       .catch(() => active && setError("Não foi possível abrir o cadastro."));
     return () => { active = false; };
@@ -41,6 +41,7 @@ export function CustomerEdit({ customerRef, onSaved, onCancel }: { customerRef: 
         <label className="qe-field"><span>WhatsApp</span><input inputMode="tel" onChange={set("phone")} value={form.phone} /></label>
         <label className="qe-field"><span>E-mail{account ? " (login do site)" : " (opcional)"}</span><input disabled={account} inputMode="email" onChange={set("email")} value={form.email} /></label>
         <label className="qe-field"><span>CPF/CNPJ (opcional)</span><input onChange={set("document")} value={form.document} /></label>
+        <label className="qe-field qe-address"><span>Endereço de entrega (opcional)</span><input onChange={set("address")} placeholder="Rua, número, bairro, cidade" value={form.address} /></label>
       </div>
       <p className="qe-fhint">Orçamentos e pedidos em aberto deste cliente passam a mostrar os dados novos.</p>
       {error ? <p className="qe-error">{error}</p> : null}

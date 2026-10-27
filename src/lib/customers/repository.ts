@@ -24,6 +24,8 @@ export type CustomerSummary = {
   createdBy?: string;
   /** Conta com a tabela profissional (cadastro pelo convite). */
   professional?: boolean;
+  /** Endereço de entrega (texto livre, só em resolveCustomer). */
+  address?: string;
   /** Outros cadastros com o mesmo WhatsApp ou CPF/CNPJ (o site não bloqueia; a equipe é avisada). */
   alsoUsedBy?: Array<{ name: string; by: Array<"WhatsApp" | "CPF/CNPJ"> }>;
 };
@@ -37,7 +39,21 @@ export class DuplicateCustomerError extends Error {
   }
 }
 
-export type PanelCustomerInput = { name: string; company?: string; phone: string; email?: string; document?: string };
+export type PanelCustomerInput = { name: string; company?: string; phone: string; email?: string; document?: string; address?: string };
+
+/** Endereço de entrega digitado pela equipe, de qualquer cliente (chave = ref "painel:…" ou "conta:…"). */
+function migrateAddresses(database: DatabaseSync) {
+  database.exec("CREATE TABLE IF NOT EXISTS fare_customer_addresses (ref TEXT PRIMARY KEY, address TEXT NOT NULL)");
+}
+function readAddress(database: DatabaseSync, ref: string) {
+  migrateAddresses(database);
+  return (database.prepare("SELECT address FROM fare_customer_addresses WHERE ref = ?").get(ref) as { address: string } | undefined)?.address ?? "";
+}
+function saveAddress(database: DatabaseSync, ref: string, address: string) {
+  migrateAddresses(database);
+  if (address) database.prepare("INSERT INTO fare_customer_addresses (ref, address) VALUES (?, ?) ON CONFLICT(ref) DO UPDATE SET address = excluded.address").run(ref, address);
+  else database.prepare("DELETE FROM fare_customer_addresses WHERE ref = ?").run(ref);
+}
 
 export const normalizePhone = (value: string) => value.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
 export const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -192,6 +208,7 @@ function validate(input: PanelCustomerInput) {
     email,
     document: !document ? "" : document.length === 11 ? formatCpf(document) : formatCnpj(document),
     documentNorm: document,
+    address: (input.address ?? "").trim().replace(/\s+/g, " ").slice(0, 300),
   };
 }
 
@@ -208,8 +225,9 @@ export function createPanelCustomer(database: DatabaseSync, input: PanelCustomer
       INSERT INTO fare_panel_customers (id, name, company, phone, phone_norm, email, email_norm, document, document_norm, created_by_id, created_by_name, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, data.name, data.company, data.phone, data.phoneNorm, data.email, data.email, data.document, data.documentNorm, actor.id, actor.name, new Date().toISOString());
+    saveAddress(database, `painel:${id}`, data.address);
     database.exec("COMMIT");
-    return { id, ref: `painel:${id}`, kind: "painel", name: data.name, company: data.company, phone: data.phone, email: data.email, document: data.document, createdBy: actor.name };
+    return { id, ref: `painel:${id}`, kind: "painel", name: data.name, company: data.company, phone: data.phone, email: data.email, document: data.document, createdBy: actor.name, ...(data.address ? { address: data.address } : {}) };
   } catch (error) {
     database.exec("ROLLBACK");
     throw error;
@@ -220,6 +238,12 @@ export type ResolvedCustomer = CustomerSummary & { ownerId: string };
 
 /** Cliente escolhido no orçamento: dono do orçamento (`userId` da conta ou `painel:<id>`) e dados. */
 export function resolveCustomer(database: DatabaseSync, ref: string): ResolvedCustomer | null {
+  const found = findCustomer(database, ref);
+  const address = found ? readAddress(database, found.ref) : "";
+  return found && address ? { ...found, address } : found;
+}
+
+function findCustomer(database: DatabaseSync, ref: string): ResolvedCustomer | null {
   const [kind, id] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)];
   if (!id || ref.indexOf(":") < 0) return null;
   if (kind === "conta") {
@@ -266,11 +290,13 @@ export function updateCustomer(database: DatabaseSync, ref: string, input: Panel
       const profile = getCustomerProfile(database, current.ownerId);
       saveCustomerProfile(database, current.ownerId, { ...profile, phone: data.phone, document: data.document, companyName: data.company });
     }
+    saveAddress(database, ref, data.address);
     // Documentos em aberto mostram os dados novos (pedido concluído/cancelado fica como foi).
     const patch = (json: string) => {
       const customer = JSON.parse(json) as Record<string, unknown>;
       delete customer.company;
-      return JSON.stringify({ ...customer, name: data.name, phone: data.phone, ...(data.company ? { company: data.company } : {}) });
+      delete customer.address;
+      return JSON.stringify({ ...customer, name: data.name, phone: data.phone, ...(data.company ? { company: data.company } : {}), ...(data.address ? { address: data.address } : {}) });
     };
     for (const [table, closed] of [["fare_quotes", "'virou_pedido', 'cancelado'"], ["fare_orders", "'concluido', 'cancelado'"]] as const) {
       if (!hasTable(database, table)) continue;

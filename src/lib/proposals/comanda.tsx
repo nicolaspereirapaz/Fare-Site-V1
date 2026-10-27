@@ -61,7 +61,7 @@ export async function buildComanda(order: Order, finance: OrderFinance | null, i
     doc,
     createdBy: finance?.createdBy ?? null,
     notes: order.customer.notes?.trim() ?? "",
-    delivery: finance ? { mode: finance.deliveryMode, date: finance.deliveryDate, time: finance.deliveryTime ?? null, address: finance.deliveryMode === "entrega" && billing ? formatBillingAddress(billing.address) : null } : null,
+    delivery: finance ? { mode: finance.deliveryMode, date: finance.deliveryDate, time: finance.deliveryTime ?? null, address: finance.deliveryMode === "entrega" ? order.customer.address || (billing ? formatBillingAddress(billing.address) : null) : null } : null,
     payment: finance ? { total: doc.total, paid: finance.paidCents / 100, balance: Math.max(0, finance.balanceCents) / 100, onPickup: Boolean(finance.paymentOnPickup), plan: paymentPlan(finance) } : null,
     images: await Promise.all(doc.items.map((item) => thumbnail(item.imageUrl))),
     printedAt: dateTimeBR(now),
@@ -170,7 +170,9 @@ export function ComandaDocument({ comanda, logo }: { comanda: Comanda; logo: str
               {comanda.images[index] ? <Image src={comanda.images[index]!} style={s.thumb} /> : <View style={s.thumbSpace} />}
               <View style={s.itemText}>
                 <Text style={s.itemName}>{item.name}</Text>
-                {[item.code, item.color].filter(Boolean).length ? <Text style={s.mutedLine}>{[item.code, item.color].filter(Boolean).join(" · ")}</Text> : null}
+                {/* Foto: tamanho e papel em destaque (é o que a produção precisa). */}
+                {item.unitLabel && item.specs?.[0] ? <Text style={s.line}>Tamanho {item.specs[0]} · {item.color ?? "Papel a definir"}</Text>
+                  : [item.code, item.color].filter(Boolean).length ? <Text style={s.mutedLine}>{[item.code, item.color].filter(Boolean).join(" · ")}</Text> : null}
                 {item.engravings.map((engraving, i) => <Text key={i} style={s.line}>{engraving}</Text>)}
               </View>
               <Text style={[s.money, s.colQty]}>{item.quantity}</Text>

@@ -43,6 +43,8 @@ export type QuoteCustomer = {
   company?: string;
   phone?: string;
   notes?: string;
+  /** Endereço de entrega digitado pela equipe (texto livre). */
+  address?: string;
   /** Dados da nota: copiados do cadastro da conta pelo servidor no momento do pedido. */
   billing?: QuoteBilling;
 };

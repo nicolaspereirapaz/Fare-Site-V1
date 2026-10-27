@@ -55,7 +55,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [creating, setCreating] = useState(startCreating);
-  const [form, setForm] = useState({ name: "", company: "", phone: "", email: "", document: "" });
+  const [form, setForm] = useState({ name: "", company: "", phone: "", email: "", document: "", address: "" });
   const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -77,7 +77,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
 
   function startCreate() {
     const digits = query.replace(/\D/g, "");
-    setForm({ name: digits.length >= 8 ? "" : query.trim(), company: "", phone: digits.length >= 8 ? query.trim() : "", email: "", document: "" });
+    setForm({ name: digits.length >= 8 ? "" : query.trim(), company: "", phone: digits.length >= 8 ? query.trim() : "", email: "", document: "", address: "" });
     setDuplicates([]);
     setError(null);
     setCreating(true);
@@ -104,6 +104,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
           <label className="qe-field"><span>WhatsApp</span><input inputMode="tel" onChange={set("phone")} placeholder="(11) 90000-0000" value={form.phone} /></label>
           <label className="qe-field"><span>E-mail (opcional)</span><input inputMode="email" onChange={set("email")} value={form.email} /></label>
           <label className="qe-field"><span>CPF/CNPJ (opcional)</span><input onChange={set("document")} value={form.document} /></label>
+          <label className="qe-field qe-address"><span>Endereço de entrega (opcional)</span><input onChange={set("address")} placeholder="Rua, número, bairro, cidade" value={form.address} /></label>
         </div>
         {error ? <p className="qe-error">{error}</p> : null}
         {duplicates.length ? (
@@ -553,7 +554,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
                 disabled={!editable}
                 inputMode="decimal"
                 onChange={(event) => setFreight(event.target.value.replace(/[^\d.,]/g, ""))}
-                placeholder="R$ 0,00 · vazio = a combinar"
+                placeholder="A combinar"
                 value={freight}
               />
             </div>
@@ -566,7 +567,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
               <span>− {brl(totals.discount)}</span>
             </div>
           ) : null}
-          <div className="qe-sum-row"><span>Frete</span><span>{totals.freight > 0 ? brl(totals.freight) : "A combinar"}</span></div>
+          {totals.freight > 0 ? <div className="qe-sum-row"><span>Frete</span><span>{brl(totals.freight)}</span></div> : null}
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
           {!isOrder ? (
             <div className="qe-discount qe-delivery">

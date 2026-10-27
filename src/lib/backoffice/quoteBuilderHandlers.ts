@@ -67,6 +67,7 @@ export function customerSnapshot(deps: QuoteBuilderDeps, ref: string): { ownerId
       name: resolved.name,
       ...(resolved.company ? { company: resolved.company } : {}),
       ...(resolved.phone ? { phone: resolved.phone } : {}),
+      ...(resolved.address ? { address: resolved.address } : {}),
       ...(billing ? { billing } : {}),
     },
   };
@@ -139,7 +140,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       try {
         const customer = createPanelCustomer(deps.database(), {
           name: String(body.name ?? ""), company: String(body.company ?? ""), phone: String(body.phone ?? ""),
-          email: String(body.email ?? ""), document: String(body.document ?? ""),
+          email: String(body.email ?? ""), document: String(body.document ?? ""), address: String(body.address ?? ""),
         }, { id: access.session.user.id, name: access.session.user.name });
         return json({ customer }, 201);
       } catch (error) {
@@ -157,7 +158,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       try {
         const customer = updateCustomer(deps.database(), body.ref, {
           name: String(body.name ?? ""), company: String(body.company ?? ""), phone: String(body.phone ?? ""),
-          email: String(body.email ?? ""), document: String(body.document ?? ""),
+          email: String(body.email ?? ""), document: String(body.document ?? ""), address: String(body.address ?? ""),
         });
         return json({ customer });
       } catch (error) {

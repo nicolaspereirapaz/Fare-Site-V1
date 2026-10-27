@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 /* Tipos e utilidades do editor de orçamentos da equipe (custo e estoque só para a equipe). */
 
-export type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; createdBy?: string; professional?: boolean; alsoUsedBy?: Array<{ name: string; by: string[] }> };
+export type Customer = { ref: string; kind: "conta" | "painel"; name: string; company: string; phone: string; email: string; document: string; address?: string; createdBy?: string; professional?: boolean; alsoUsedBy?: Array<{ name: string; by: string[] }> };
 export type Duplicate = Customer & { by: string[] };
 export type SpotOption = { id: string; tecnica: string; local: string; componente: string; area: string; cores: number; padrao: boolean };
 export type Product = {
