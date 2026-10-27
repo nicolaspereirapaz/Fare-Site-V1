@@ -1,3 +1,4 @@
+import { formatDeliveryAddress } from "@/lib/customers/address";
 import { paymentPlan } from "@/lib/orders/paymentPlan";
 import { buildWhatsAppUrl, formatBillingAddress, type QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
@@ -31,7 +32,8 @@ export function buildOrderDocument(order: Order, finance: OrderFinance | null, o
   const terms=[{title:"Pagamento",text:paymentText+(finance?.installments?` · ${finance.installments} parcelas`:"")}];
   if(finance){
     terms.push({title:finance.deliveryMode==="retirada"?"Retirada":"Entrega",text:finance.deliveryDate?`${date(finance.deliveryDate)}${finance.deliveryTime?` às ${finance.deliveryTime}`:""}`:"Data a combinar."});
-    if(finance.deliveryMode==="entrega" && billing) terms.push({title:"Endereço",text:formatBillingAddress(billing.address)});
+    const address=orderDeliveryAddress(order,finance);
+    if(address) terms.push({title:"Endereço",text:address});
     if(finance.dueDate)terms.push({title:"Vencimento",text:date(finance.dueDate)});
   }
   return {kind:"order",code:orderCode(order.id),issuedAt:date(order.createdAt),seller:options.seller,
@@ -39,6 +41,11 @@ export function buildOrderDocument(order: Order, finance: OrderFinance | null, o
     items,subtotal:applied.subtotalCents/100,discount:order.discount && applied.discountCents>0?{label:discountLabel(order.discount),amount:applied.discountCents/100}:null,freight:applied.freightCents/100,
     total:order.totalCents!==null?order.totalCents/100:applied.totalCents/100,terms,company:FARE_COMPANY,
     finance:finance?{paid:finance.paidCents/100,balance:finance.balanceCents/100,plan:paymentPlan(finance)}:null};
+}
+/** Endereço de entrega do pedido: o digitado no pedido, senão o do cadastro do cliente (equipe ou site). Retirada = null. */
+export function orderDeliveryAddress(order: Order, finance: OrderFinance | null): string | null {
+  if (finance?.deliveryMode !== "entrega") return null;
+  return formatDeliveryAddress(finance.deliveryAddress) || order.customer.address || (order.customer.billing ? formatBillingAddress(order.customer.billing.address) : null);
 }
 export function orderWhatsAppText(doc: OrderDocument): string {
  const first=doc.customer.name.trim().split(/\s+/)[0];

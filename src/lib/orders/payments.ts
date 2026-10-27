@@ -1,3 +1,4 @@
+import { parseDeliveryAddress, type DeliveryAddress } from "@/lib/customers/address";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { createOrder, findOrderById, runOrderMigrations, type CreateOrderInput, type Order, type PaymentMethod } from "./repository";
@@ -13,6 +14,8 @@ export type DirectOrderInput = CreateOrderInput & {
   deliveryDate: string | null; deliveryMode: "retirada" | "entrega";
   /** Horário combinado ("14:30"), opcional; só junto com a data. */
   deliveryTime?: string | null;
+  /** Endereço só deste pedido (entrega). Vazio: vale o endereço do cadastro do cliente. */
+  deliveryAddress?: DeliveryAddress | null;
   installments: number | null; dueDate: string | null;
   payment: { amountCents: number; paidAt: string | null };
   paymentOnPickup?: boolean;
@@ -24,6 +27,7 @@ export type OrderPayment = {
 export type OrderFinance = {
   paidCents: number; balanceCents: number; createdBy: string; internalNotes: string;
   deliveryDate: string | null; deliveryMode: "retirada" | "entrega"; deliveryTime?: string | null;
+  deliveryAddress?: DeliveryAddress | null;
   installments: number | null; dueDate: string | null; payments: OrderPayment[];
   paymentOnPickup?: boolean;
 };
@@ -117,6 +121,16 @@ function migrateFinance(db: DatabaseSync) {
     db.exec('ALTER TABLE fare_order_finance ADD COLUMN payment_on_pickup INTEGER NOT NULL DEFAULT 0 CHECK(payment_on_pickup IN (0, 1))');
   }
   if (!columns.some(column => column.name === 'delivery_time')) db.exec('ALTER TABLE fare_order_finance ADD COLUMN delivery_time TEXT');
+  if (!columns.some(column => column.name === 'delivery_address')) db.exec('ALTER TABLE fare_order_finance ADD COLUMN delivery_address TEXT');
+}
+
+/** Endereço do pedido: só existe com entrega; retirada apaga. */
+function saveDeliveryAddress(db: DatabaseSync, orderId: string, mode: "retirada" | "entrega", address: DeliveryAddress | null | undefined) {
+  db.prepare("UPDATE fare_order_finance SET delivery_address = ? WHERE order_id = ?").run(mode === "entrega" && address ? JSON.stringify(address) : null, orderId);
+}
+function readDeliveryAddress(json: string | null): DeliveryAddress | null {
+  if (!json) return null;
+  try { return parseDeliveryAddress(JSON.parse(json)); } catch { return null; }
 }
 
 function transaction<T>(db: DatabaseSync, action: () => T): T {
@@ -136,7 +150,7 @@ function transaction<T>(db: DatabaseSync, action: () => T): T {
 export function getOrderFinance(db: DatabaseSync, orderId: string): OrderFinance | null {
   migrateFinance(db);
   const meta = db.prepare("SELECT * FROM fare_order_finance WHERE order_id = ?").get(orderId) as {
-    actor_id: string; actor_name: string; internal_notes: string; delivery_date: string | null; delivery_time: string | null;
+    actor_id: string; actor_name: string; internal_notes: string; delivery_date: string | null; delivery_time: string | null; delivery_address: string | null;
     delivery_mode: "retirada" | "entrega"; installments: number | null; due_date: string | null;
     payment_on_pickup: number;
   } | undefined;
@@ -150,11 +164,18 @@ export function getOrderFinance(db: DatabaseSync, orderId: string): OrderFinance
   const order = findOrderById(db, orderId)!;
   return { paidCents, balanceCents: order.totalCents! - paidCents, createdBy: meta.actor_name,
     internalNotes: meta.internal_notes, deliveryDate: meta.delivery_date, deliveryMode: meta.delivery_mode, deliveryTime: meta.delivery_time ?? null,
+    deliveryAddress: readDeliveryAddress(meta.delivery_address),
     installments: meta.installments, dueDate: meta.due_date, payments, ...(meta.payment_on_pickup ? { paymentOnPickup: true } : {}) };
 }
 
-/** Muda só a data/horário de entrega previstos; pedido concluído ou cancelado fica como está. */
-export function updateOrderDelivery(db: DatabaseSync, input: { orderId: string; deliveryDate: string | null; deliveryTime: string | null }): OrderFinance {
+/**
+ * Muda data/horário, retirada ou entrega e o endereço do pedido (campos ausentes ficam como estão).
+ * Pedido concluído ou cancelado fica como está.
+ */
+export function updateOrderDelivery(db: DatabaseSync, input: {
+  orderId: string; deliveryDate: string | null; deliveryTime: string | null;
+  deliveryMode?: "retirada" | "entrega"; deliveryAddress?: DeliveryAddress | null;
+}): OrderFinance {
   migrateFinance(db);
   if (input.deliveryDate !== null) requireDate(input.deliveryDate);
   if (input.deliveryTime !== null) {
@@ -165,8 +186,13 @@ export function updateOrderDelivery(db: DatabaseSync, input: { orderId: string; 
     const order = findOrderById(db, input.orderId);
     if (!order || !getOrderFinance(db, order.id)) throw new Error("Pedido sem metadados financeiros.");
     if (order.status === "cancelado" || order.status === "concluido") throw new Error("Pedido concluído ou cancelado não pode ser alterado.");
-    requireWrite(db.prepare("UPDATE fare_order_finance SET delivery_date = ?, delivery_time = ? WHERE order_id = ?")
-      .run(input.deliveryDate, input.deliveryTime, order.id));
+    const current = getOrderFinance(db, order.id)!;
+    const mode = input.deliveryMode ?? current.deliveryMode;
+    if (mode !== "retirada" && mode !== "entrega") throw new Error("Modalidade de entrega inválida.");
+    if (mode === "entrega" && current.paymentOnPickup) throw new Error("Pedido com pagamento na retirada: mude o pagamento antes de marcar entrega.");
+    requireWrite(db.prepare("UPDATE fare_order_finance SET delivery_date = ?, delivery_time = ?, delivery_mode = ? WHERE order_id = ?")
+      .run(input.deliveryDate, input.deliveryTime, mode, order.id));
+    saveDeliveryAddress(db, order.id, mode, input.deliveryAddress === undefined ? current.deliveryAddress : input.deliveryAddress);
     return getOrderFinance(db, order.id)!;
   });
 }
@@ -230,6 +256,7 @@ export function createDirectOrder(db: DatabaseSync, input: DirectOrderInput): Or
       (order_id, actor_id, actor_name, created_at, internal_notes, delivery_date, delivery_mode, installments, due_date, payment_on_pickup, delivery_time)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(order.id, input.actorId, input.actorName, now,
       input.internalNotes, input.deliveryDate, input.deliveryMode, input.installments, input.dueDate, input.paymentOnPickup === true ? 1 : 0, input.deliveryTime ?? null));
+    saveDeliveryAddress(db, order.id, input.deliveryMode, input.deliveryAddress);
     if (input.payment.amountCents > 0) {
       requireWrite(db.prepare(`INSERT INTO fare_order_payments
         (id, order_id, idempotency_key, amount_cents, payment_method, paid_at, actor_id, actor_name, created_at)
@@ -243,7 +270,7 @@ export function createDirectOrder(db: DatabaseSync, input: DirectOrderInput): Or
   });
 }
 
-export type CloseSiteOrderInput = Pick<DirectOrderInput, "actorId" | "actorName" | "paymentMethod" | "deliveryDate" | "deliveryMode" | "deliveryTime"
+export type CloseSiteOrderInput = Pick<DirectOrderInput, "actorId" | "actorName" | "paymentMethod" | "deliveryDate" | "deliveryMode" | "deliveryTime" | "deliveryAddress"
   | "installments" | "dueDate" | "payment" | "paymentOnPickup"> & { orderId: string; expectedUpdatedAt: string };
 
 /**
@@ -270,6 +297,7 @@ export function closeSiteOrder(db: DatabaseSync, input: CloseSiteOrderInput): Or
       (order_id, actor_id, actor_name, created_at, internal_notes, delivery_date, delivery_mode, installments, due_date, payment_on_pickup, delivery_time)
       VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)`).run(order.id, input.actorId, input.actorName, now, input.deliveryDate, input.deliveryMode,
       input.installments, input.dueDate, input.paymentOnPickup === true ? 1 : 0, input.deliveryTime ?? null));
+    saveDeliveryAddress(db, order.id, input.deliveryMode, input.deliveryAddress);
     if (input.payment.amountCents > 0) {
       requireWrite(db.prepare(`INSERT INTO fare_order_payments
         (id, order_id, idempotency_key, amount_cents, payment_method, paid_at, actor_id, actor_name, created_at)

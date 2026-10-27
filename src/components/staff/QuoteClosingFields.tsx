@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { brl, moneyInput } from '@/components/staff/quoteEditorShared';
 import { paidCents, STAFF_PAYMENT_LABELS, type PaymentForm } from '@/components/staff/paymentFieldsShared';
+import { AddressFields } from '@/components/staff/AddressFields';
 export type ClosingChoice='half'|'full'|'pickup'|'other'|'zero'|null;
 export function QuoteClosingFields({total,value,onChange,choice,onChoice}:{total:number|null;value:PaymentForm;onChange:(value:PaymentForm)=>void;choice:ClosingChoice;onChoice:(choice:ClosingChoice)=>void}){
  const amountRef=useRef<HTMLInputElement>(null);
@@ -34,6 +35,8 @@ export function QuoteClosingFields({total,value,onChange,choice,onChoice}:{total
    <div className={`cq-balance${valid&&cents===totalCents?' is-paid':''}`} aria-label="Resumo do recebimento" aria-live="polite"><div><span>Recebido agora</span><strong>{valid?brl(cents/100):'—'}</strong></div><div><span>Saldo restante</span><strong>{valid?brl((totalCents-cents)/100):'—'}</strong></div></div>
    <p className={`cq-state${pickup?' is-pickup':''}`} role="status">{status}</p>
   </section>
-  <section className="cq-delivery"><h3>Entrega</h3><div className="cq-grid"><label className="cq-field"><span>Data prevista de entrega</span><input type="date" value={value.deliveryDate} onChange={event=>set('deliveryDate',event.target.value)}/></label><label className="cq-field"><span>Horário (opcional)</span><input type="time" value={value.deliveryTime} onChange={event=>set('deliveryTime',event.target.value)}/></label><label className="cq-field"><span>Forma de entrega</span><select value={pickup?'retirada':value.deliveryMode} disabled={pickup} onChange={event=>set('deliveryMode',event.target.value as PaymentForm['deliveryMode'])}><option value="retirada">Retirada na loja</option><option value="entrega">Entrega ao cliente</option></select></label></div></section>
+  <section className="cq-delivery"><h3>Entrega</h3><div className="cq-grid"><label className="cq-field"><span>Data prevista de entrega</span><input type="date" value={value.deliveryDate} onChange={event=>set('deliveryDate',event.target.value)}/></label><label className="cq-field"><span>Horário (opcional)</span><input type="time" value={value.deliveryTime} onChange={event=>set('deliveryTime',event.target.value)}/></label><label className="cq-field"><span>Forma de entrega</span><select value={pickup?'retirada':value.deliveryMode} disabled={pickup} onChange={event=>set('deliveryMode',event.target.value as PaymentForm['deliveryMode'])}><option value="retirada">Retirada na loja</option><option value="entrega">Entrega ao cliente</option></select></label></div>
+   {!pickup&&value.deliveryMode==='entrega'?<AddressFields hint="Só para este pedido. Em branco: usa o endereço do cadastro do cliente." value={value.deliveryAddress} onChange={update=>onChange({...value,deliveryAddress:update(value.deliveryAddress)})}/>:null}
+  </section>
  </>;
 }

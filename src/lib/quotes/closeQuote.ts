@@ -8,7 +8,7 @@ export type CloseQuoteInput = {
   quoteId: string; actorId: string; actorName: string;
   idempotencyKey: string; expectedUpdatedAt: string;
   payment: DirectOrderInput["payment"] & Pick<DirectOrderInput, "paymentMethod" | "installments" | "dueDate">;
-  delivery: Pick<DirectOrderInput, "deliveryDate" | "deliveryMode" | "deliveryTime">;
+  delivery: Pick<DirectOrderInput, "deliveryDate" | "deliveryMode" | "deliveryTime" | "deliveryAddress">;
   paymentOnPickup?: boolean;
 };
 
@@ -35,7 +35,8 @@ export function closeQuote(db: DatabaseSync, input: CloseQuoteInput): Order {
   const payload = JSON.stringify({ quoteId: input.quoteId, expectedUpdatedAt: input.expectedUpdatedAt,
     payment: { paymentMethod: input.payment.paymentMethod, amountCents: input.payment.amountCents,
       paidAt: input.payment.paidAt, installments: input.payment.installments, dueDate: input.payment.dueDate },
-    delivery: { deliveryDate: input.delivery.deliveryDate, deliveryMode: input.delivery.deliveryMode, ...(input.delivery.deliveryTime ? { deliveryTime: input.delivery.deliveryTime } : {}) },
+    delivery: { deliveryDate: input.delivery.deliveryDate, deliveryMode: input.delivery.deliveryMode, ...(input.delivery.deliveryTime ? { deliveryTime: input.delivery.deliveryTime } : {}),
+      ...(input.delivery.deliveryAddress ? { deliveryAddress: input.delivery.deliveryAddress } : {}) },
     ...(input.paymentOnPickup === true ? { paymentOnPickup: true } : {}) });
   db.exec("BEGIN IMMEDIATE");
   try {

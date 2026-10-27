@@ -1,3 +1,4 @@
+import { parseDeliveryAddress } from "@/lib/customers/address";
 import type { DatabaseSync } from "node:sqlite";
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
@@ -29,6 +30,7 @@ export function createCloseQuoteHandler(deps: CloseQuoteDeps) {
     const keys = ["idempotencyKey", "expectedUpdatedAt", "paymentMethod", "payment", "installments", "dueDate", "deliveryDate", "deliveryMode"];
     if (raw && typeof raw === 'object' && Object.hasOwn(raw, 'paymentOnPickup')) keys.push('paymentOnPickup');
     if (raw && typeof raw === 'object' && Object.hasOwn(raw, 'deliveryTime')) keys.push('deliveryTime');
+    if (raw && typeof raw === 'object' && Object.hasOwn(raw, 'deliveryAddress')) keys.push('deliveryAddress');
     if (!exactObject(raw, keys)
       || !exactObject(raw.payment, ["amountCents", "paidAt"])
       || (raw.paymentOnPickup !== undefined && typeof raw.paymentOnPickup !== 'boolean')
@@ -41,7 +43,7 @@ export function createCloseQuoteHandler(deps: CloseQuoteDeps) {
         quoteId, idempotencyKey: raw.idempotencyKey, expectedUpdatedAt: raw.expectedUpdatedAt,
         actorId: session.user.id, actorName: session.user.name,
         payment: { ...raw.payment, paymentMethod: raw.paymentMethod, installments: raw.installments, dueDate: raw.dueDate } as CloseQuoteInput["payment"],
-        delivery: { deliveryDate: raw.deliveryDate, deliveryMode: raw.deliveryMode, deliveryTime: raw.deliveryTime ?? null } as CloseQuoteInput["delivery"],
+        delivery: { deliveryDate: raw.deliveryDate, deliveryMode: raw.deliveryMode, deliveryTime: raw.deliveryTime ?? null, deliveryAddress: parseDeliveryAddress(raw.deliveryAddress) } as CloseQuoteInput["delivery"],
         paymentOnPickup: raw.paymentOnPickup === true,
       });
       // Pasta das fotos do orçamento passa a ser do pedido; falha aqui não desfaz o pedido.
@@ -75,6 +77,7 @@ export function createCloseSiteOrderHandler(deps: CloseQuoteDeps) {
         orderId, expectedUpdatedAt: raw.expectedUpdatedAt, actorId: session.user.id, actorName: session.user.name,
         paymentMethod: raw.paymentMethod, payment: raw.payment, installments: raw.installments ?? null, dueDate: raw.dueDate ?? null,
         deliveryDate: raw.deliveryDate ?? null, deliveryMode: raw.deliveryMode, deliveryTime: raw.deliveryTime ?? null,
+        deliveryAddress: parseDeliveryAddress(raw.deliveryAddress),
         paymentOnPickup: raw.paymentOnPickup === true,
       } as CloseSiteOrderInput);
       return json({ order: { id: order.id, code: orderCode(order.id), status: order.status } });

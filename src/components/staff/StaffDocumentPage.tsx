@@ -11,6 +11,7 @@ import { STATUS_LABELS, STATUS_COLORS } from '@/components/BackofficeBoard';
 import { CloseQuoteDialog } from '@/components/staff/CloseQuoteDialog';
 import { PhotoLinkActions } from "@/components/staff/PhotoLinkActions";
 import { photoFromName } from "@/components/staff/photoItems";
+import { formatDeliveryAddress } from '@/lib/customers/address';
 import { ProposalActions } from '@/components/staff/ProposalActions';
 import { OrderPaymentPanel } from '@/components/staff/OrderPaymentPanel';
 import { OrderDeliveryEditor } from '@/components/staff/OrderDeliveryEditor';
@@ -162,7 +163,7 @@ export function StaffDocumentPage({kind,id,canCancel,children}:{kind:StaffDocume
    <section className="qe-card"><h2>Cliente</h2><p className="sd-customer">{document.customer.company||document.customer.name}</p><p className="sd-muted">{document.customer.company?<>{document.customer.name}<br/></>:null}{document.customer.phone||'Telefone não informado'}{document.customer.address?<><br/>{document.customer.address}</>:null}</p>
    {billing?<details className="sd-billing"><summary>Dados de faturamento</summary><p>{billingDocument(billing)}<br/>{billing.companyName}<br/>{formatBillingAddress(billing.address)}</p></details>:null}</section>
    {isQuote?<section className="qe-card"><h2>Entrega prevista</h2><p className="sd-delivery-date">{deliveryLabel(document.quoteDelivery?.date,document.quoteDelivery?.time)}</p>{openQuote?<Link className="sd-muted" href={`/equipe/orcamentos/${id}`}>Alterar no editor do orçamento</Link>:null}</section>:null}
-   {!isQuote?<section className="qe-card"><h2>Entrega</h2><p className="sd-delivery-date">{deliveryLabel(finance?.deliveryDate, finance?.deliveryTime)}</p><p className="sd-muted">{finance?finance.deliveryMode==='retirada'?'Retirada na loja':'Entrega ao cliente':'Forma de entrega não informada'}</p>{finance&&editableOrder?<OrderDeliveryEditor orderId={id} date={finance.deliveryDate} time={finance.deliveryTime} onSaved={reload}/>:null}</section>:null}
+   {!isQuote?<section className="qe-card"><h2>Entrega</h2><p className="sd-delivery-date">{deliveryLabel(finance?.deliveryDate, finance?.deliveryTime)}</p><p className="sd-muted">{finance?finance.deliveryMode==='retirada'?'Retirada na loja':'Entrega ao cliente':'Forma de entrega não informada'}</p>{finance?.deliveryMode==='entrega'?<p className="sd-delivery-address">{formatDeliveryAddress(finance.deliveryAddress)||document.customer.address||'Endereço não informado'}</p>:null}{finance&&editableOrder?<OrderDeliveryEditor orderId={id} date={finance.deliveryDate} time={finance.deliveryTime} mode={finance.deliveryMode} address={finance.deliveryAddress} customerAddress={document.customer.address} onSaved={reload}/>:null}</section>:null}
    <section className="qe-card financial"><h2>{isQuote?'Resumo do orçamento':'Pagamento'}</h2><dl>
     {document.discount||document.freight?<div><dt>Subtotal</dt><dd>{document.total===null?'Sob consulta':brl(document.total+(document.discount?.amount??0)-(document.freight??0))}</dd></div>:null}
     {document.discount?<div><dt>{document.discount.label}</dt><dd>− {brl(document.discount.amount)}</dd></div>:null}

@@ -4,6 +4,7 @@ import { customerSnapshot, type QuoteBuilderDeps } from "@/lib/backoffice/quoteB
 import { createDirectOrder, STAFF_PAYMENT_METHODS, type DirectOrderInput } from "@/lib/orders/payments";
 import { orderCode } from "@/lib/orders/orderCode";
 import { parseDiscount } from "@/lib/quotes/discount";
+import { parseDeliveryAddress } from "@/lib/customers/address";
 import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -41,6 +42,7 @@ export function createDirectOrderHandler(deps: QuoteBuilderDeps) {
         installments: body.installments as number | null, dueDate: body.dueDate as string | null,
         deliveryDate: body.deliveryDate as string | null, deliveryMode: body.deliveryMode as DirectOrderInput["deliveryMode"],
         deliveryTime: (body.deliveryTime ?? null) as string | null,
+        deliveryAddress: parseDeliveryAddress(body.deliveryAddress),
         paymentOnPickup: body.paymentOnPickup === true,
       });
       return json({ id: order.id, code: orderCode(order.id), orderStatus: order.status }, 201);

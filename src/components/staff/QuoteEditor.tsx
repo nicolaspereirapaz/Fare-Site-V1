@@ -321,6 +321,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
           dueDate: !pickup && ["boleto", "faturamento_empresa"].includes(payment.paymentMethod) ? payment.dueDate || null : null,
           deliveryDate: payment.deliveryDate || null, deliveryMode: pickup ? "retirada" : payment.deliveryMode,
           deliveryTime: payment.deliveryDate && payment.deliveryTime ? payment.deliveryTime : null,
+          deliveryAddress: !pickup && payment.deliveryMode === "entrega" ? payment.deliveryAddress : null,
         } : {}),
       };
     const { ok, status, data } = await postJson<{ id?: string; orderStatus?: string; message?: string; preview?: Preview[] }>(

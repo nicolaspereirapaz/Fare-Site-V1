@@ -134,3 +134,9 @@
 /* Etapa ocupa a largura do bloco Andamento, como os botões abaixo. */
 .sd-flow .kb-stage { display:flex; width:100%; }
 .sd-flow .kb-stage select { flex:1; min-width:0; }
+
+/* Endereço da entrega no cartão Entrega e no editor de entrega. */
+.sd-delivery-address { margin: 6px 0 0; font-size: 13px; line-height: 1.4; }
+.sd-delivery-edit .qe-address { grid-template-columns: 1fr 1fr; }
+.sd-delivery-edit .qe-address .qe-addr-street { grid-column: 1 / -1; }
+.sd-delivery-edit select { min-width: 0; width: 100%; }

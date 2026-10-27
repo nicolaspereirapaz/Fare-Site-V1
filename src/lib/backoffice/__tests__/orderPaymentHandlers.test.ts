@@ -35,6 +35,15 @@ it('entrega prevista do pedido: altera data/horário, valida e bloqueia pedido e
  expect((await update(patch({deliveryDate:'2026-02-30'}),order.id)).status).toBe(400);
  expect((await update(patch({deliveryDate:'2026-11-06'}),order.id)).status).toBe(200);
  expect(getOrderFinance(db,order.id)).toMatchObject({deliveryDate:'2026-11-06',deliveryTime:null});
+ // Entrega com endereço só deste pedido; voltar para retirada apaga o endereço.
+ const address={cep:'13201000',street:'Rua A',number:'10',district:'Centro',city:'Jundiaí',state:'SP',reference:'portão azul'};
+ expect((await update(patch({deliveryDate:'2026-11-06',deliveryMode:'entrega',deliveryAddress:address}),order.id)).status).toBe(200);
+ expect(getOrderFinance(db,order.id)).toMatchObject({deliveryMode:'entrega',deliveryAddress:{cep:'13201-000',street:'Rua A',complement:''}});
+ expect((await update(patch({deliveryDate:'2026-11-06'}),order.id)).status).toBe(200);
+ expect(getOrderFinance(db,order.id)?.deliveryAddress?.street).toBe('Rua A');
+ expect((await update(patch({deliveryDate:'2026-11-06',deliveryMode:'entrega',deliveryAddress:{cep:'12'}}),order.id)).status).toBe(400);
+ expect((await update(patch({deliveryDate:'2026-11-06',deliveryMode:'retirada'}),order.id)).status).toBe(200);
+ expect(getOrderFinance(db,order.id)).toMatchObject({deliveryMode:'retirada',deliveryAddress:null});
  db.prepare("UPDATE fare_orders SET status='cancelado' WHERE id=?").run(order.id);
  expect((await update(patch({deliveryDate:'2026-11-07'}),order.id)).status).toBe(400);
  expect(getOrderFinance(db,order.id)?.deliveryDate).toBe('2026-11-06');

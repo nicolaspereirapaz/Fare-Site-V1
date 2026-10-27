@@ -34,7 +34,8 @@ export function CloseQuoteDialog({quote,onClose,onClosed}:{quote:QuoteToClose;on
         payment:{amountCents,paidAt:amountCents>0?form.paidAt:null},
         installments:!pickup&&form.paymentMethod==='cartao_credito'?Number(form.installments):null,
         dueDate:!pickup&&['boleto','faturamento_empresa'].includes(form.paymentMethod)?form.dueDate||null:null,
-        deliveryDate:form.deliveryDate||null,deliveryTime:form.deliveryDate&&form.deliveryTime?form.deliveryTime:null,deliveryMode:pickup?'retirada':form.deliveryMode};
+        deliveryDate:form.deliveryDate||null,deliveryTime:form.deliveryDate&&form.deliveryTime?form.deliveryTime:null,deliveryMode:pickup?'retirada':form.deliveryMode,
+        deliveryAddress:!pickup&&form.deliveryMode==='entrega'?form.deliveryAddress:null};
       setPending(true);
     }
     inFlight.current=true;setBusy(true);setError('');

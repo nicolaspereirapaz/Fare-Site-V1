@@ -4,9 +4,10 @@ import { useState } from "react";
 import { formatCep } from "@/lib/account/documents";
 import { lookupCep } from "@/lib/account/profileClient";
 import type { DeliveryAddress } from "@/lib/customers/address";
+import "@/components/staff/quoteEditor.css";
 
 /** Endereço de entrega no cadastro do cliente: o CEP preenche rua, bairro, cidade e UF (ViaCEP). */
-export function AddressFields({ value, onChange }: { value: DeliveryAddress; onChange: (update: (current: DeliveryAddress) => DeliveryAddress) => void }) {
+export function AddressFields({ value, onChange, hint }: { value: DeliveryAddress; onChange: (update: (current: DeliveryAddress) => DeliveryAddress) => void; hint?: string }) {
   const [cepState, setCepState] = useState<"idle" | "loading" | "notfound">("idle");
   const set = (key: keyof DeliveryAddress) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const text = key === "state" ? event.target.value.toUpperCase() : event.target.value;
@@ -29,6 +30,7 @@ export function AddressFields({ value, onChange }: { value: DeliveryAddress; onC
   return (
     <fieldset className="qe-address">
       <legend>Endereço de entrega (opcional)</legend>
+      {hint ? <p className="qe-fhint qe-addr-wide">{hint}</p> : null}
       <label className="qe-field">
         <span>CEP</span>
         <input autoComplete="postal-code" inputMode="numeric" onChange={(event) => void changeCep(event.target.value)} placeholder="00000-000" value={value.cep} />

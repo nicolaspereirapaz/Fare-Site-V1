@@ -7,12 +7,12 @@ import sharp from "sharp";
 import type { SessionReader } from "@/lib/auth/session";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { mockupFileOf } from "@/lib/backoffice/mockupFiles";
-import { formatBillingAddress, type QuoteCartItem } from "@/lib/commerce";
+import type { QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import { getOrderFinance, type OrderFinance } from "@/lib/orders/payments";
 import { paymentPlan } from "@/lib/orders/paymentPlan";
 import { findOrderById, type Order } from "@/lib/orders/repository";
-import { buildOrderDocument, type OrderDocument } from "./orderDocument";
+import { buildOrderDocument, orderDeliveryAddress, type OrderDocument } from "./orderDocument";
 import { registerFonts } from "./pdf";
 import { brl } from "./proposal";
 
@@ -56,12 +56,11 @@ async function thumbnail(source: string | null): Promise<string | null> {
 export async function buildComanda(order: Order, finance: OrderFinance | null, imageOf: (item: QuoteCartItem) => Promise<string | null>, now = new Date()): Promise<Comanda> {
   const sources = await Promise.all(order.items.map((item) => imageOf(item).catch(() => null)));
   const doc = buildOrderDocument(order, finance, { seller: "", siteUrl: "", imageOf: (item) => sources[order.items.indexOf(item)] ?? null });
-  const billing = order.customer.billing;
   return {
     doc,
     createdBy: finance?.createdBy ?? null,
     notes: order.customer.notes?.trim() ?? "",
-    delivery: finance ? { mode: finance.deliveryMode, date: finance.deliveryDate, time: finance.deliveryTime ?? null, address: finance.deliveryMode === "entrega" ? order.customer.address || (billing ? formatBillingAddress(billing.address) : null) : null } : null,
+    delivery: finance ? { mode: finance.deliveryMode, date: finance.deliveryDate, time: finance.deliveryTime ?? null, address: orderDeliveryAddress(order, finance) } : null,
     payment: finance ? { total: doc.total, paid: finance.paidCents / 100, balance: Math.max(0, finance.balanceCents) / 100, onPickup: Boolean(finance.paymentOnPickup), plan: paymentPlan(finance) } : null,
     images: await Promise.all(doc.items.map((item) => thumbnail(item.imageUrl))),
     printedAt: dateTimeBR(now),

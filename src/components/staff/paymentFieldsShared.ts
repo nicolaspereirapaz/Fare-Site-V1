@@ -1,4 +1,5 @@
 import type { PaymentMethod } from "@/lib/orders/repository";
+import { EMPTY_ADDRESS, type DeliveryAddress } from "@/lib/customers/address";
 
 /** Métodos do balcão; o checkout público continua com sua lista própria. */
 export const STAFF_PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -10,9 +11,11 @@ export type PaymentForm = {
   deliveryDate: string; deliveryMode: "retirada" | "entrega";
   /** Horário combinado da retirada/entrega ("14:30"), opcional. */
   deliveryTime: string;
+  /** Endereço só deste pedido (com entrega); em branco vale o do cadastro do cliente. */
+  deliveryAddress: DeliveryAddress;
 };
 export const EMPTY_PAYMENT_FORM: PaymentForm = {
-  paid: "0,00", paymentMethod: "pix", paidAt: "", installments: "1", dueDate: "", deliveryDate: "", deliveryMode: "retirada", deliveryTime: "",
+  paid: "0,00", paymentMethod: "pix", paidAt: "", installments: "1", dueDate: "", deliveryDate: "", deliveryMode: "retirada", deliveryTime: "", deliveryAddress: EMPTY_ADDRESS,
 };
 export function todayInBrazil(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());

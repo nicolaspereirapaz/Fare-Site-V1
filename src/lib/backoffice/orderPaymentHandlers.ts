@@ -1,3 +1,4 @@
+import { parseDeliveryAddress } from "@/lib/customers/address";
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import type { QuoteBuilderDeps } from "@/lib/backoffice/quoteBuilderHandlers";
 import { findOrderById } from "@/lib/orders/repository";
@@ -49,7 +50,11 @@ export function createUpdateOrderDeliveryHandler(deps: Pick<QuoteBuilderDeps, "d
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return json({ error: "INVALID_REQUEST" }, 400);
     const body = raw as Record<string, unknown>;
     try {
-      const finance = updateOrderDelivery(db, { orderId, deliveryDate: (body.deliveryDate || null) as string | null, deliveryTime: (body.deliveryTime || null) as string | null });
+      const finance = updateOrderDelivery(db, {
+        orderId, deliveryDate: (body.deliveryDate || null) as string | null, deliveryTime: (body.deliveryTime || null) as string | null,
+        ...(body.deliveryMode !== undefined ? { deliveryMode: body.deliveryMode as "retirada" | "entrega" } : {}),
+        ...("deliveryAddress" in body ? { deliveryAddress: parseDeliveryAddress(body.deliveryAddress) } : {}),
+      });
       return json({ finance });
     } catch (error) {
       if (error instanceof Error && !('code' in error)) return json({ error: "INVALID_REQUEST", message: error.message }, 400);

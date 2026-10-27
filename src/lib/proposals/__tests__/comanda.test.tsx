@@ -43,6 +43,9 @@ describe("comanda A5", () => {
     expect(comanda.delivery?.address).toBe("Rua das Flores, 12 — Centro, Jundiaí");
     expect(comanda.doc.items[0]).toMatchObject({ specs: ["10x15cm", expect.any(String)], color: "Papel Fosco" });
     expect((await buildComanda(photoOrder, finance(0), noImage)).delivery?.address).toBeNull(); // retirada: sem endereço
+    // Endereço digitado no pedido vale no lugar do cadastro.
+    const own = await buildComanda(photoOrder, { ...finance(0), deliveryMode: "entrega", deliveryAddress: { cep: "", street: "Av. B", number: "5", complement: "", district: "", city: "Itu", state: "SP", reference: "" } }, noImage);
+    expect(own.delivery?.address).toBe("Av. B, 5 — Itu/SP");
     await expect(renderComandaPdf(comanda)).resolves.toBeInstanceOf(Buffer);
   }, 30000);
 });
