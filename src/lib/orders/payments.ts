@@ -38,7 +38,7 @@ function requireCents(value: unknown, allowZero = false) {
   }
 }
 
-function requireDate(value: unknown) {
+export function requireDate(value: unknown) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) {
     throw new Error("Data inválida; use YYYY-MM-DD.");
   }
@@ -150,6 +150,24 @@ export function getOrderFinance(db: DatabaseSync, orderId: string): OrderFinance
   return { paidCents, balanceCents: order.totalCents! - paidCents, createdBy: meta.actor_name,
     internalNotes: meta.internal_notes, deliveryDate: meta.delivery_date, deliveryMode: meta.delivery_mode, deliveryTime: meta.delivery_time ?? null,
     installments: meta.installments, dueDate: meta.due_date, payments, ...(meta.payment_on_pickup ? { paymentOnPickup: true } : {}) };
+}
+
+/** Muda só a data/horário de entrega previstos; pedido concluído ou cancelado fica como está. */
+export function updateOrderDelivery(db: DatabaseSync, input: { orderId: string; deliveryDate: string | null; deliveryTime: string | null }): OrderFinance {
+  migrateFinance(db);
+  if (input.deliveryDate !== null) requireDate(input.deliveryDate);
+  if (input.deliveryTime !== null) {
+    if (typeof input.deliveryTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.deliveryTime)) throw new Error("Horário inválido; use HH:MM.");
+    if (input.deliveryDate === null) throw new Error("Informe a data junto com o horário.");
+  }
+  return transaction(db, () => {
+    const order = findOrderById(db, input.orderId);
+    if (!order || !getOrderFinance(db, order.id)) throw new Error("Pedido sem metadados financeiros.");
+    if (order.status === "cancelado" || order.status === "concluido") throw new Error("Pedido concluído ou cancelado não pode ser alterado.");
+    requireWrite(db.prepare("UPDATE fare_order_finance SET delivery_date = ?, delivery_time = ? WHERE order_id = ?")
+      .run(input.deliveryDate, input.deliveryTime, order.id));
+    return getOrderFinance(db, order.id)!;
+  });
 }
 
 export function recordOrderPayment(db: DatabaseSync, input: {

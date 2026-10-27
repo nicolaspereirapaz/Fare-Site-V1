@@ -180,6 +180,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [items, setItems] = useState<Item[]>([]);
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [notes, setNotes] = useState("");
+  /** Entrega prevista do orçamento (vira a sugestão ao fechar). */
+  const [delivery, setDelivery] = useState({ date: "", time: "" });
   const [preview, setPreview] = useState<Record<string, Preview>>({});
   const [totals, setTotals] = useState<Totals>(EMPTY_TOTALS);
   const [discount, setDiscount] = useState<DiscountForm>({ type: "percent", value: "" });
@@ -217,6 +219,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
         setItems((payload.items as ServerItem[]).map(fromServerItem));
         setProducts(payload.products ?? {});
         setNotes(payload.internalNotes ?? "");
+        setDelivery({ date: payload.deliveryDate ?? "", time: payload.deliveryTime ?? "" });
         if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
         if (payload.hasCustomer === false) setNeedsCustomer(true);
         else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); setFixedProfessional(Boolean(payload.customerProfessional)); }
@@ -296,11 +299,12 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   async function submit() {
     if (isOrder && !editingOrder && (!customer || !payment.paid.trim() || paymentFormError(payment, Math.round(totals.total * 100)))) return;
     const pickup = paymentChoice === "pickup";
+    const quoteDelivery = isOrder ? {} : { deliveryDate: delivery.date || null, deliveryTime: delivery.date && delivery.time ? delivery.time : null };
     setSaving(true);
     setSaveError(null);
     const body = docId
-      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
-      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody,
+      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...quoteDelivery, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
+      : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody, ...quoteDelivery,
         ...(isOrder ? {
           // Mesmas regras de "Fechar Orçamento": pagar na retirada = sem recebimento agora, retirada na loja.
           paymentMethod: pickup ? "pix" : payment.paymentMethod, paymentOnPickup: pickup,
@@ -547,6 +551,15 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
           ) : null}
           <div className="qe-sum-row"><span>Frete</span><span>A combinar</span></div>
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
+          {!isOrder ? (
+            <div className="qe-discount qe-delivery">
+              <span className="qe-discount-label">Entrega prevista</span>
+              <div className="qe-discount-row">
+                <input aria-label="Data de entrega" disabled={!editable} onChange={(event) => setDelivery({ ...delivery, date: event.target.value })} type="date" value={delivery.date} />
+                <input aria-label="Horário de entrega (opcional)" disabled={!editable || !delivery.date} onChange={(event) => setDelivery({ ...delivery, time: event.target.value })} type="time" value={delivery.time} />
+              </div>
+            </div>
+          ) : null}
           {isOrder ? <>
             <div className="qe-sum-row"><span>Já pago</span><span>{brl(receivedCents / 100)}</span></div>
             <div className="qe-sum-row"><span>Falta pagar</span><span className="qe-payment-debt">{brl(Math.max(0, Math.round(totals.total * 100) - receivedCents) / 100)}</span></div>

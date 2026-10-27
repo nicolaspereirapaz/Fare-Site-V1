@@ -9,10 +9,12 @@ import type { BackofficeQuoteSummary } from '@/lib/backoffice/quotesAccess';
 export type QuoteToClose = Pick<BackofficeQuoteSummary,'id'|'code'|'customerName'|'total'|'updatedAt'> & {
   /** Pedido do site (carrinho/fotos) sem pagamento: mesma janela, outro endereço. */
   kind?: 'order';
+  /** Entrega prevista combinada no orçamento: já vem preenchida. */
+  deliveryDate?: string | null; deliveryTime?: string | null;
 };
 export type ClosedOrder = {id:string;code:string;status:string};
 export function CloseQuoteDialog({quote,onClose,onClosed}:{quote:QuoteToClose;onClose:()=>void;onClosed:(order:ClosedOrder)=>void}) {
-  const [form,setForm]=useState<PaymentForm>(()=>({...EMPTY_PAYMENT_FORM,paid:'',paidAt:todayInBrazil()}));
+  const [form,setForm]=useState<PaymentForm>(()=>({...EMPTY_PAYMENT_FORM,paid:'',paidAt:todayInBrazil(),deliveryDate:quote.deliveryDate??'',deliveryTime:quote.deliveryTime??''}));
   const [choice,setChoice]=useState<ClosingChoice>(null);
   const [busy,setBusy]=useState(false);const [pending,setPending]=useState(false);const [error,setError]=useState('');
   const [confirmed,setConfirmed]=useState<ClosedOrder|null>(null);

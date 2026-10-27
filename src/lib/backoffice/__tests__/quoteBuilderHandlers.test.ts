@@ -156,4 +156,22 @@ describe("editor de orçamentos do painel", () => {
     const response = await handlers.create(post({ customerRef: "painel:nao-existe", idempotencyKey: "orc-cliente-x", items }));
     expect(response.status).toBe(400);
   });
+
+  it("entrega prevista: cria com data e hora, reabre, mantém sem o campo e recusa hora sem data", async () => {
+    const { db, handlers } = setup();
+    const items = [{ id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 300, gravacoes: [] }];
+    const created = await handlers.create(post({ customerRef: "conta:u1", idempotencyKey: "orc-entrega-1", items, deliveryDate: "2026-11-10", deliveryTime: "14:30" }));
+    const { id } = await created.json() as { id: string };
+    expect(findQuoteById(db, id)).toMatchObject({ deliveryDate: "2026-11-10", deliveryTime: "14:30" });
+    const state = await (await handlers.read(new Request("http://x"), id)).json() as { updatedAt: string; deliveryDate: string };
+    expect(state.deliveryDate).toBe("2026-11-10");
+
+    const put = (body: Record<string, unknown>) => new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ internalNotes: "", items, ...body }) });
+    expect((await handlers.update(put({ updatedAt: state.updatedAt }), id)).status).toBe(200);
+    expect(findQuoteById(db, id)).toMatchObject({ deliveryDate: "2026-11-10", deliveryTime: "14:30" });
+    expect((await handlers.update(put({ updatedAt: findQuoteById(db, id)!.updatedAt, deliveryDate: null, deliveryTime: "10:00" }), id)).status).toBe(400);
+    expect((await handlers.update(put({ updatedAt: findQuoteById(db, id)!.updatedAt, deliveryDate: "2026-02-30" }), id)).status).toBe(400);
+    expect((await handlers.update(put({ updatedAt: findQuoteById(db, id)!.updatedAt, deliveryDate: "2026-11-12", deliveryTime: null }), id)).status).toBe(200);
+    expect(findQuoteById(db, id)).toMatchObject({ deliveryDate: "2026-11-12", deliveryTime: null });
+  });
 });

@@ -27,6 +27,8 @@ export type CreateQuoteInput = {
   items: QuoteCartItem[];
 };
 
+export type QuoteDelivery = { date: string | null; time: string | null };
+
 export type Quote = CreateQuoteInput & {
   id: string;
   status: QuoteStatus;
@@ -41,6 +43,9 @@ export type Quote = CreateQuoteInput & {
   proposalSentAt: string | null;
   /** Desconto no total dado pela equipe (totalCents já vem descontado). */
   discount: QuoteDiscount | null;
+  /** Entrega prevista combinada no orçamento (YYYY-MM-DD e HH:MM); vira a sugestão ao fechar. */
+  deliveryDate: string | null;
+  deliveryTime: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -58,6 +63,8 @@ type QuoteRow = {
   internal_notes?: string | null;
   proposal_sent_at?: string | null;
   discount_json?: string | null;
+  delivery_date?: string | null;
+  delivery_time?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -113,6 +120,8 @@ export function runQuoteMigrations(database: DatabaseSync) {
   if (!columns.has("internal_notes")) database.exec("ALTER TABLE fare_quotes ADD COLUMN internal_notes TEXT NOT NULL DEFAULT ''");
   if (!columns.has("proposal_sent_at")) database.exec("ALTER TABLE fare_quotes ADD COLUMN proposal_sent_at TEXT");
   if (!columns.has("discount_json")) database.exec("ALTER TABLE fare_quotes ADD COLUMN discount_json TEXT");
+  if (!columns.has("delivery_date")) database.exec("ALTER TABLE fare_quotes ADD COLUMN delivery_date TEXT");
+  if (!columns.has("delivery_time")) database.exec("ALTER TABLE fare_quotes ADD COLUMN delivery_time TEXT");
 }
 
 /** Soma dos itens em centavos (null se algum está "sob consulta"), já com o desconto. */
@@ -146,6 +155,8 @@ function deserialize(row: QuoteRow): Quote {
     internalNotes: row.internal_notes ?? "",
     proposalSentAt: row.proposal_sent_at ?? null,
     discount: readDiscount(row.discount_json),
+    deliveryDate: row.delivery_date ?? null,
+    deliveryTime: row.delivery_time ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -185,17 +196,17 @@ export function listQuotesByOwners(database: DatabaseSync, ownerIds: string[]): 
 /** Orçamento montado pela equipe no painel (cliente do site ou cadastrado no painel). Já tem preço: nasce em "Em negociação". */
 export function createManualQuote(
   database: DatabaseSync,
-  input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string; discount?: QuoteDiscount | null },
+  input: { ownerId: string; customer: QuoteCustomer; items: QuoteCartItem[]; createdBy: string; internalNotes: string; idempotencyKey: string; discount?: QuoteDiscount | null; delivery?: QuoteDelivery },
 ): Quote {
   runQuoteMigrations(database);
   const now = new Date().toISOString();
   const discount = input.discount ?? null;
   const total = totalCents(input.items, discount);
   database.prepare(`
-    INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, discount_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'em_negociacao', ?, ?, ?, ?, ?, ?)
+    INSERT INTO fare_quotes (id, user_id, idempotency_key, customer_snapshot, items_snapshot, status, total_cents, created_by, internal_notes, discount_json, delivery_date, delivery_time, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'em_negociacao', ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, idempotency_key) DO NOTHING
-  `).run(numberedId(nextDocumentNumber(database)), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, now, now);
+  `).run(numberedId(nextDocumentNumber(database)), input.ownerId, input.idempotencyKey, JSON.stringify(input.customer), JSON.stringify(input.items), total, input.createdBy, input.internalNotes, discount ? JSON.stringify(discount) : null, input.delivery?.date ?? null, input.delivery?.time ?? null, now, now);
   const row = database.prepare("SELECT * FROM fare_quotes WHERE user_id = ? AND idempotency_key = ?")
     .get(input.ownerId, input.idempotencyKey) as QuoteRow | undefined;
   if (!row) throw new Error("Não foi possível salvar o orçamento.");
@@ -221,6 +232,8 @@ export function replaceQuoteItems(
     quoteId: string; items: QuoteCartItem[]; internalNotes: string; expectedUpdatedAt: string; discount?: QuoteDiscount | null;
     /** Cliente escolhido depois: só vale para orçamento ainda sem cliente. */
     owner?: { ownerId: string; customer: QuoteCustomer } | null;
+    /** Sem o campo = mantém a entrega que já estava. */
+    delivery?: QuoteDelivery;
   },
 ): Quote {
   runQuoteMigrations(database);
@@ -234,10 +247,11 @@ export function replaceQuoteItems(
   const owner = input.owner && current.userId === NO_CUSTOMER_OWNER ? input.owner : null;
   const userId = owner?.ownerId ?? current.userId;
   const customer = owner?.customer ?? current.customer;
-  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, discount_json = ?, user_id = ?, customer_snapshot = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
-    .run(JSON.stringify(input.items), total, input.internalNotes, discount ? JSON.stringify(discount) : null, userId, JSON.stringify(customer), now, current.id, input.expectedUpdatedAt);
+  const delivery = input.delivery ?? { date: current.deliveryDate, time: current.deliveryTime };
+  const result = database.prepare("UPDATE fare_quotes SET items_snapshot = ?, total_cents = ?, internal_notes = ?, discount_json = ?, user_id = ?, customer_snapshot = ?, delivery_date = ?, delivery_time = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+    .run(JSON.stringify(input.items), total, input.internalNotes, discount ? JSON.stringify(discount) : null, userId, JSON.stringify(customer), delivery.date, delivery.time, now, current.id, input.expectedUpdatedAt);
   if (Number(result.changes) !== 1) throw new Error("O orçamento foi alterado por outra pessoa. Abra de novo.");
-  return { ...current, userId, customer, items: input.items, totalCents: total, internalNotes: input.internalNotes, discount, updatedAt: now };
+  return { ...current, userId, customer, items: input.items, totalCents: total, internalNotes: input.internalNotes, discount, deliveryDate: delivery.date, deliveryTime: delivery.time, updatedAt: now };
 }
 
 /** Proposta enviada: guarda a data e, se ainda aguardava orçamento, passa para "Em negociação". */

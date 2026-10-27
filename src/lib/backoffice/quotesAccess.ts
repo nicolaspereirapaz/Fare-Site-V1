@@ -24,6 +24,8 @@ export type BackofficeQuoteSummary = {
   createdBy: string | null;
   internalNotes: string;
   proposalSentAt: string | null;
+  deliveryDate: string | null;
+  deliveryTime: string | null;
   createdAt: string;
   /** Para editar sem sobrescrever a mudança de outra pessoa. */
   updatedAt: string;
@@ -46,6 +48,8 @@ function toSummary(quote: Quote): BackofficeQuoteSummary {
     createdBy: quote.createdBy ?? null,
     internalNotes: quote.internalNotes ?? "",
     proposalSentAt: quote.proposalSentAt ?? null,
+    deliveryDate: quote.deliveryDate,
+    deliveryTime: quote.deliveryTime,
     createdAt: quote.createdAt,
     updatedAt: quote.updatedAt,
   };

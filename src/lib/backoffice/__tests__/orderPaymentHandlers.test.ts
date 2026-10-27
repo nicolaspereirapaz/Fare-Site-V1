@@ -1,6 +1,6 @@
 import {DatabaseSync} from 'node:sqlite';
 import {expect,it,vi} from 'vitest';
-import {createRecordOrderPaymentHandler} from '@/lib/backoffice/orderPaymentHandlers';
+import {createRecordOrderPaymentHandler,createUpdateOrderDeliveryHandler} from '@/lib/backoffice/orderPaymentHandlers';
 import {createDirectOrder,getOrderFinance} from '@/lib/orders/payments';
 const request=(body:unknown)=>new Request('http://x',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
 function setup(role:string|null='vendedor'){
@@ -24,4 +24,18 @@ it('401/403/404, JSON inválido, inválidos não mudam o saldo',async()=>{
  expect((await handler(new Request('http://x',{method:'POST',headers:{'content-type':'application/json'},body:'{'}),order.id)).status).toBe(400);
  expect((await handler(request({idempotencyKey:'12345678',amountCents:'2000',paymentMethod:'pix',paidAt:'2026-10-14'}),order.id)).status).toBe(400);
  expect(getOrderFinance(db,order.id)?.paidCents).toBe(0);
+});
+it('entrega prevista do pedido: altera data/horário, valida e bloqueia pedido encerrado',async()=>{
+ const {db,order}=setup();
+ const update=createUpdateOrderDeliveryHandler({database:()=>db,getSession:vi.fn().mockResolvedValue({user:{id:'s1',name:'Bia',role:'vendedor'}})});
+ const patch=(body:unknown)=>new Request('http://x',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+ expect((await update(patch({deliveryDate:'2026-11-05',deliveryTime:'09:15'}),order.id)).status).toBe(200);
+ expect(getOrderFinance(db,order.id)).toMatchObject({deliveryDate:'2026-11-05',deliveryTime:'09:15',deliveryMode:'retirada'});
+ expect((await update(patch({deliveryDate:null,deliveryTime:'09:15'}),order.id)).status).toBe(400);
+ expect((await update(patch({deliveryDate:'2026-02-30'}),order.id)).status).toBe(400);
+ expect((await update(patch({deliveryDate:'2026-11-06'}),order.id)).status).toBe(200);
+ expect(getOrderFinance(db,order.id)).toMatchObject({deliveryDate:'2026-11-06',deliveryTime:null});
+ db.prepare("UPDATE fare_orders SET status='cancelado' WHERE id=?").run(order.id);
+ expect((await update(patch({deliveryDate:'2026-11-07'}),order.id)).status).toBe(400);
+ expect(getOrderFinance(db,order.id)?.deliveryDate).toBe('2026-11-06');
 });

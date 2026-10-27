@@ -19,7 +19,7 @@ const QUOTE: Quote = {
     name: "Ana Souza", company: "Padaria Boa Vista", phone: "(11) 98888-7777",
     billing: { personType: "pj", document: "11.222.333/0001-81", companyName: "Padaria Boa Vista Ltda", tradeName: "", stateRegistration: "ISENTO", address: { cep: "13201-000", street: "Rua A", number: "1", complement: "", district: "Centro", city: "Jundiaí", state: "SP" } },
   },
-  items: ITEMS, status: "aguardando_orcamento", orderId: null, totalCents: 198300, createdBy: "Bia", internalNotes: "não mostrar", proposalSentAt: null, discount: null, createdAt: "2026-10-12T15:00:00.000Z", updatedAt: "2026-10-12T15:00:00.000Z",
+  items: ITEMS, status: "aguardando_orcamento", orderId: null, totalCents: 198300, createdBy: "Bia", internalNotes: "não mostrar", proposalSentAt: null, discount: null, deliveryDate: null, deliveryTime: null, createdAt: "2026-10-12T15:00:00.000Z", updatedAt: "2026-10-12T15:00:00.000Z",
 };
 
 const NOW = new Date("2026-10-13T14:00:00.000Z");
@@ -49,6 +49,11 @@ describe("proposta para o cliente", () => {
     expect(proposal.notice).toBe("Início da produção mediante sinal de 50%.");
     expect(proposal.terms.some((term) => term.text.includes("50%"))).toBe(false);
     expect(proposal.company).toEqual({ name: "Fare Foto", document: "CNPJ 50.344.377/0001-36", address: "Rua do Rosário, 68 - Centro · Jundiaí/SP", whatsapp: "(11) 95314-7703", site: "farefoto.com.br" });
+  });
+
+  it("entrega prevista do orçamento aparece depois do prazo de produção", () => {
+    const proposal = buildProposal({ ...QUOTE, deliveryDate: "2026-11-10", deliveryTime: "14:30" }, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal.terms[1]).toEqual({ title: "Entrega prevista", text: "10/11/2026 às 14:30" });
   });
 
   it("nunca leva custo, fornecedor, SKU ou observação interna", () => {

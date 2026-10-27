@@ -116,3 +116,6 @@
 .sd-payment-plan .sd-payment-due { color:#9a3412; font-weight:600; }
 .sd-comanda-print { display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .sd-comanda-pdf { font-size:.82rem; color:#5f6470; text-decoration:underline; }
+.sd-delivery-edit { display:grid; gap:8px; margin-top:10px; }
+.sd-delivery-edit label { display:grid; gap:4px; font-size:13px; color:#4b5168; }
+.sd-delivery-edit input { padding:7px 9px; border:1px solid #d6d9e4; border-radius:8px; font:inherit; }

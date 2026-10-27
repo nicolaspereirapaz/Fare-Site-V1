@@ -17,6 +17,8 @@ export type StaffDocument = {
   createdAt: string; updatedAt: string; createdBy: string | null; internalNotes: string;
   finance: OrderFinance | null; paymentMethod: PaymentMethod | null;
   proposalSentAt: string | null; orderId: string | null; history: OrderHistoryEntry[];
+  /** Entrega prevista do orçamento (pedido usa `finance`). */
+  quoteDelivery?: { date: string | null; time: string | null } | null;
 };
 
 type DetailDeps = {
@@ -49,6 +51,7 @@ export function createDocumentDetailsHandler(deps: DetailDeps) {
       createdBy:quote?.createdBy??finance?.createdBy??null,internalNotes:quote?.internalNotes??finance?.internalNotes??'',
       finance,paymentMethod:quote?null:(record as Order).paymentMethod,
       proposalSentAt:quote?.proposalSentAt??null,orderId:quote?.orderId??null,history:deps.history?.(id)??[],
+      quoteDelivery:quote?{date:quote.deliveryDate,time:quote.deliveryTime}:null,
     };
     return json({document});
   };

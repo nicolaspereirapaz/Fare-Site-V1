@@ -145,6 +145,8 @@
 .qe-discount-row input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--qe-line); border-radius: 8px; font: inherit; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
 .qe-discount-row input:focus { outline: 2px solid rgba(43, 56, 84, .18); border-color: var(--qe-ink); }
 .qe-discount .qe-error { margin: 8px 0 0; }
+.qe-delivery input { text-align: left; }
+.qe-delivery input[type="time"] { flex: 0 0 104px; }
 .qe-sum-discount span:last-child { color: #167b55; font-weight: 600; }
 /* Valores editáveis à mão (custo, preço e gravação): o calculado aparece como valor; digitado fica laranja claro */
 .qe-cost { display: inline-flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; color: var(--qe-muted); }

@@ -135,6 +135,7 @@ export function buildProposal(
     pixKey: "50.344.377/0001-36",
     terms: [
       { title: "Prazo de produção", text: PROPOSAL_TERMS.production },
+      ...(quote.deliveryDate ? [{ title: "Entrega prevista", text: `${formatDate(new Date(`${quote.deliveryDate}T12:00:00Z`))}${quote.deliveryTime ? ` às ${quote.deliveryTime}` : ""}` }] : []),
       { title: "Pagamento", text: PROPOSAL_TERMS.payment },
       { title: "Frete", text: PROPOSAL_TERMS.freight },
       { title: "Validade", text: `Até ${formatDate(new Date(now.getTime() + PROPOSAL_VALIDITY_DAYS * 86_400_000))}, sujeita ao estoque do fornecedor.` },

@@ -13,6 +13,7 @@ import { PhotoLinkActions } from "@/components/staff/PhotoLinkActions";
 import { photoFromName } from "@/components/staff/photoItems";
 import { ProposalActions } from '@/components/staff/ProposalActions';
 import { OrderPaymentPanel } from '@/components/staff/OrderPaymentPanel';
+import { OrderDeliveryEditor } from '@/components/staff/OrderDeliveryEditor';
 import { dateLabel, deliveryLabel, STAFF_PAYMENT_LABELS } from '@/components/staff/paymentFieldsShared';
 import { canTransitionQuote, QUOTE_BOARD_COLUMNS, QUOTE_STATUS_LABELS, type QuoteStatus } from '@/lib/quotes/quoteCode';
 import { COLUNAS_QUADRO_PEDIDOS, podeTransicionarStatusPedido, type StatusPedido } from '@/lib/backoffice/orderStatus';
@@ -148,7 +149,8 @@ export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'
    {(document.customer.notes||document.internalNotes)?<section className="qe-card"><h2>Observações</h2>{document.customer.notes?<p>{document.customer.notes}</p>:null}{document.internalNotes?<div><h3>Observações internas</h3><p>{document.internalNotes}</p></div>:null}</section>:null}
    {!isQuote?<section className="qe-card"><h2>Histórico</h2><ol className="kb-history">{[...document.history].reverse().map((entry,i)=><li key={i}><strong>{STATUS_LABELS[entry.status]}</strong><span>{formatDate(entry.at)} · {entry.by}</span></li>)}<li><strong>Pedido criado</strong><span>{formatDate(document.createdAt)}{document.createdBy?` · ${document.createdBy}`:''}</span></li></ol></section>:null}
   </div><aside className="sd-side">
-   {!isQuote?<section className="qe-card"><h2>Entrega</h2><p className="sd-delivery-date">{deliveryLabel(finance?.deliveryDate, finance?.deliveryTime)}</p><p className="sd-muted">{finance?finance.deliveryMode==='retirada'?'Retirada na loja':'Entrega ao cliente':'Forma de entrega não informada'}</p></section>:null}
+   {isQuote?<section className="qe-card"><h2>Entrega prevista</h2><p className="sd-delivery-date">{deliveryLabel(document.quoteDelivery?.date,document.quoteDelivery?.time)}</p>{openQuote?<Link className="sd-muted" href={`/equipe/orcamentos/${id}`}>Alterar no editor do orçamento</Link>:null}</section>:null}
+   {!isQuote?<section className="qe-card"><h2>Entrega</h2><p className="sd-delivery-date">{deliveryLabel(finance?.deliveryDate, finance?.deliveryTime)}</p><p className="sd-muted">{finance?finance.deliveryMode==='retirada'?'Retirada na loja':'Entrega ao cliente':'Forma de entrega não informada'}</p>{finance&&editableOrder?<OrderDeliveryEditor orderId={id} date={finance.deliveryDate} time={finance.deliveryTime} onSaved={reload}/>:null}</section>:null}
    <section className="qe-card financial"><h2>{isQuote?'Resumo do orçamento':'Pagamento'}</h2><dl>
     {document.discount?<><div><dt>Subtotal</dt><dd>{document.total===null?'Sob consulta':brl(document.total+document.discount.amount)}</dd></div><div><dt>{document.discount.label}</dt><dd>− {brl(document.discount.amount)}</dd></div></>:null}
     <div><dt>Total</dt><dd>{document.total===null?'Sob consulta':brl(document.total)}</dd></div>
@@ -172,6 +174,6 @@ export function StaffDocumentPage({kind,id,canCancel}:{kind:StaffDocument['kind'
     <button className="sd-refresh" disabled={busy} onClick={()=>reload().catch(e=>setError(e.message))} type="button"><RefreshCw size={13}/> Atualizar dados</button>
    </section>
   </aside></div>
-  {closing?<CloseQuoteDialog quote={{id,code:document.code,customerName:document.customer.name,total:document.total,updatedAt:document.updatedAt}} onClose={()=>setClosing(false)} onClosed={order=>router.push(`/equipe?aba=${order.status==='aguardando_pagamento'?'orcamentos':'pedidos'}&novo=${order.id}`)}/>:null}
+  {closing?<CloseQuoteDialog quote={{id,code:document.code,customerName:document.customer.name,total:document.total,updatedAt:document.updatedAt,deliveryDate:document.quoteDelivery?.date,deliveryTime:document.quoteDelivery?.time}} onClose={()=>setClosing(false)} onClosed={order=>router.push(`/equipe?aba=${order.status==='aguardando_pagamento'?'orcamentos':'pedidos'}&novo=${order.id}`)}/>:null}
  </div>;
 }

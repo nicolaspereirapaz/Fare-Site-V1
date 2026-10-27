@@ -9,9 +9,9 @@ import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCus
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
-import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote } from "@/lib/quotes/repository";
+import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote, type QuoteDelivery } from "@/lib/quotes/repository";
 import { findOrderById } from "@/lib/orders/repository";
-import { getOrderFinance, replaceOrderItems } from "@/lib/orders/payments";
+import { getOrderFinance, replaceOrderItems, requireDate } from "@/lib/orders/payments";
 import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 
 /** Rotas do editor de orçamentos do painel (clientes, produtos, prévia, criar e editar). */
@@ -35,6 +35,17 @@ async function staff(deps: QuoteBuilderDeps, request: Request) {
   if (!session) return { error: json({ error: "AUTH_REQUIRED" }, 401) };
   if (!hasBackofficeAccess(resolveUserRole(session.user))) return { error: json({ error: "FORBIDDEN" }, 403) };
   return { session };
+}
+
+/** Entrega prevista do orçamento: data opcional e horário só junto com a data. Sem o campo = não mexe. */
+function parseQuoteDelivery(body: Record<string, unknown>): QuoteDelivery | undefined {
+  if (!("deliveryDate" in body)) return undefined;
+  const date = body.deliveryDate || null;
+  const time = body.deliveryTime || null;
+  if (date !== null) requireDate(date);
+  if (time !== null && (typeof time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) throw new Error("Horário inválido; use HH:MM.");
+  if (time !== null && date === null) throw new Error("Informe a data junto com o horário.");
+  return { date: date as string | null, time: time as string | null };
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown> | null> {
@@ -211,7 +222,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         if (items.length !== drafts.length) return json({ error: "INVALID_ITEMS", preview }, 422);
         const quote = createManualQuote(deps.database(), {
           ownerId: owner.ownerId, customer: owner.customer, items, createdBy: access.session.user.name,
-          internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), idempotencyKey, discount,
+          internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), idempotencyKey, discount, delivery: parseQuoteDelivery(body),
         });
         return json({ id: quote.id }, 201);
       } catch (error) {
@@ -262,7 +273,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
           return same && before.costing && item.costing ? { ...kept, costing: { ...item.costing, por: before.costing.por, em: before.costing.em } } : kept;
         });
         const updated = replaceQuoteItems(deps.database(), {
-          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount, owner,
+          quoteId, items: merged, internalNotes: String(body.internalNotes ?? "").trim().slice(0, 2000), expectedUpdatedAt: String(body.updatedAt ?? ""), discount, owner, delivery: parseQuoteDelivery(body),
         });
         return json({ id: updated.id, updatedAt: updated.updatedAt });
       } catch (error) {
@@ -343,6 +354,8 @@ export function editorState(quote: Quote) {
     createdBy: quote.createdBy,
     internalNotes: quote.internalNotes,
     discount: quote.discount,
+    deliveryDate: quote.deliveryDate,
+    deliveryTime: quote.deliveryTime,
     hasCustomer: quote.userId !== NO_CUSTOMER_OWNER,
     customerRef: quote.userId === NO_CUSTOMER_OWNER ? null : quote.userId.startsWith("painel:") ? quote.userId : `conta:${quote.userId}`,
     customer: { name: quote.customer.name, company: quote.customer.company ?? "", phone: quote.customer.phone ?? "", notes: quote.customer.notes ?? "" },

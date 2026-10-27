@@ -1,7 +1,7 @@
 import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import type { QuoteBuilderDeps } from "@/lib/backoffice/quoteBuilderHandlers";
 import { findOrderById } from "@/lib/orders/repository";
-import { getOrderFinance, recordOrderPayment, STAFF_PAYMENT_METHODS } from "@/lib/orders/payments";
+import { getOrderFinance, recordOrderPayment, STAFF_PAYMENT_METHODS, updateOrderDelivery } from "@/lib/orders/payments";
 import { financialMutationGuard } from "@/lib/backoffice/financialMutationGuard";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 export function createRecordOrderPaymentHandler(deps: Pick<QuoteBuilderDeps, "database" | "getSession">) {
@@ -30,6 +30,31 @@ export function createRecordOrderPaymentHandler(deps: Pick<QuoteBuilderDeps, "da
       if (error instanceof Error && !('code' in error)) return json({ error: "INVALID_REQUEST", message: error.message }, 400);
       console.error("Falha ao registrar recebimento", error);
       return json({ error: "INTERNAL_ERROR", message: "Não foi possível registrar o pagamento. Tente novamente." }, 500);
+    }
+  };
+}
+
+/** Alterar data/horário de entrega previstos do pedido (página do pedido). */
+export function createUpdateOrderDeliveryHandler(deps: Pick<QuoteBuilderDeps, "database" | "getSession">) {
+  return async function update(request: Request, orderId: string): Promise<Response> {
+    const session = await deps.getSession({ headers: request.headers });
+    if (!session) return json({ error: "AUTH_REQUIRED" }, 401);
+    if (!hasBackofficeAccess(resolveUserRole(session.user))) return json({ error: "FORBIDDEN" }, 403);
+    const rejected = financialMutationGuard(request);
+    if (rejected) return rejected;
+    const db = deps.database();
+    if (!findOrderById(db, orderId)) return json({ error: "ORDER_NOT_FOUND" }, 404);
+    let raw: unknown;
+    try { raw = await request.json(); } catch { return json({ error: "INVALID_REQUEST" }, 400); }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return json({ error: "INVALID_REQUEST" }, 400);
+    const body = raw as Record<string, unknown>;
+    try {
+      const finance = updateOrderDelivery(db, { orderId, deliveryDate: (body.deliveryDate || null) as string | null, deliveryTime: (body.deliveryTime || null) as string | null });
+      return json({ finance });
+    } catch (error) {
+      if (error instanceof Error && !('code' in error)) return json({ error: "INVALID_REQUEST", message: error.message }, 400);
+      console.error("Falha ao alterar entrega", error);
+      return json({ error: "INTERNAL_ERROR", message: "Não foi possível alterar a entrega. Tente novamente." }, 500);
     }
   };
 }
