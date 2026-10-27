@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import "@/components/staff/quoteEditor.css";
 import "@/components/staff/staffDocument.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardList, FileText, LayoutGrid, Plus, RefreshCw, TriangleAlert } from "lucide-react";
+import { ClipboardList, FileText, LayoutGrid, Plus, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { COLUNAS_QUADRO_PEDIDOS, ORDER_STAFF_LABELS, podeTransicionarStatusPedido, type StatusPedido } from "@/lib/backoffice/orderStatus";
 import type { OrderHistoryEntry } from "@/lib/backoffice/access";
 import type { QuoteBilling } from "@/lib/commerce";
 import {
   formatDay,
   itemsSummary,
+  matchesSearch,
   KanbanBoard,
   KanbanCard,
   KanbanCardBody,
@@ -80,7 +81,7 @@ type BoardColumn = (typeof COLUNAS_QUADRO_PEDIDOS)[number];
 const isBoardColumn = (status: string): status is BoardColumn => (COLUNAS_QUADRO_PEDIDOS as readonly string[]).includes(status);
 
 /** Quadro de pedidos: Aguardando arte | … | Aguardando feedback | Finalizado (fica 24 h e some). */
-function OrdersBoard({ freshOrderId, onFreshShown }: { freshOrderId?: string; onFreshShown: () => void }) {
+function OrdersBoard({ freshOrderId, onFreshShown, search = "" }: { freshOrderId?: string; onFreshShown: () => void; search?: string }) {
   const router = useRouter();
   const [freshId, setFreshId] = useState(freshOrderId);
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
@@ -224,7 +225,7 @@ function OrdersBoard({ freshOrderId, onFreshShown }: { freshOrderId?: string; on
           }}
         >
           {COLUNAS_QUADRO_PEDIDOS.map((status) => {
-            const column = orders.filter((order) => order.status === status && visivelNoQuadroDePedidos(order, now));
+            const column = orders.filter((order) => order.status === status && visivelNoQuadroDePedidos(order, now) && matchesSearch(order, search));
             return (
               <KanbanColumn
                 color={STATUS_COLORS[status].dot}
@@ -254,6 +255,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
   const [tab, setTab] = useState<BackofficeTab>(initialTab);
   /** Destaque do orçamento recém-criado: usado uma vez (trocar de aba e voltar não repete a animação). */
   const [freshId, setFreshId] = useState(freshQuoteId);
+  const [search, setSearch] = useState("");
   const clearFresh = useCallback(() => setFreshId(undefined), []);
   const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutGrid }> = [
     { id: "pedidos", label: "Pedidos", icon: ClipboardList },
@@ -293,6 +295,10 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
         ))}
       </div>
         <div className="kb-new-actions">
+        <label className="kb-search">
+          <Search aria-hidden="true" size={16} />
+          <input aria-label="Pesquisar no quadro" onChange={(event) => setSearch(event.target.value)} placeholder="Nome, número ou produto" type="search" value={search} />
+        </label>
         {tab === "pedidos" ? <Link className="kb-new-quote" href="/equipe/pedidos/novo"><Plus aria-hidden="true" size={16} /> Novo pedido</Link> : null}
         {tab === "orcamentos" ? (
           <Link className="kb-new-quote" href="/equipe/orcamentos/novo">
@@ -302,7 +308,7 @@ export function BackofficeBoard({ canCancel, initialTab = "pedidos", freshQuoteI
         </div>
       </div>
 
-      {tab === "pedidos" ? <OrdersBoard freshOrderId={freshId} onFreshShown={clearFresh} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} />}
+      {tab === "pedidos" ? <OrdersBoard freshOrderId={freshId} onFreshShown={clearFresh} search={search} /> : <QuotesBoard canCancel={canCancel} freshQuoteId={freshId} onFreshShown={clearFresh} search={search} />}
     </div>
   );
 }

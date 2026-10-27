@@ -7,6 +7,7 @@ import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type Staf
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
 import { formatDeliveryAddress } from "@/lib/customers/address";
+import { formatProductName } from "@/lib/text/names";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
@@ -80,7 +81,7 @@ export type EditorProduct = ReturnType<typeof toEditorProduct>;
 export function toEditorProduct(product: BuilderProduct) {
   return {
     publicId: product.publicId,
-    name: product.name,
+    name: formatProductName(product.name),
     category: product.category,
     imageUrl: product.imageUrl,
     description: product.description ?? "",

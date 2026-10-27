@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { formatCnpj, formatCpf, formatPhoneBR, isBrazilianPhone, isValidCnpj, isValidCpf } from "@/lib/account/documents";
 import { getCustomerProfile, saveCustomerProfile } from "@/lib/account/profileRepository";
 import { formatDeliveryAddress, parseDeliveryAddress, type DeliveryAddress } from "@/lib/customers/address";
+import { formatPersonName } from "@/lib/text/names";
 
 /**
  * Clientes para o orçamento do painel: contas do site (tabela `user` + cadastro) e clientes
@@ -208,7 +209,7 @@ function validate(input: PanelCustomerInput) {
   }
   const phone = normalizePhone(input.phone);
   return {
-    name: name.slice(0, 120),
+    name: formatPersonName(name).slice(0, 120),
     company: (input.company ?? "").trim().slice(0, 120),
     phone: formatPhoneBR(phone),
     phoneNorm: phone,

@@ -6651,3 +6651,9 @@ aside.checkout-card .checkout-mode > label.active {
   .kb-toolbar-3, .kb-toolbar-6 { max-width: calc(7 * 250px + 6 * 10px); }
   .kb-board-3 { width: 100%; max-width: calc(7 * 250px + 6 * 10px); grid-template-columns: repeat(3, minmax(250px, 1fr)); }
 }
+
+/* Pesquisa no quadro (canto superior direito, ao lado de "Novo pedido/orçamento"). */
+.kb-search { display: inline-flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 8px; padding: 0 10px; border: 1px solid #e6e7ec; border-radius: 8px; background: #fff; color: #5b6170; }
+.kb-search:focus-within { border-color: #F65C2D; box-shadow: 0 0 0 3px rgba(246,92,45,.15); }
+.kb-search input { width: 210px; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 0.88rem; color: #111; }
+@media (max-width: 600px) { .kb-search { flex: 1 1 100%; } .kb-search input { width: 100%; } }

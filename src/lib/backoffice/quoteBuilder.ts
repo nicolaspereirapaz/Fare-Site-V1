@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { calcularItemOrcamento, FRETE_FORNECEDOR_PRODUTO, type Tecnica } from "@/lib/backoffice/customization";
 import { photoFromName } from "@/components/staff/photoItems";
+import { formatProductName } from "@/lib/text/names";
 import { isMockupFile } from "@/lib/backoffice/mockupFiles";
 import type { ItemCosting, QuoteCartItem } from "@/lib/commerce";
 import type { SpotCustomization } from "@/lib/suppliers/spotCustomizations";
@@ -214,7 +215,8 @@ export function buildQuoteItems(
 
       items.push({
         id: draft.id,
-        productName: product ? product.name : (draft as Extract<DraftItem, { source: "avulso" }>).name,
+        // Nome formatado ("Caneca de Porcelana"); foto mantém o nome exato, que é como ela é reconhecida.
+        productName: product ? formatProductName(product.name) : itemName(draft as Extract<DraftItem, { source: "avulso" }>),
         slug: product ? `${GIFT_PREFIX}${product.publicId}` : `avulso:${randomUUID().slice(0, 8)}`,
         quantity: draft.quantity,
         selections: variant ? { "Variação": variant.label } : {},
@@ -247,6 +249,8 @@ export function buildQuoteItems(
   const cost = cents(valid.reduce((sum, entry) => sum + entry.cost, 0));
   return { items, preview, totals: { total, cost, margin: cents(total - cost), pending: preview.length - valid.length } };
 }
+
+const itemName = (draft: { name: string }) => (photoFromName(draft.name) ? draft.name : formatProductName(draft.name));
 
 /** Item gravado → rascunho para abrir de novo no editor. */
 /**

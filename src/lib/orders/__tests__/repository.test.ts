@@ -476,7 +476,7 @@ describe("camada de dados do backoffice", () => {
 
       workers.push(
         createTransitionWorker(workerPath, databasePath, created.id, "aguardando_feedback"),
-        createTransitionWorker(workerPath, databasePath, created.id, "cancelado"),
+        createTransitionWorker(workerPath, databasePath, created.id, "em_producao"),
       );
       await Promise.all(workers.map((worker) => worker.ready));
       const results = await Promise.all(workers.map((worker) => worker.run()));
@@ -490,7 +490,7 @@ describe("camada de dados do backoffice", () => {
       const history = listOrderStatusHistory(verificationDatabase, created.id);
       verificationDatabase.close();
 
-      expect(["aguardando_feedback", "cancelado"]).toContain(persisted?.status);
+      expect(["aguardando_feedback", "em_producao"]).toContain(persisted?.status);
       expect(history).toHaveLength(statusesAteTransporte.length + 1);
       expect(history.at(-1)).toMatchObject({
         previousStatus: "aguardando_retirada",

@@ -7,6 +7,7 @@ import { Camera, RefreshCw, ShoppingCart, TriangleAlert } from "lucide-react";
 import {
   formatDay,
   itemsSummary,
+  matchesSearch,
   KanbanBoard,
   KanbanCard,
   KanbanCardBody,
@@ -37,7 +38,7 @@ const ORDER_PREFIX = "pedido:";
  * Pedidos feitos direto no site (sem orçamento) também entram em "Aguardando pagamento".
  * Pagamento recebido → vira pedido em "Aguardando arte" (aba Pedidos) e sai daqui.
  */
-export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolean; freshQuoteId?: string; onFreshShown?: () => void }) {
+export function QuotesBoard({ freshQuoteId, onFreshShown, search = "" }: { canCancel?: boolean; freshQuoteId?: string; onFreshShown?: () => void; search?: string }) {
   const [quotes, setQuotes] = useState<BackofficeQuoteSummary[]>([]);
   const [orders, setOrders] = useState<BackofficeOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,9 +138,9 @@ export function QuotesBoard({ freshQuoteId, onFreshShown }: { canCancel?: boolea
   }
 
   const boardQuotes = quotes.filter((quote): quote is BackofficeQuoteSummary & { status: Column } =>
-    (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status),
+    (QUOTE_BOARD_COLUMNS as readonly string[]).includes(quote.status) && matchesSearch(quote, search),
   );
-  const siteOrders = orders.filter((order) => order.status === "aguardando_pagamento");
+  const siteOrders = orders.filter((order) => order.status === "aguardando_pagamento" && matchesSearch(order, search));
   const quoteCard = (quote: BackofficeQuoteSummary) => ({
     code: quote.code,
     summary: itemsSummary(quote.items),

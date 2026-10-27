@@ -65,7 +65,7 @@ describe("itens do orçamento montados no servidor", () => {
     // Sem transporte digitado: nada de frete fixo.
     const semTransporte = buildQuoteItems([{ id: "b", source: "avulso", name: "Banner", cost: 38, quantity: 2, gravacoes: [] }], lookup, actor, NOW);
     expect(semTransporte.preview[0]).toMatchObject({ ok: true, unitPrice: 76, total: 152 });
-    expect(items[0]).toMatchObject({ productName: "Banner lona 90×120 cm", selections: {}, unitPrice: 126, codes: null });
+    expect(items[0]).toMatchObject({ productName: "Banner Lona 90×120 cm", selections: {}, unitPrice: 126, codes: null });
     expect(items[0].slug).toMatch(/^avulso:/);
     expect(items[0].costing?.custoProduto).toBe(38);
   });
