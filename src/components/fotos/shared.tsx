@@ -140,11 +140,14 @@ export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Recor
   const proSizes = SIZES.filter((size) => size.group === group && PRO_PRICES[size.id] !== undefined);
   if (pro && proSizes.length) {
     return (
-      <div className="quantity-range-table">
-        <div className="fp-price-row two"><strong>Tabela profissional</strong><strong>Por foto</strong></div>
-        {proSizes.map((size) => (
-          <div className="fp-price-row two" key={size.id}><span>{size.label}</span><strong className={count(size.id) > 0 ? "fp-hit" : undefined}>{brl(PRO_PRICES[size.id])}</strong></div>
-        ))}
+      <div className="fp-price-table">
+        <div className="quantity-range-table">
+          <div className="quantity-range-head fp-price-row two" aria-hidden="true"><span>Tabela profissional</span><span>Por foto</span></div>
+          {proSizes.map((size) => (
+            <div className="quantity-range-row fp-price-row two" key={size.id}><span>{size.label}</span><strong className={count(size.id) > 0 ? "fp-hit" : undefined}>{brl(PRO_PRICES[size.id])}</strong></div>
+          ))}
+        </div>
+        {proSizes.some((size) => count(size.id) > 0) ? <p className="fp-hit-legend"><i className="fp-hit-swatch" /> Preço das suas fotos agora</p> : null}
       </div>
     );
   }
