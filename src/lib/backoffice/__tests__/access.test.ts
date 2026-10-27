@@ -64,8 +64,9 @@ describe("resolução e permissões de papel do backoffice", () => {
     expect(hasBackofficeAccess("admin")).toBe(true);
   });
 
-  it("restringe cancelamento ao admin", () => {
-    expect(canCancelOrders("vendedor")).toBe(false);
+  it("toda a equipe cancela pedido; cliente não", () => {
+    expect(canCancelOrders("cliente")).toBe(false);
+    expect(canCancelOrders("vendedor")).toBe(true);
     expect(canCancelOrders("admin")).toBe(true);
   });
 });
@@ -242,8 +243,8 @@ describe("atualização de status de pedido no backoffice", () => {
     expect(findOrder).not.toHaveBeenCalled();
   });
 
-  it("nega vendedor tentando cancelar", async () => {
-    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "vendedor" } });
+  it("nega cliente tentando cancelar", async () => {
+    const getSession = vi.fn().mockResolvedValue({ user: { id: "user-1", role: "cliente" } });
     const findOrder = vi.fn();
     const changeOrderStatus = vi.fn();
     const handler = createUpdateBackofficeOrderStatusHandler(getSession, findOrder, changeOrderStatus);

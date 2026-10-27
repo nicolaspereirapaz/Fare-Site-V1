@@ -63,7 +63,7 @@ const TRANSICOES_PERMITIDAS: Record<StatusPedido, StatusPedido[]> = {
   aguardando_producao: ["em_producao", "criando_arte", "cancelado"],
   em_producao: ["aguardando_retirada", "aguardando_producao", "cancelado"],
   aguardando_retirada: ["aguardando_feedback", "em_producao", "cancelado"],
-  aguardando_feedback: ["concluido", "aguardando_retirada"],
+  aguardando_feedback: ["concluido", "aguardando_retirada", "cancelado"],
   // Finalizado por engano: volta enquanto ainda está no quadro.
   concluido: ["aguardando_feedback"],
   cancelado: [],

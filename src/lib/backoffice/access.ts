@@ -54,8 +54,9 @@ export function hasBackofficeAccess(role: UserRole): boolean {
   return role === "vendedor" || role === "admin";
 }
 
+/** Toda a equipe cancela pedido (a tela pede confirmação antes). */
 export function canCancelOrders(role: UserRole): boolean {
-  return role === "admin";
+  return hasBackofficeAccess(role);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

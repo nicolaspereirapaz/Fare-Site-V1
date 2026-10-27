@@ -45,7 +45,7 @@ describe("situações do pedido", () => {
     expect(transicionarStatusPedido(de, para)).toBe(para);
   });
 
-  it.each(["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada"] as const)(
+  it.each(["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback"] as const)(
     "pode cancelar a partir de %s",
     (de) => {
       expect(podeTransicionarStatusPedido(de, "cancelado")).toBe(true);
@@ -57,7 +57,6 @@ describe("situações do pedido", () => {
     ["aguardando_arte", "aguardando_pagamento"],
     ["criando_arte", "em_producao"],
     ["aguardando_retirada", "concluido"],
-    ["aguardando_feedback", "cancelado"],
     ["concluido", "cancelado"],
     ["cancelado", "criando_arte"],
   ] as const)("bloqueia %s → %s", (de, para) => {
