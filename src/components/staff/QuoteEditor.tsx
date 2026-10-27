@@ -9,6 +9,8 @@ import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductC
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
 import { PhotoConfigModal } from "@/components/staff/PhotoConfigModal";
 import { photoFromName, photoTablePrice, type PhotoChoice } from "@/components/staff/photoItems";
+import { AddressFields } from "@/components/staff/AddressFields";
+import { EMPTY_ADDRESS } from "@/lib/customers/address";
 import { paperLabel, PHOTO_PRODUCT_IMAGE, sizeById, SIZES, type SizeGroup } from "@/components/fotos/catalog";
 import { QuoteCreatedDialog } from "@/components/staff/QuoteCreatedDialog";
 import { quoteCode } from "@/lib/quotes/quoteCode";
@@ -55,7 +57,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [creating, setCreating] = useState(startCreating);
-  const [form, setForm] = useState({ name: "", company: "", phone: "", email: "", document: "", address: "" });
+  const [form, setForm] = useState({ name: "", company: "", phone: "", email: "", document: "", address: EMPTY_ADDRESS });
   const [duplicates, setDuplicates] = useState<Duplicate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -77,7 +79,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
 
   function startCreate() {
     const digits = query.replace(/\D/g, "");
-    setForm({ name: digits.length >= 8 ? "" : query.trim(), company: "", phone: digits.length >= 8 ? query.trim() : "", email: "", document: "", address: "" });
+    setForm({ name: digits.length >= 8 ? "" : query.trim(), company: "", phone: digits.length >= 8 ? query.trim() : "", email: "", document: "", address: EMPTY_ADDRESS });
     setDuplicates([]);
     setError(null);
     setCreating(true);
@@ -95,7 +97,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
   }
 
   if (creating) {
-    const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: event.target.value });
+    const set = (key: Exclude<keyof typeof form, "address">) => (event: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: event.target.value });
     return (
       <div className="qe-newclient">
         <div className="qe-grid-3">
@@ -104,7 +106,7 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
           <label className="qe-field"><span>WhatsApp</span><input inputMode="tel" onChange={set("phone")} placeholder="(11) 90000-0000" value={form.phone} /></label>
           <label className="qe-field"><span>E-mail (opcional)</span><input inputMode="email" onChange={set("email")} value={form.email} /></label>
           <label className="qe-field"><span>CPF/CNPJ (opcional)</span><input onChange={set("document")} value={form.document} /></label>
-          <label className="qe-field qe-address"><span>Endereço de entrega (opcional)</span><input onChange={set("address")} placeholder="Rua, número, bairro, cidade" value={form.address} /></label>
+          <AddressFields onChange={(update) => setForm((current) => ({ ...current, address: update(current.address) }))} value={form.address} />
         </div>
         {error ? <p className="qe-error">{error}</p> : null}
         {duplicates.length ? (

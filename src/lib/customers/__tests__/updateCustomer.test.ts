@@ -24,14 +24,16 @@ describe("editar cliente cadastrado", () => {
     expect(customerHistory(db, ana.ref)).toMatchObject([{ kind: "quote", id: quote.id }]);
   });
 
-  it("endereço de entrega: salva no cadastro, vai para o orçamento aberto e some quando apagado", () => {
+  it("endereço de entrega: salva em partes, vai montado para o orçamento aberto e some quando apagado", () => {
     const db = new DatabaseSync(":memory:");
-    const ana = createPanelCustomer(db, { name: "Ana Silva", phone: "(11) 91111-1111", address: " Rua A, 10 — Centro " }, actor);
-    expect(resolveCustomer(db, ana.ref)?.address).toBe("Rua A, 10 — Centro");
+    const address = { cep: "13201000", street: " Rua A ", number: "10", district: "Centro", city: "Jundiaí", state: "sp", reference: "portão azul" };
+    const ana = createPanelCustomer(db, { name: "Ana Silva", phone: "(11) 91111-1111", address }, actor);
+    expect(resolveCustomer(db, ana.ref)?.address).toEqual({ cep: "13201-000", street: "Rua A", number: "10", complement: "", district: "Centro", city: "Jundiaí", state: "SP", reference: "portão azul" });
     const quote = createManualQuote(db, { ownerId: `painel:${ana.id}`, customer: { name: "Ana Silva", phone: "(11) 91111-1111" }, items, createdBy: "Bia", internalNotes: "", idempotencyKey: "k2" });
-    updateCustomer(db, ana.ref, { name: "Ana Silva", phone: "(11) 91111-1111", address: "Rua B, 20" });
-    expect(findQuoteById(db, quote.id)!.customer.address).toBe("Rua B, 20");
-    updateCustomer(db, ana.ref, { name: "Ana Silva", phone: "(11) 91111-1111", address: "" });
+    updateCustomer(db, ana.ref, { name: "Ana Silva", phone: "(11) 91111-1111", address: { ...address, number: "20", complement: "Apto 3" } });
+    expect(findQuoteById(db, quote.id)!.customer.address).toBe("Rua A, 20, Apto 3 — Centro — Jundiaí/SP — CEP 13201-000 · Referência: portão azul");
+    expect(() => updateCustomer(db, ana.ref, { name: "Ana Silva", phone: "(11) 91111-1111", address: { cep: "123" } })).toThrow(/CEP/);
+    updateCustomer(db, ana.ref, { name: "Ana Silva", phone: "(11) 91111-1111", address: null });
     expect(resolveCustomer(db, ana.ref)?.address).toBeUndefined();
     expect(findQuoteById(db, quote.id)!.customer.address).toBeUndefined();
   });

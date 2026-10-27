@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { formatCnpj, formatCpf, formatPhoneBR, isBrazilianPhone, isValidCnpj, isValidCpf } from "@/lib/account/documents";
 import { getCustomerProfile, saveCustomerProfile } from "@/lib/account/profileRepository";
+import { formatDeliveryAddress, parseDeliveryAddress, type DeliveryAddress } from "@/lib/customers/address";
 
 /**
  * Clientes para o orçamento do painel: contas do site (tabela `user` + cadastro) e clientes
@@ -24,8 +25,8 @@ export type CustomerSummary = {
   createdBy?: string;
   /** Conta com a tabela profissional (cadastro pelo convite). */
   professional?: boolean;
-  /** Endereço de entrega (texto livre, só em resolveCustomer). */
-  address?: string;
+  /** Endereço de entrega (só em resolveCustomer). */
+  address?: DeliveryAddress;
   /** Outros cadastros com o mesmo WhatsApp ou CPF/CNPJ (o site não bloqueia; a equipe é avisada). */
   alsoUsedBy?: Array<{ name: string; by: Array<"WhatsApp" | "CPF/CNPJ"> }>;
 };
@@ -39,19 +40,25 @@ export class DuplicateCustomerError extends Error {
   }
 }
 
-export type PanelCustomerInput = { name: string; company?: string; phone: string; email?: string; document?: string; address?: string };
+export type PanelCustomerInput = { name: string; company?: string; phone: string; email?: string; document?: string; address?: unknown };
 
 /** Endereço de entrega digitado pela equipe, de qualquer cliente (chave = ref "painel:…" ou "conta:…"). */
 function migrateAddresses(database: DatabaseSync) {
   database.exec("CREATE TABLE IF NOT EXISTS fare_customer_addresses (ref TEXT PRIMARY KEY, address TEXT NOT NULL)");
 }
-function readAddress(database: DatabaseSync, ref: string) {
+function readAddress(database: DatabaseSync, ref: string): DeliveryAddress | null {
   migrateAddresses(database);
-  return (database.prepare("SELECT address FROM fare_customer_addresses WHERE ref = ?").get(ref) as { address: string } | undefined)?.address ?? "";
+  const row = database.prepare("SELECT address FROM fare_customer_addresses WHERE ref = ?").get(ref) as { address: string } | undefined;
+  if (!row) return null;
+  try {
+    return parseDeliveryAddress(JSON.parse(row.address));
+  } catch {
+    return null;
+  }
 }
-function saveAddress(database: DatabaseSync, ref: string, address: string) {
+function saveAddress(database: DatabaseSync, ref: string, address: DeliveryAddress | null) {
   migrateAddresses(database);
-  if (address) database.prepare("INSERT INTO fare_customer_addresses (ref, address) VALUES (?, ?) ON CONFLICT(ref) DO UPDATE SET address = excluded.address").run(ref, address);
+  if (address) database.prepare("INSERT INTO fare_customer_addresses (ref, address) VALUES (?, ?) ON CONFLICT(ref) DO UPDATE SET address = excluded.address").run(ref, JSON.stringify(address));
   else database.prepare("DELETE FROM fare_customer_addresses WHERE ref = ?").run(ref);
 }
 
@@ -208,7 +215,7 @@ function validate(input: PanelCustomerInput) {
     email,
     document: !document ? "" : document.length === 11 ? formatCpf(document) : formatCnpj(document),
     documentNorm: document,
-    address: (input.address ?? "").trim().replace(/\s+/g, " ").slice(0, 300),
+    address: parseDeliveryAddress(input.address),
   };
 }
 
@@ -296,7 +303,7 @@ export function updateCustomer(database: DatabaseSync, ref: string, input: Panel
       const customer = JSON.parse(json) as Record<string, unknown>;
       delete customer.company;
       delete customer.address;
-      return JSON.stringify({ ...customer, name: data.name, phone: data.phone, ...(data.company ? { company: data.company } : {}), ...(data.address ? { address: data.address } : {}) });
+      return JSON.stringify({ ...customer, name: data.name, phone: data.phone, ...(data.company ? { company: data.company } : {}), ...(data.address ? { address: formatDeliveryAddress(data.address) } : {}) });
     };
     for (const [table, closed] of [["fare_quotes", "'virou_pedido', 'cancelado'"], ["fare_orders", "'concluido', 'cancelado'"]] as const) {
       if (!hasTable(database, table)) continue;

@@ -6,6 +6,7 @@ import { buildQuoteItems, draftFromItem, keepSavedPrices, parseDraftItems, type 
 import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type StaffMatch } from "@/lib/backoffice/productSearch";
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
 import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
+import { formatDeliveryAddress } from "@/lib/customers/address";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
@@ -67,7 +68,7 @@ export function customerSnapshot(deps: QuoteBuilderDeps, ref: string): { ownerId
       name: resolved.name,
       ...(resolved.company ? { company: resolved.company } : {}),
       ...(resolved.phone ? { phone: resolved.phone } : {}),
-      ...(resolved.address ? { address: resolved.address } : {}),
+      ...(resolved.address ? { address: formatDeliveryAddress(resolved.address) } : {}),
       ...(billing ? { billing } : {}),
     },
   };
@@ -140,7 +141,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       try {
         const customer = createPanelCustomer(deps.database(), {
           name: String(body.name ?? ""), company: String(body.company ?? ""), phone: String(body.phone ?? ""),
-          email: String(body.email ?? ""), document: String(body.document ?? ""), address: String(body.address ?? ""),
+          email: String(body.email ?? ""), document: String(body.document ?? ""), address: body.address,
         }, { id: access.session.user.id, name: access.session.user.name });
         return json({ customer }, 201);
       } catch (error) {
@@ -158,7 +159,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       try {
         const customer = updateCustomer(deps.database(), body.ref, {
           name: String(body.name ?? ""), company: String(body.company ?? ""), phone: String(body.phone ?? ""),
-          email: String(body.email ?? ""), document: String(body.document ?? ""), address: String(body.address ?? ""),
+          email: String(body.email ?? ""), document: String(body.document ?? ""), address: body.address,
         });
         return json({ customer });
       } catch (error) {

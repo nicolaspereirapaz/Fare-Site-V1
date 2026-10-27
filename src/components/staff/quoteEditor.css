@@ -486,3 +486,13 @@
 /* Mesma largura do topo da área da equipe (container-shell). */
 .qe-page { width: min(100% - 48px, 1280px); max-width: none; padding-inline: 0; }
 .qe-fhint a { color: var(--qe-lilac); font-weight: 600; }
+
+/* Endereço de entrega no cadastro do cliente: CEP | Rua | Número / Complemento | Bairro | Cidade | UF / Referência */
+.qe-address { grid-column: 1 / -1; display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 110px; gap: 10px 12px; margin: 4px 0 0; padding: 0; border: 0; min-width: 0; }
+.qe-address legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+.qe-address .qe-addr-street { grid-column: span 2; }
+.qe-address .qe-addr-wide { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  .qe-address { grid-template-columns: 1fr 1fr; }
+  .qe-address .qe-addr-street { grid-column: 1 / -1; }
+}
