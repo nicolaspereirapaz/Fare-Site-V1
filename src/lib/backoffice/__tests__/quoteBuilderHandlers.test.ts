@@ -99,7 +99,7 @@ describe("editor de orçamentos do painel", () => {
 
     const preview = await (await handlers.preview(post({ items, discount: { type: "percent", value: "10" } }))).json() as { totals: Record<string, unknown> };
     // 300 × R$ 1,78 = R$ 534,00; 10% = R$ 53,40; custo 0,72 × 300 + 100 = R$ 316,00
-    expect(preview.totals).toEqual({ subtotal: 534, discount: 53.4, total: 480.6, cost: 316, margin: 164.6, pending: 0 });
+    expect(preview.totals).toEqual({ subtotal: 534, discount: 53.4, freight: 0, total: 480.6, cost: 316, margin: 164.6, pending: 0 });
 
     const tooMuch = await (await handlers.preview(post({ items, discount: { type: "value", value: "600" } }))).json() as { totals: Record<string, unknown>; discountError?: string };
     expect(tooMuch.discountError).toBe("O desconto não pode ser maior que o subtotal.");

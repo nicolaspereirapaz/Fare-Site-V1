@@ -4,7 +4,7 @@ import { AccountOrders } from "@/components/account/AccountOrders";
 import { database } from "@/lib/auth";
 import { getCurrentSession } from "@/lib/auth/server";
 import { listOrdersByUser } from "@/lib/orders/repository";
-import { discountLine } from "@/lib/quotes/discount";
+import { discountLine, freightOf } from "@/lib/quotes/discount";
 
 export const metadata: Metadata = { title: "Meus pedidos" };
 
@@ -19,6 +19,7 @@ export default async function AccountOrdersPage() {
     paymentMethod: order.paymentMethod,
     totalCents: order.totalCents,
     discount: discountLine(order.discount, order.items),
+    freight: freightOf(order.discount),
     createdAt: order.createdAt,
     items: order.items.map((item) => ({
       productName: item.productName,

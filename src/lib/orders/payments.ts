@@ -90,7 +90,8 @@ function validateDirectInput(input: DirectOrderInput) {
   requireCents(subtotal, true);
   if (input.discount != null && ((input.discount.type !== "percent" && input.discount.type !== "value")
     || typeof input.discount.value !== "number" || !Number.isFinite(input.discount.value) || input.discount.value < 0
-    || (input.discount.type === "percent" && input.discount.value > 100))) throw new Error("Desconto inválido.");
+    || (input.discount.type === "percent" && input.discount.value > 100)
+    || (input.discount.freight !== undefined && !(input.discount.freight >= 0)))) throw new Error("Desconto inválido.");
 }
 
 function migrateFinance(db: DatabaseSync) {

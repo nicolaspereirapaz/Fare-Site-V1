@@ -180,7 +180,7 @@ function ProposalDocument({ proposal, logo }: { proposal: Proposal | OrderDocume
             {proposal.discount ? (
               <View style={s.totalRow}><Text>{proposal.discount.label}</Text><Text style={s.discountValue}>− {brl(proposal.discount.amount)}</Text></View>
             ) : null}
-            {quote ? <View style={s.totalRow}><Text>Frete</Text><Text>A combinar</Text></View> : null}
+            {proposal.freight || quote ? <View style={s.totalRow}><Text>Frete</Text><Text>{proposal.freight ? brl(proposal.freight) : "A combinar"}</Text></View> : null}
             <View style={s.grand}><Text style={{ fontWeight: 700, color: C.ink }}>Total</Text><Text style={s.grandValue}>{brl(proposal.total)}</Text></View>
             {order?.finance ? <><View style={s.totalRow}><Text>Recebido</Text><Text>{brl(order.finance.paid)}</Text></View><View style={s.totalRow}><Text>Saldo</Text><Text>{brl(order.finance.balance)}</Text></View></> : null}
           </View>

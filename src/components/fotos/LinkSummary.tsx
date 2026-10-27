@@ -85,6 +85,7 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
       ))}
       {!photoLines.length ? <p className="fp-help">Nenhuma foto ainda.</p> : null}
       {priced.discountCents ? <div className="fp-summary-row"><span>Desconto</span><strong>− {brl(priced.discountCents / 100)}</strong></div> : null}
+      {priced.freightCents ? <div className="fp-summary-row"><span>Frete</span><strong>{brl(priced.freightCents / 100)}</strong></div> : null}
       <div className="fp-summary-total"><span>Total</span><strong>{onRequest ? "a combinar" : brl(priced.totalCents / 100)}</strong></div>
       {belowMinimum.map((text) => <p className="fp-help fp-link-error" key={text} role="status">{text}</p>)}
       <button className="button button-primary button-large" disabled={sending || !photos.length || uploading > 0 || failed || belowMinimum.length > 0} onClick={send} type="button">

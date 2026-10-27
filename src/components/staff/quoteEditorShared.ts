@@ -24,8 +24,8 @@ export type Item =
 export type PreviewGravacao = { descricao: string; local: string; detalhe: string; custoUnitario: number; custoTotal: number; manual?: true };
 export type PreviewOk = { id: string; ok: true; unitPrice: number; total: number; cost: number; productCost: number; gravacoes: PreviewGravacao[]; stockWarning?: string; manual: { cost: boolean; price: boolean }; suggestedPrice: number };
 export type Preview = PreviewOk | { id: string; ok: false; error: string };
-export type Totals = { subtotal: number; discount: number; total: number; cost: number; margin: number; pending: number };
-export const EMPTY_TOTALS: Totals = { subtotal: 0, discount: 0, total: 0, cost: 0, margin: 0, pending: 0 };
+export type Totals = { subtotal: number; discount: number; freight: number; total: number; cost: number; margin: number; pending: number };
+export const EMPTY_TOTALS: Totals = { subtotal: 0, discount: 0, freight: 0, total: 0, cost: 0, margin: 0, pending: 0 };
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 export const brl = (value: number) => money.format(value).replace(/\u00a0/g, " ");

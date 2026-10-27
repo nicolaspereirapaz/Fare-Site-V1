@@ -164,7 +164,9 @@ export function StaffDocumentPage({kind,id,canCancel,children}:{kind:StaffDocume
    {isQuote?<section className="qe-card"><h2>Entrega prevista</h2><p className="sd-delivery-date">{deliveryLabel(document.quoteDelivery?.date,document.quoteDelivery?.time)}</p>{openQuote?<Link className="sd-muted" href={`/equipe/orcamentos/${id}`}>Alterar no editor do orçamento</Link>:null}</section>:null}
    {!isQuote?<section className="qe-card"><h2>Entrega</h2><p className="sd-delivery-date">{deliveryLabel(finance?.deliveryDate, finance?.deliveryTime)}</p><p className="sd-muted">{finance?finance.deliveryMode==='retirada'?'Retirada na loja':'Entrega ao cliente':'Forma de entrega não informada'}</p>{finance&&editableOrder?<OrderDeliveryEditor orderId={id} date={finance.deliveryDate} time={finance.deliveryTime} onSaved={reload}/>:null}</section>:null}
    <section className="qe-card financial"><h2>{isQuote?'Resumo do orçamento':'Pagamento'}</h2><dl>
-    {document.discount?<><div><dt>Subtotal</dt><dd>{document.total===null?'Sob consulta':brl(document.total+document.discount.amount)}</dd></div><div><dt>{document.discount.label}</dt><dd>− {brl(document.discount.amount)}</dd></div></>:null}
+    {document.discount||document.freight?<div><dt>Subtotal</dt><dd>{document.total===null?'Sob consulta':brl(document.total+(document.discount?.amount??0)-(document.freight??0))}</dd></div>:null}
+    {document.discount?<div><dt>{document.discount.label}</dt><dd>− {brl(document.discount.amount)}</dd></div>:null}
+    <div><dt>Frete</dt><dd>{document.freight?brl(document.freight):'A combinar'}</dd></div>
     <div><dt>Total</dt><dd>{document.total===null?'Sob consulta':brl(document.total)}</dd></div>
     {isQuote&&document.total!==null?<div className="balance-row"><dt>Sinal mínimo (50%)</dt><dd>{brl(Math.ceil(Math.round(document.total*100)/2)/100)}</dd></div>:null}
     {!isQuote&&finance?<><div><dt>Recebido</dt><dd>{brl(finance.paidCents/100)}</dd></div><div className="balance-row"><dt>{finance.balanceCents>0?'Saldo a receber':'Situação'}</dt><dd>{finance.balanceCents>0?brl(finance.balanceCents/100):'Quitado'}</dd></div></>:null}

@@ -3,7 +3,11 @@
  * Sem dependências de servidor: usado também na tela do editor.
  */
 
-export type QuoteDiscount = { type: "percent" | "value"; value: number };
+/** freight: frete cobrado do cliente (R$), somado ao total. Gravado junto com o desconto para seguir o mesmo caminho. */
+export type QuoteDiscount = { type: "percent" | "value"; value: number; freight?: number };
+
+/** Frete gravado no documento, em reais (0 = a combinar). */
+export const freightOf = (discount: QuoteDiscount | null | undefined) => discount?.freight ?? 0;
 
 /** "1.250,50", "7,5", 150 → número; NaN se não der para ler. */
 function toNumber(raw: unknown): number {
@@ -14,11 +18,26 @@ function toNumber(raw: unknown): number {
   return Number(normalized);
 }
 
-/** Valida o desconto vindo do navegador. Vazio ou zero = sem desconto. */
+/** Valida desconto e frete vindos do navegador. Vazio ou zero nos dois = null. */
 export function parseDiscount(raw: unknown): QuoteDiscount | null {
   if (raw === null || raw === undefined) return null;
   const body = raw as Record<string, unknown>;
   if (body.type !== "percent" && body.type !== "value") throw new Error("Desconto inválido.");
+  const freight = parseFreight(body.freight);
+  const discount = parseDiscountValue(body.type, body.value);
+  if (!freight) return discount;
+  return { ...(discount ?? { type: body.type, value: 0 }), freight };
+}
+
+function parseFreight(raw: unknown): number {
+  if (raw === "" || raw === null || raw === undefined) return 0;
+  const value = toNumber(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error("Frete inválido.");
+  return Math.round(value * 100) / 100;
+}
+
+function parseDiscountValue(type: "percent" | "value", raw: unknown): QuoteDiscount | null {
+  const body = { type, value: raw };
   if (body.value === "" || body.value === null || body.value === undefined) return null;
   const value = toNumber(body.value);
   if (!Number.isFinite(value)) throw new Error("Desconto inválido.");
@@ -34,12 +53,13 @@ export function parseDiscount(raw: unknown): QuoteDiscount | null {
 
 /** Aplica o desconto ao subtotal (em centavos). Porcentagem arredonda o desconto para baixo. */
 export function applyDiscount(subtotalCents: number, discount: QuoteDiscount | null) {
-  if (!discount) return { subtotalCents, discountCents: 0, totalCents: subtotalCents };
+  if (!discount) return { subtotalCents, discountCents: 0, freightCents: 0, totalCents: subtotalCents };
+  const freightCents = Math.round(freightOf(discount) * 100);
   const discountCents = discount.type === "percent"
     ? Math.floor(Math.round(subtotalCents * discount.value * 1e4) / 1e6)
     : Math.round(discount.value * 100);
   if (discountCents > subtotalCents) throw new Error("O desconto não pode ser maior que o subtotal.");
-  return { subtotalCents, discountCents, totalCents: subtotalCents - discountCents };
+  return { subtotalCents, discountCents, freightCents, totalCents: subtotalCents - discountCents + freightCents };
 }
 
 /**

@@ -4,7 +4,7 @@ import type { QuoteCartItem, QuoteCustomer } from '@/lib/commerce';
 import type { OrderFinance } from '@/lib/orders/payments';
 import { orderCode } from '@/lib/orders/orderCode';
 import type { Order, PaymentMethod } from '@/lib/orders/repository';
-import { discountLine } from '@/lib/quotes/discount';
+import { discountLine, freightOf } from '@/lib/quotes/discount';
 import { quoteCode } from '@/lib/quotes/quoteCode';
 import type { Quote } from '@/lib/quotes/repository';
 
@@ -14,6 +14,8 @@ export type StaffDocument = {
   kind: 'order' | 'quote'; id: string; code: string; status: string;
   customer: QuoteCustomer; items: DocumentItem[]; total: number | null;
   discount: { label: string; amount: number } | null;
+  /** Frete cobrado (R$, 0 = a combinar). */
+  freight?: number;
   createdAt: string; updatedAt: string; createdBy: string | null; internalNotes: string;
   finance: OrderFinance | null; paymentMethod: PaymentMethod | null;
   proposalSentAt: string | null; orderId: string | null; history: OrderHistoryEntry[];
@@ -47,7 +49,7 @@ export function createDocumentDetailsHandler(deps: DetailDeps) {
     const document:StaffDocument={
       kind:deps.kind,id:record.id,code:quote?quoteCode(record.id):orderCode(record.id),status:record.status,
       customer:record.customer,items,total:record.totalCents===null?null:record.totalCents/100,
-      discount:discountLine(record.discount,record.items),createdAt:record.createdAt,updatedAt:record.updatedAt,
+      discount:discountLine(record.discount,record.items),freight:freightOf(record.discount),createdAt:record.createdAt,updatedAt:record.updatedAt,
       createdBy:quote?.createdBy??finance?.createdBy??null,internalNotes:quote?.internalNotes??finance?.internalNotes??'',
       finance,paymentMethod:quote?null:(record as Order).paymentMethod,
       proposalSentAt:quote?.proposalSentAt??null,orderId:quote?.orderId??null,history:deps.history?.(id)??[],

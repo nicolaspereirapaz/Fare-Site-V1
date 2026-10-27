@@ -186,6 +186,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [totals, setTotals] = useState<Totals>(EMPTY_TOTALS);
   const [discount, setDiscount] = useState<DiscountForm>({ type: "percent", value: "" });
   const [discountError, setDiscountError] = useState<string | null>(null);
+  /** Frete cobrado do cliente (R$, vazio = a combinar). */
+  const [freight, setFreight] = useState("");
   const [modal, setModal] = useState<ModalStart | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   /** Configuração de foto aberta (nova ou editando um item de foto da lista). */
@@ -220,7 +222,10 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
         setProducts(payload.products ?? {});
         setNotes(payload.internalNotes ?? "");
         setDelivery({ date: payload.deliveryDate ?? "", time: payload.deliveryTime ?? "" });
-        if (payload.discount) setDiscount({ type: payload.discount.type, value: String(payload.discount.value).replace(".", ",") });
+        if (payload.discount) {
+          setDiscount({ type: payload.discount.type, value: payload.discount.value ? String(payload.discount.value).replace(".", ",") : "" });
+          setFreight(payload.discount.freight ? String(payload.discount.freight).replace(".", ",") : "");
+        }
         if (payload.hasCustomer === false) setNeedsCustomer(true);
         else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); setFixedProfessional(Boolean(payload.customerProfessional)); }
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
@@ -234,7 +239,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   }, [docId, editingOrder]);
 
   // Prévia do preço no servidor a cada mudança dos itens ou do desconto.
-  const discountBody = discount.value.trim() ? discount : null;
+  const discountBody = discount.value.trim() || freight.trim() ? { ...discount, freight } : null;
   const itemsKey = useDebounced(JSON.stringify({ items, discount: discountBody }), 300);
   useEffect(() => {
     const { items: list, discount: sentDiscount } = JSON.parse(itemsKey) as { items: Item[]; discount: DiscountForm | null };
@@ -540,16 +545,28 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
             {discountError ? <p className="qe-error">{discountError}</p> : null}
           </div>
 
+          <div className="qe-discount">
+            <span className="qe-discount-label" id="qe-freight-label">Frete</span>
+            <div className="qe-discount-row">
+              <input
+                aria-labelledby="qe-freight-label"
+                disabled={!editable}
+                inputMode="decimal"
+                onChange={(event) => setFreight(event.target.value.replace(/[^\d.,]/g, ""))}
+                placeholder="R$ 0,00 · vazio = a combinar"
+                value={freight}
+              />
+            </div>
+          </div>
+
+          {totals.discount > 0 || totals.freight > 0 ? <div className="qe-sum-row"><span>Subtotal</span><span>{brl(totals.subtotal)}</span></div> : null}
           {totals.discount > 0 ? (
-            <>
-              <div className="qe-sum-row"><span>Subtotal</span><span>{brl(totals.subtotal)}</span></div>
-              <div className="qe-sum-row qe-sum-discount">
-                <span>Desconto{discount.type === "percent" ? ` (${discount.value.replace(".", ",")}%)` : ""}</span>
-                <span>− {brl(totals.discount)}</span>
-              </div>
-            </>
+            <div className="qe-sum-row qe-sum-discount">
+              <span>Desconto{discount.type === "percent" ? ` (${discount.value.replace(".", ",")}%)` : ""}</span>
+              <span>− {brl(totals.discount)}</span>
+            </div>
           ) : null}
-          <div className="qe-sum-row"><span>Frete</span><span>A combinar</span></div>
+          <div className="qe-sum-row"><span>Frete</span><span>{totals.freight > 0 ? brl(totals.freight) : "A combinar"}</span></div>
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
           {!isOrder ? (
             <div className="qe-discount qe-delivery">

@@ -3,19 +3,19 @@ import { applyDiscount, discountLabel, discountLine, parseDiscount } from "@/lib
 
 describe("desconto no total do orçamento", () => {
   it("por porcentagem: arredonda o desconto para baixo no centavo (a loja nunca dá mais que o combinado)", () => {
-    expect(applyDiscount(240000, { type: "percent", value: 10 })).toEqual({ subtotalCents: 240000, discountCents: 24000, totalCents: 216000 });
+    expect(applyDiscount(240000, { type: "percent", value: 10 })).toEqual({ subtotalCents: 240000, discountCents: 24000, freightCents: 0, totalCents: 216000 });
     // 7,5% de R$ 1.734,00 = 130,05
-    expect(applyDiscount(173400, { type: "percent", value: 7.5 })).toEqual({ subtotalCents: 173400, discountCents: 13005, totalCents: 160395 });
+    expect(applyDiscount(173400, { type: "percent", value: 7.5 })).toEqual({ subtotalCents: 173400, discountCents: 13005, freightCents: 0, totalCents: 160395 });
     // 3% de R$ 0,99 = 0,0297 -> 0,02
     expect(applyDiscount(99, { type: "percent", value: 3 }).discountCents).toBe(2);
   });
 
   it("por valor: desconta o valor em reais", () => {
-    expect(applyDiscount(240000, { type: "value", value: 150 })).toEqual({ subtotalCents: 240000, discountCents: 15000, totalCents: 225000 });
+    expect(applyDiscount(240000, { type: "value", value: 150 })).toEqual({ subtotalCents: 240000, discountCents: 15000, freightCents: 0, totalCents: 225000 });
   });
 
   it("sem desconto, o total é o subtotal", () => {
-    expect(applyDiscount(240000, null)).toEqual({ subtotalCents: 240000, discountCents: 0, totalCents: 240000 });
+    expect(applyDiscount(240000, null)).toEqual({ subtotalCents: 240000, discountCents: 0, freightCents: 0, totalCents: 240000 });
   });
 
   it("valor do desconto não pode passar do subtotal", () => {
@@ -65,5 +65,14 @@ describe("linha do desconto nas telas (calculada pelo subtotal dos itens)", () =
     expect(discountLine(null, items(100))).toBeNull();
     expect(discountLine({ type: "percent", value: 10 }, [{ unitPrice: null, quantity: 1 }])).toBeNull();
     expect(discountLine({ type: "value", value: 5 }, items(100))).toBeNull();
+  });
+});
+
+describe("frete no orçamento/pedido", () => {
+  it("vai junto do desconto, soma no total e sozinho também vale", () => {
+    expect(parseDiscount({ type: "percent", value: "", freight: "35,50" })).toEqual({ type: "percent", value: 0, freight: 35.5 });
+    expect(parseDiscount({ type: "value", value: "10", freight: "" })).toEqual({ type: "value", value: 10 });
+    expect(() => parseDiscount({ type: "value", value: "", freight: "-1" })).toThrow(/frete/i);
+    expect(applyDiscount(10000, { type: "percent", value: 10, freight: 20 })).toEqual({ subtotalCents: 10000, discountCents: 1000, freightCents: 2000, totalCents: 11000 });
   });
 });

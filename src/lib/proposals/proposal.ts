@@ -63,6 +63,8 @@ export type Proposal = {
   subtotal: number;
   /** Desconto no total (null = sem desconto). */
   discount: { label: string; amount: number } | null;
+  /** Frete cobrado (R$); vazio/0 = a combinar. */
+  freight?: number;
   /** Total a pagar (já com desconto). */
   total: number;
   minimumDeposit?: number;
@@ -130,6 +132,7 @@ export function buildProposal(
     items,
     subtotal: applied.subtotalCents / 100,
     discount: quote.discount && applied.discountCents > 0 ? { label: discountLabel(quote.discount), amount: applied.discountCents / 100 } : null,
+    freight: applied.freightCents / 100,
     total: applied.totalCents / 100,
     minimumDeposit: Math.ceil(applied.totalCents / 2) / 100,
     pixKey: "50.344.377/0001-36",
@@ -137,7 +140,7 @@ export function buildProposal(
       { title: "Prazo de produção", text: PROPOSAL_TERMS.production },
       ...(quote.deliveryDate ? [{ title: "Entrega prevista", text: `${formatDate(new Date(`${quote.deliveryDate}T12:00:00Z`))}${quote.deliveryTime ? ` às ${quote.deliveryTime}` : ""}` }] : []),
       { title: "Pagamento", text: PROPOSAL_TERMS.payment },
-      { title: "Frete", text: PROPOSAL_TERMS.freight },
+      { title: "Frete", text: applied.freightCents ? `${brl(applied.freightCents / 100)}, incluso no total.` : PROPOSAL_TERMS.freight },
       { title: "Validade", text: `Até ${formatDate(new Date(now.getTime() + PROPOSAL_VALIDITY_DAYS * 86_400_000))}, sujeita ao estoque do fornecedor.` },
     ],
     notice: PROPOSAL_TERMS.deposit,
@@ -166,7 +169,8 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     ...lines,
     "",
     ...(proposal.discount ? [`Subtotal: ${brl(proposal.subtotal)} · ${proposal.discount.label}: − ${brl(proposal.discount.amount)}`] : []),
-    `*Total: ${brl(proposal.total)}* (frete a combinar)`,
+    ...(proposal.freight ? [`Frete: ${brl(proposal.freight)}`] : []),
+    `*Total: ${brl(proposal.total)}*${proposal.freight ? "" : " (frete a combinar)"}`,
     `Produção: ${PROPOSAL_TERMS.production} Início mediante sinal de 50%.`,
     `Sinal mínimo (50%): ${brl(proposal.minimumDeposit ?? Math.ceil(Math.round(proposal.total * 100) / 2) / 100)}`,
     `Chave Pix (CNPJ): ${proposal.pixKey ?? "50.344.377/0001-36"}`,

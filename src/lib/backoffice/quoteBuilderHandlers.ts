@@ -96,7 +96,7 @@ const reais = (centsValue: number) => centsValue / 100;
 /** Totais da prévia com o desconto: subtotal, desconto, total e margem (sobre o total descontado). */
 function totalsWithDiscount(totals: { total: number; cost: number; pending: number }, discount: QuoteDiscount | null) {
   const subtotalCents = Math.round(totals.total * 100);
-  let applied = { subtotalCents, discountCents: 0, totalCents: subtotalCents };
+  let applied = { subtotalCents, discountCents: 0, freightCents: 0, totalCents: subtotalCents };
   let discountError: string | undefined;
   try {
     applied = applyDiscount(subtotalCents, discount);
@@ -107,9 +107,11 @@ function totalsWithDiscount(totals: { total: number; cost: number; pending: numb
     totals: {
       subtotal: reais(applied.subtotalCents),
       discount: reais(applied.discountCents),
+      freight: reais(applied.freightCents),
       total: reais(applied.totalCents),
       cost: totals.cost,
-      margin: reais(applied.totalCents - Math.round(totals.cost * 100)),
+      // Frete é repassado: não entra na margem.
+      margin: reais(applied.totalCents - applied.freightCents - Math.round(totals.cost * 100)),
       pending: totals.pending,
     },
     discountError,

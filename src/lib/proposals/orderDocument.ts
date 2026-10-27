@@ -36,7 +36,7 @@ export function buildOrderDocument(order: Order, finance: OrderFinance | null, o
   }
   return {kind:"order",code:orderCode(order.id),issuedAt:date(order.createdAt),seller:options.seller,
     customer:{name:order.customer.name===NO_CUSTOMER_NAME?"":order.customer.name,company:(billing?.personType==="pj"?billing.companyName||billing.tradeName:order.customer.company)||null,document:billing?`${billing.personType==="pj"?"CNPJ":"CPF"} ${billing.document}`:null,phone:order.customer.phone??"",city:billing?.address.city?`${billing.address.city} · ${billing.address.state}`:null},
-    items,subtotal:applied.subtotalCents/100,discount:order.discount && applied.discountCents>0?{label:discountLabel(order.discount),amount:applied.discountCents/100}:null,
+    items,subtotal:applied.subtotalCents/100,discount:order.discount && applied.discountCents>0?{label:discountLabel(order.discount),amount:applied.discountCents/100}:null,freight:applied.freightCents/100,
     total:order.totalCents!==null?order.totalCents/100:applied.totalCents/100,terms,company:FARE_COMPANY,
     finance:finance?{paid:finance.paidCents/100,balance:finance.balanceCents/100,plan:paymentPlan(finance)}:null};
 }
@@ -46,6 +46,7 @@ export function orderWhatsAppText(doc: OrderDocument): string {
   `${first?`Olá, ${first}!`:"Olá!"} Aqui é a ${doc.seller}, da Fare Foto.`, "", `Pedido ${doc.code}:`, "",
   ...doc.items.map(item=>`• ${item.quantity.toLocaleString("pt-BR")} × ${item.name}${item.unitLabel&&item.specs?.[0]?` ${item.specs[0]}`:""}${item.color?` (${item.color})`:""} — ${item.engravings.length?item.engravings.join(" + ")+" — ":""}${brl(item.unitPrice)}/${item.unitLabel?item.unitLabel.one.toLowerCase():"un."}`), "",
   ...(doc.discount?[`Subtotal: ${brl(doc.subtotal)} · ${doc.discount.label}: − ${brl(doc.discount.amount)}`]:[]),
+  ...(doc.freight?[`Frete: ${brl(doc.freight)}`]:[]),
   `*Total: ${brl(doc.total)}*`,
   ...(doc.finance?[`Recebido: ${brl(doc.finance.paid)}`,`Saldo: ${brl(doc.finance.balance)}`]:[]),
   ...doc.terms.map(term=>`${term.title}: ${term.text}`), "", "Vou anexar o documento HTML com os detalhes do pedido na conversa.",
