@@ -128,11 +128,15 @@ export function sizeById(id: SizeId): Size {
   const group = (Object.keys(PREFIX) as SizeGroup[]).find((key) => PREFIX[key] === match?.[1]);
   return (match && group && customSize(group, Number(match[2]), Number(match[3]))) || SIZES[1];
 }
-export const SIZE_GROUPS: { id: SizeGroup; label: string; item: string; note: string }[] = [
-  { id: "revelacao", label: "Revelação", item: "Revelação", note: "Quanto mais fotos do mesmo tamanho, menor o preço. Tamanho digitado: preço do tamanho em que ele cabe + R$ 1,00. Pronto em 1 hora após o pagamento." },
+/** `proNote`: aviso para o cliente profissional (preço único, sem faixa de quantidade). */
+export const SIZE_GROUPS: { id: SizeGroup; label: string; item: string; note: string; proNote?: string }[] = [
+  { id: "revelacao", label: "Revelação", item: "Revelação", note: "Quanto mais fotos do mesmo tamanho, menor o preço. Tamanho digitado: preço do tamanho em que ele cabe + R$ 1,00. Pronto em 1 hora após o pagamento.",
+    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Tamanho digitado segue o preço normal. Pronto em 1 hora após o pagamento." },
   { id: "retro", label: "Fotos retrô", item: "Foto retrô", note: "Estilo Polaroid e Instax, com a moldura branca. Quanto mais fotos do mesmo modelo, menor o preço. Instax: sempre em número par. Pronto em 1 hora após o pagamento." },
-  { id: "ampliacao", label: "Ampliações", item: "Ampliação", note: "Preço por foto: de 1 a 10 ou acima de 10 do mesmo tamanho. Tamanho digitado: preço do tamanho em que ele cabe + R$ 3,00. Pronto em 1 hora após o pagamento." },
-  { id: "grande", label: "Grandes formatos", item: "Grande formato", note: "Escolha um tamanho ou digite o seu: o preço segue a faixa da tabela. Pronto em 3 dias úteis." },
+  { id: "ampliacao", label: "Ampliações", item: "Ampliação", note: "Preço por foto: de 1 a 10 ou acima de 10 do mesmo tamanho. Tamanho digitado: preço do tamanho em que ele cabe + R$ 3,00. Pronto em 1 hora após o pagamento.",
+    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Outros tamanhos e tamanho digitado seguem o preço normal. Pronto em 1 hora após o pagamento." },
+  { id: "grande", label: "Grandes formatos", item: "Grande formato", note: "Escolha um tamanho ou digite o seu: o preço segue a faixa da tabela. Pronto em 3 dias úteis.",
+    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Outros tamanhos e tamanho digitado seguem o preço normal. Pronto em 3 dias úteis." },
 ];
 /** Foto padrão do produto de cada grupo (carrinho e equipe; as fotos do cliente não aparecem). */
 export const PHOTO_PRODUCT_IMAGE: Record<SizeGroup, string> = {

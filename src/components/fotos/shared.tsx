@@ -281,7 +281,7 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
       {group !== "grande" && group !== "retro" && !customOpen && !(value && sizeById(value).custom && sizeById(value).group === group) ? (
         <button className="sp-custom-toggle" onClick={() => setCustomOpen(true)} type="button">+ Digitar outro tamanho</button>
       ) : null}
-      <p className="sp-note">{groupOf(group).note}</p>
+      <p className="sp-note">{(pro && groupOf(group).proNote) || groupOf(group).note}</p>
       {below?.(group)}
     </div>
   );

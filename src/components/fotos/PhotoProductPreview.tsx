@@ -5,6 +5,7 @@ import { useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Crop, ImagePlus, MessageCircle, Ruler, Upload } from "lucide-react";
 import { PHOTO_TYPE_EVENT } from "@/components/fotos/PhotoGallery";
+import { useProfessional } from "@/components/fotos/useProfessional";
 import { PriceTable, SIZES, SIZE_GROUPS, addPhotos, groupOf, loadDemoPhotos, loadFiles, type SizeGroup } from "@/components/fotos/shared";
 
 /** `group`: tipo escolhido no menu "Fotos" (?tipo=…): a aba de preços já abre nele e as fotos enviadas já entram nesse tipo. */
@@ -13,6 +14,7 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [table, setTable] = useState<SizeGroup>(group);
+  const pro = useProfessional();
   // Trocar a aba de preços leva a galeria para a foto desse tipo e guarda o tipo no endereço (recarregar mantém).
   function chooseTable(id: SizeGroup) {
     setTable(id);
@@ -73,7 +75,7 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
           ))}
         </div>
         <div role="tabpanel"><PriceTable group={table} /></div>
-        <p className="fp-note"><MessageCircle aria-hidden="true" size={18} /> {groupOf(table).note.replace(/ Pronto em [^.]+\./, "")} Papel brilho ou fosco, mesmo valor.</p>
+        <p className="fp-note"><MessageCircle aria-hidden="true" size={18} /> {((pro && groupOf(table).proNote) || groupOf(table).note).replace(/ Pronto em [^.]+\./, "")} Papel brilho ou fosco, mesmo valor.</p>
         <p className="fp-help fp-inline-icon"><Clock aria-hidden="true" size={15} /> Até 30 × 45: pronto em 1 hora após o pagamento. Grandes formatos: 3 dias úteis.</p>
       </fieldset>
     </div>
