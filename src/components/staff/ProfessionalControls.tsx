@@ -19,7 +19,13 @@ export function ProfessionalInvite() {
     try { setLink((await post({ action: "convite" })).link ?? null); } catch (error) { setMessage(error instanceof Error ? error.message : "Erro."); }
     setBusy(false);
   }
-  const text = link ? `Olá! Este é o seu convite para a tabela de Revelação Profissional da Fare Foto. Crie sua conta (ou entre na sua) por este link: ${link}` : "";
+  const text = link ? [
+    "Olá! Aqui é da *Fare Foto*.",
+    "Agora você pode enviar as fotos dos seus trabalhos direto pelo nosso site, com a tabela de *Revelação Profissional*.",
+    "Pelo site as fotos chegam na qualidade original, sem a compressão do WhatsApp, e já com tamanho, papel e corte escolhidos por você. Assim elas saem *mais rápido e sem erros*.",
+    `Faça seu cadastro por este link (é só seu e vale por 30 dias):\n${link}`,
+    `Depois é só entrar em ${new URL(link).origin}/produtos/revelacao-de-fotos e enviar. Qualquer dúvida, é só chamar aqui!`,
+  ].join("\n\n") : "";
   return (
     <div className="cl-invite">
       <button className="kb-secondary" disabled={busy} onClick={create} type="button">{busy ? "Gerando…" : "Convidar cliente profissional"}</button>
