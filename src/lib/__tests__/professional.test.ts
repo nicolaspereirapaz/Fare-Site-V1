@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { pricing, summarize, type Photo } from "@/components/fotos/catalog";
-import { createProfessionalInvite, inviteState, isProfessional, redeemProfessionalInvite, setProfessional } from "@/lib/professional";
+import { createProfessionalInvite, inviteState, isProfessional, professionalLink, redeemProfessionalInvite, setProfessional } from "@/lib/professional";
 
 describe("tabela profissional", () => {
   it("preço único por foto nos tamanhos da tabela; retrô e outros seguem o normal", () => {
@@ -31,5 +31,20 @@ describe("tabela profissional", () => {
     expect(() => redeemProfessionalInvite(db, old, "u3", new Date("2026-12-01T12:00:00Z"))).toThrow("venceu");
     setProfessional(db, "u1", false, "Bia");
     expect(isProfessional(db, "u1")).toBe(false);
+  });
+
+  it("link geral: o mesmo para todos; trocar invalida o anterior", () => {
+    const db = new DatabaseSync(":memory:");
+    const link = professionalLink(db, "Bia");
+    expect(professionalLink(db, "Ana")).toBe(link);
+    expect(inviteState(db, link, new Date("2030-01-01T00:00:00Z"))).toBe("valido"); // não vence
+    redeemProfessionalInvite(db, link, "u1");
+    redeemProfessionalInvite(db, link, "u2");
+    expect(isProfessional(db, "u1") && isProfessional(db, "u2")).toBe(true);
+    const renewed = professionalLink(db, "Bia", true);
+    expect(renewed).not.toBe(link);
+    expect(inviteState(db, link)).toBe("inexistente");
+    expect(() => redeemProfessionalInvite(db, link, "u3")).toThrow("não encontrado");
+    expect(isProfessional(db, "u1")).toBe(true); // quem já entrou continua profissional
   });
 });

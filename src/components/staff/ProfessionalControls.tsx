@@ -9,32 +9,37 @@ const post = async (body: object) => {
   return data;
 };
 
-/** Gera o link de cadastro do cliente profissional (tabela de Revelação Profissional). Vale 1 vez, por 30 dias. */
+/** Link geral de cadastro profissional (tabela de Revelação Profissional): o mesmo para todos, até a equipe trocar. */
 export function ProfessionalInvite() {
   const [link, setLink] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  async function create() {
+  async function load(novo = false) {
+    if (novo && !window.confirm("Trocar o link? O link atual para de funcionar para quem ainda não se cadastrou.")) return;
     setBusy(true); setMessage("");
-    try { setLink((await post({ action: "convite" })).link ?? null); } catch (error) { setMessage(error instanceof Error ? error.message : "Erro."); }
+    try {
+      setLink((await post({ action: "convite", novo })).link ?? null);
+      if (novo) setMessage("Link trocado.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Erro."); }
     setBusy(false);
   }
   const text = link ? [
     "Olá! Aqui é da *Fare Foto*.",
     "Agora você pode enviar as fotos dos seus trabalhos direto pelo nosso site, com a tabela de *Revelação Profissional*.",
     "Pelo site as fotos chegam na qualidade original, sem a compressão do WhatsApp, e já com tamanho, papel e corte escolhidos por você. Assim elas saem *mais rápido e sem erros*.",
-    `Faça seu cadastro por este link (é só seu e vale por 30 dias):\n${link}`,
+    `Faça seu cadastro por este link:\n${link}`,
     `Depois é só entrar em ${new URL(link).origin}/produtos/revelacao-de-fotos e enviar. Qualquer dúvida, é só chamar aqui!`,
   ].join("\n\n") : "";
   return (
     <div className="cl-invite">
-      <button className="kb-secondary" disabled={busy} onClick={create} type="button">{busy ? "Gerando…" : "Convidar cliente profissional"}</button>
+      <button className="kb-secondary" disabled={busy} onClick={() => load()} type="button">{busy ? "Carregando…" : "Link para profissionais"}</button>
       {link ? (
         <div className="cl-invite-link">
           <input aria-label="Link do convite" readOnly value={link} onFocus={(event) => event.currentTarget.select()} />
           <button className="kb-secondary" onClick={async () => { try { await navigator.clipboard.writeText(link); setMessage("Link copiado."); } catch { setMessage("Selecione o link para copiar."); } }} type="button">Copiar</button>
           <a className="kb-secondary" href={`https://wa.me/?text=${encodeURIComponent(text)}`} rel="noreferrer" target="_blank">Enviar no WhatsApp</a>
-          <small>Vale para 1 cadastro, por 30 dias.</small>
+          <button className="qe-btn-text" disabled={busy} onClick={() => load(true)} type="button">Trocar link</button>
+          <small>Link geral: quem se cadastrar por ele entra na tabela profissional. Se vazar, troque o link.</small>
         </div>
       ) : null}
       {message ? <small role="status">{message}</small> : null}

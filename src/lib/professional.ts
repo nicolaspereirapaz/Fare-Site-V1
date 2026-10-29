@@ -3,7 +3,8 @@ import type { DatabaseSync } from "node:sqlite";
 
 /*
  * Clientes profissionais: quem cria conta (ou entra) pelo link de convite da equipe paga a tabela de
- * Revelação Profissional nas fotos (PRO_PRICES em catalog.ts). Convite vale uma vez só, por 30 dias.
+ * Revelação Profissional nas fotos (PRO_PRICES em catalog.ts). Link geral: o mesmo para todos, vale até a
+ * equipe trocar. Convites antigos de uso único (30 dias) continuam valendo.
  * A equipe também pode marcar/desmarcar à mão na página do cliente.
  */
 const INVITE_DAYS = 30;
@@ -17,8 +18,26 @@ function ensure(db: DatabaseSync) {
     CREATE TABLE IF NOT EXISTS fare_professional_customers (
       user_id TEXT PRIMARY KEY, since TEXT NOT NULL, origin TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fare_professional_link (
+      id INTEGER PRIMARY KEY CHECK (id = 1), token TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL
+    );
   `);
 }
+
+/** Token do link geral de cadastro profissional. `renew`: gera outro e o anterior para de valer. */
+export function professionalLink(db: DatabaseSync, createdBy: string, renew = false, now = new Date()) {
+  ensure(db);
+  const row = db.prepare("SELECT token FROM fare_professional_link WHERE id = 1").get() as { token: string } | undefined;
+  if (row && !renew) return row.token;
+  const token = randomBytes(18).toString("base64url");
+  db.prepare(`INSERT INTO fare_professional_link (id, token, created_by, created_at) VALUES (1, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET token = excluded.token, created_by = excluded.created_by, created_at = excluded.created_at`)
+    .run(token, createdBy, now.toISOString());
+  return token;
+}
+
+const isGeneralLink = (db: DatabaseSync, token: string) =>
+  Boolean(db.prepare("SELECT 1 FROM fare_professional_link WHERE token = ?").get(token.slice(0, 64)));
 
 export function createProfessionalInvite(db: DatabaseSync, createdBy: string, now = new Date()) {
   ensure(db);
@@ -33,6 +52,7 @@ export type InviteState = "valido" | "usado" | "vencido" | "inexistente";
 
 export function inviteState(db: DatabaseSync, token: string, now = new Date()): InviteState {
   ensure(db);
+  if (isGeneralLink(db, token)) return "valido";
   const row = db.prepare("SELECT expires_at, used_by FROM fare_professional_invites WHERE token = ?").get(token.slice(0, 64)) as { expires_at: string; used_by: string | null } | undefined;
   if (!row) return "inexistente";
   if (row.used_by) return "usado";
@@ -42,6 +62,10 @@ export function inviteState(db: DatabaseSync, token: string, now = new Date()): 
 /** Usa o convite nesta conta. Repetir com a mesma conta não dá erro. */
 export function redeemProfessionalInvite(db: DatabaseSync, token: string, userId: string, now = new Date()) {
   ensure(db);
+  if (isGeneralLink(db, token)) {
+    db.prepare("INSERT INTO fare_professional_customers (user_id, since, origin) VALUES (?, ?, 'link') ON CONFLICT(user_id) DO NOTHING").run(userId, now.toISOString());
+    return;
+  }
   const row = db.prepare("SELECT expires_at, used_by FROM fare_professional_invites WHERE token = ?").get(token.slice(0, 64)) as { expires_at: string; used_by: string | null } | undefined;
   if (!row) throw new Error("Convite não encontrado. Peça um novo à Fare Foto.");
   if (row.used_by && row.used_by !== userId) throw new Error("Este convite já foi usado. Peça um novo à Fare Foto.");
