@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { isListed, PHOTO_PRODUCT_IMAGE, SIZE_GROUPS, SIZES, sizeById, sizePriceHint } from "@/components/fotos/catalog";
+import { isListed, PAPERS, PHOTO_PRODUCT_IMAGE, SIZE_GROUPS, SIZES, sizeById, sizePriceHint, type Paper } from "@/components/fotos/catalog";
 import { CustomSizeForm } from "@/components/fotos/shared";
 import { MoneyField } from "@/components/staff/ProductConfigModal";
 import { photoItemName, photoTablePrice, type PhotoChoice } from "@/components/staff/photoItems";
 import { brl, moneyInput, newId, parseNumber, type Item } from "@/components/staff/quoteEditorShared";
 
-/** Foto no orçamento/pedido: quantidade de fotos e tamanho; preço da tabela do site (editável). O papel o cliente escolhe depois. */
+/** Foto no orçamento/pedido: quantidade, tamanho e papel (opcional); preço da tabela do site (editável). O cliente pode trocar o papel no link das fotos. */
 export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: {
   start: PhotoChoice;
   /** Cliente profissional: preço da tabela profissional. */
@@ -20,6 +20,7 @@ export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: 
 }) {
   const [id] = useState(() => item?.id ?? newId());
   const [sizeId, setSizeId] = useState(start.sizeId);
+  const [paper, setPaper] = useState<Paper | undefined>(start.paper);
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
   const qty = Number.parseInt(quantity, 10) || 0;
   const table = photoTablePrice(sizeId, qty, pro);
@@ -46,7 +47,7 @@ export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: 
 
   const canSave = qty > 0 && Number.isFinite(unit) && unit >= 0;
   const save = () => onSave({
-    id, source: "avulso", name: photoItemName({ sizeId }), cost: 0, quantity: qty, gravacoes: [],
+    id, source: "avulso", name: photoItemName({ sizeId, paper }), cost: 0, quantity: qty, gravacoes: [],
     // Sempre com preço gravado: o servidor não conhece a tabela de fotos (custo zero daria preço zero).
     priceOverride: moneyInput(unit),
   });
@@ -90,6 +91,15 @@ export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: 
                   {/* Tamanho digitado: mesma regra do site (preço do tamanho em que cabe + acréscimo; grandes pela faixa). */}
                   <CustomSizeForm group={size.group} key={`${size.group}-${sizeId}`} onPick={setSizeId} value={sizeId} />
                 </div>
+                <div className="qe-field">
+                  <span>Papel</span>
+                  <div aria-label="Papel" className="qe-seg" role="radiogroup">
+                    {[{ id: undefined, label: "A definir" }, ...PAPERS].map((option) => (
+                      <button aria-checked={paper === option.id} className={paper === option.id ? "on" : undefined} key={option.label}
+                        onClick={() => setPaper(option.id)} role="radio" type="button">{option.label}</button>
+                    ))}
+                  </div>
+                </div>
                 <div className="qe-mgrid">
                   <label className="qe-field">
                     <span>Preço por foto (R$)</span>
@@ -108,8 +118,8 @@ export function PhotoConfigModal({ start, item, onSave, onClose, pro = false }: 
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt="" src={PHOTO_PRODUCT_IMAGE[size.group]} />
             </div>
-            <p className="qe-mside-name">{photoItemName({ sizeId })}</p>
-            <p className="qe-fhint">O papel (brilho ou fosco) o cliente escolhe ao enviar as fotos.</p>
+            <p className="qe-mside-name">{photoItemName({ sizeId, paper })}</p>
+            <p className="qe-fhint">O cliente pode trocar o papel ao enviar as fotos.</p>
           </aside>
         </div>
 

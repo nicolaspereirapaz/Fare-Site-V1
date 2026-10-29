@@ -19,11 +19,11 @@ describe("foto no orçamento da equipe", () => {
     expect(photoTablePrice("20x30", 11)).toBe(10);
   });
 
-  it("quantidade e tamanho; custo zero e preço da tabela; a equipe pode trocar o preço; sem papel", async () => {
+  it("quantidade e tamanho; custo zero e preço da tabela; a equipe pode trocar o preço; papel a definir por padrão", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
     render(<PhotoConfigModal onClose={vi.fn()} onSave={onSave} start={{ sizeId: "10x15" }} />);
-    expect(screen.queryByRole("radio", { name: "Fosco" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "A definir" })).toHaveAttribute("aria-checked", "true");
     const copies = screen.getByLabelText("Quantidade de fotos");
     await user.clear(copies);
     await user.type(copies, "20");
@@ -38,6 +38,16 @@ describe("foto no orçamento da equipe", () => {
     await user.tab();
     await user.click(screen.getByRole("button", { name: /Adicionar/ }));
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ priceOverride: "2,50" }));
+  });
+
+  it("papel escolhido entra no nome; reabrir mantém o papel", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<PhotoConfigModal onClose={vi.fn()} onSave={onSave} start={{ sizeId: "10x15", paper: "brilho" }} />);
+    expect(screen.getByRole("radio", { name: "Brilho" })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("radio", { name: "Fosco" }));
+    await user.click(screen.getByRole("button", { name: /Adicionar/ }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ name: "Revelação 10 × 15 cm · papel Fosco" }));
   });
 
   it("tamanho digitado: nome vai e volta e o preço segue a regra do site", async () => {

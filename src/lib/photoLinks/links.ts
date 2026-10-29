@@ -116,8 +116,8 @@ export type PhotoLinkView = {
   submittedAt: string | null;
   /** Brindes e outros itens: fixos, só para o cliente ver o total. */
   others: Array<{ id: string; name: string; details: string; quantity: number; unitPrice: number | null }>;
-  /** Fotos pedidas pela equipe (ponto de partida). */
-  photos: Array<{ sizeId: string; quantity: number }>;
+  /** Fotos pedidas pela equipe (ponto de partida). `paper`: papel escolhido pela equipe; o cliente pode trocar. */
+  photos: Array<{ sizeId: string; quantity: number; paper?: Paper }>;
   special: Record<string, number>;
   discount: QuoteDiscount | null;
 };
@@ -138,7 +138,7 @@ export function photoLinkView(database: DatabaseSync, token: string): PhotoLinkV
     })),
     photos: doc.items.flatMap((item) => {
       const photo = photoOf(item);
-      return photo ? [{ sizeId: photo.sizeId, quantity: item.quantity }] : [];
+      return photo ? [{ sizeId: photo.sizeId, quantity: item.quantity, ...(photo.paper ? { paper: photo.paper } : {}) }] : [];
     }),
     special: specialPrices(doc.items, isProfessional(database, doc.userId)),
     discount: doc.discount ?? null,

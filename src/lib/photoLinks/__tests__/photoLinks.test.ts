@@ -71,6 +71,15 @@ describe("link das fotos", () => {
     expect(createPhotoLink(database, "quote", quote.id, "Equipe")).not.toBe(token);
   });
 
+  it("papel escolhido pela equipe vai para o link (o cliente pode trocar)", () => {
+    const quote = createManualQuote(database, {
+      ownerId: "cliente-p", customer, createdBy: "Equipe", internalNotes: "", idempotencyKey: "q-papel",
+      items: [item("f1", "Revelação 10 × 15 cm · papel Fosco", 10, 3), item("f2", "Ampliação 20 × 30 cm", 2, 11)],
+    });
+    const view = photoLinkView(database, createPhotoLink(database, "quote", quote.id, "Equipe"))!;
+    expect(view.photos).toEqual([{ sizeId: "10x15", quantity: 10, paper: "fosco" }, { sizeId: "20x30", quantity: 2 }]);
+  });
+
   it("pedido: troca as linhas de foto e recalcula o total; link inválido não abre", async () => {
     const order = createOrder(database, {
       userId: "cliente-c", idempotencyKey: "o1", customer: { name: "Caio Reis", phone: "(11) 96666-5555" }, paymentMethod: "pix",

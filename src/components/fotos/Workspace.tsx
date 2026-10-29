@@ -30,11 +30,12 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
   // Preço especial da equipe não muda com a quantidade: sem o aviso "com mais fotos sai mais barato".
   const nudge = summary.sizes.find((group) => group.price.nudge && !link?.view.special[group.size.id]);
   const firstSize = link?.view.photos[0]?.sizeId;
+  const firstPaper = link?.view.photos[0]?.paper;
 
   async function addFiles(files: FileList | File[] | null) {
     const list = await loadFiles(files);
-    // Fotos novas entram no tamanho/papel que as outras já usam.
-    addPhotos(list.map((p) => ({ ...p, sizeId: allSize ?? firstSize ?? p.sizeId, paper: allPaper ?? p.paper })));
+    // Fotos novas entram no tamanho/papel que as outras já usam (no link, no que a equipe escolheu).
+    addPhotos(list.map((p) => ({ ...p, sizeId: allSize ?? firstSize ?? p.sizeId, paper: allPaper ?? firstPaper ?? p.paper })));
   }
   function onDrop(event: DragEvent) {
     event.preventDefault();
