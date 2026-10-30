@@ -56,11 +56,11 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
         onDragOver={(event) => { event.preventDefault(); setDragOver(true); }}
         onDrop={onDrop}
       >
-        <input accept="image/*,.heic,.heif" aria-label="Enviar minhas fotos" disabled={loading} multiple onChange={(event) => start(loadFiles(event.target.files))} type="file" />
+        <input accept="image/*,.heic,.heif,.pdf,application/pdf" aria-label="Enviar minhas fotos" disabled={loading} multiple onChange={(event) => start(loadFiles(event.target.files))} type="file" />
         <ImagePlus aria-hidden="true" size={36} />
         <span>
           <strong>{loading ? "Carregando suas fotos…" : "Enviar minhas fotos"}</strong>
-          <small>Toque para escolher da galeria ou arraste as fotos para cá.</small>
+          <small>Toque para escolher da galeria ou arraste as fotos para cá. Aceita PDF: cada página vira uma foto.</small>
         </span>
         <span className="button button-primary button-large">Escolher fotos</span>
       </label>

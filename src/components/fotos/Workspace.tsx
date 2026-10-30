@@ -32,8 +32,12 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
   const firstSize = link?.view.photos[0]?.sizeId;
   const firstPaper = link?.view.photos[0]?.paper;
 
+  // PDF grande leva alguns segundos para virar fotos: mostra "Carregando…" enquanto isso.
+  const [loading, setLoading] = useState(false);
+
   async function addFiles(files: FileList | File[] | null) {
-    const list = await loadFiles(files);
+    setLoading(true);
+    const list = await loadFiles(files).finally(() => setLoading(false));
     // Fotos novas entram no tamanho/papel que as outras já usam (no link, no que a equipe escolheu).
     addPhotos(list.map((p) => ({ ...p, sizeId: allSize ?? firstSize ?? p.sizeId, paper: allPaper ?? firstPaper ?? p.paper })));
   }
@@ -57,10 +61,10 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
             </ul>
           ) : null}
           <label className={`fp-link-drop${dragOver ? " over" : ""}`} onDragLeave={() => setDragOver(false)} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDrop={onDrop}>
-            <input accept="image/*,.heic,.heif" aria-label="Escolher fotos" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} type="file" />
+            <input accept="image/*,.heic,.heif,.pdf,application/pdf" aria-label="Escolher fotos" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} type="file" />
             <ImagePlus aria-hidden="true" size={26} />
-            <strong>Escolher fotos</strong>
-            <span>ou arraste para cá · JPG, PNG ou HEIC (iPhone)</span>
+            <strong>{loading ? "Carregando suas fotos…" : "Escolher fotos"}</strong>
+            <span>ou arraste para cá · JPG, PNG, HEIC (iPhone) ou PDF (cada página vira uma foto)</span>
           </label>
         </div>
       </div></section>
@@ -92,8 +96,8 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
             <div className="fp-title-row">
               <h1 className="fp-h1">Escolha o tamanho e o papel</h1>
               <label className={`fp-add-more${dragOver ? " over" : ""}`} onDragLeave={() => setDragOver(false)} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDrop={onDrop}>
-                <input accept="image/*,.heic,.heif" aria-label="Adicionar mais fotos" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} type="file" />
-                <ImagePlus aria-hidden="true" size={18} /> Adicionar mais fotos
+                <input accept="image/*,.heic,.heif,.pdf,application/pdf" aria-label="Adicionar mais fotos" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} type="file" />
+                <ImagePlus aria-hidden="true" size={18} /> {loading ? "Carregando…" : "Adicionar mais fotos"}
               </label>
             </div>
 

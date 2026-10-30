@@ -107,8 +107,43 @@ async function loadFile(file: File): Promise<Photo | null> {
     return null;
   }
 }
-export const loadFiles = async (files: FileList | File[] | null) =>
-  (await Promise.all([...(files ?? [])].filter(isImageFile).map(loadFile))).filter((photo): photo is Photo => photo !== null);
+const isPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+
+/** PDF: cada página vira uma foto JPG, desenhada no navegador com pdf.js. PDF que não abre: nenhuma foto. */
+export async function pdfPages(file: File): Promise<File[]> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  const base = file.name.replace(/\.pdf$/i, "");
+  const pages: File[] = [];
+  try {
+    const pdf = await task.promise;
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const page = await pdf.getPage(number);
+      const { width, height } = page.getViewport({ scale: 1 });
+      // 300 dpi, no máximo 16 MP (limite de desenho do iPhone).
+      const viewport = page.getViewport({ scale: Math.min(300 / 72, Math.sqrt(16_000_000 / (width * height))) });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      await page.render({ canvas, viewport }).promise;
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
+      canvas.width = canvas.height = 0; // libera a memória antes da próxima página
+      page.cleanup();
+      if (blob) pages.push(new File([blob], pdf.numPages === 1 ? `${base}.jpg` : `${base} - página ${number}.jpg`, { type: "image/jpeg" }));
+    }
+  } finally {
+    void task.destroy();
+  }
+  return pages;
+}
+
+export async function loadFiles(files: FileList | File[] | null) {
+  const list: File[] = [];
+  // Um PDF por vez: no celular, vários abertos juntos estouram a memória.
+  for (const file of [...(files ?? [])]) list.push(...(isPdf(file) ? await pdfPages(file).catch(() => []) : [file]));
+  return (await Promise.all(list.filter(isImageFile).map(loadFile))).filter((photo): photo is Photo => photo !== null);
+}
 
 /**
  * "Trocar foto": o arquivo novo entra no lugar, mantendo tamanho, papel, cópias, borda e filtro.
