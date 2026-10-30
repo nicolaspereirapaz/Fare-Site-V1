@@ -135,10 +135,11 @@ export function existingDocumentFolder(db: DatabaseSync, id: string) {
   return row && existsSync(row.folder) ? row.folder : null;
 }
 
-const SYNC_MS = 30_000;
+// Sem mudança, a rodada é só uma consulta: 5 s deixa a pasta pronta logo depois de salvar.
+const SYNC_MS = 5_000;
 const state = globalThis as typeof globalThis & { fareDocumentFolders?: ReturnType<typeof setInterval> };
 
-/** Liga a rodada a cada 30 s (uma por servidor). */
+/** Liga a rodada a cada 5 s (uma por servidor). */
 export function startDocumentFolderSync(db: DatabaseSync, deps: DocumentFolderDeps) {
   if (state.fareDocumentFolders) return;
   let running = false;
