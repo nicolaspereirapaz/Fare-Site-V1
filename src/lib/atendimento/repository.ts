@@ -1,0 +1,354 @@
+import { randomUUID } from "node:crypto";
+import type { DatabaseSync } from "node:sqlite";
+import {
+  isConversationStatus,
+  type AuthorKind,
+  type Channel,
+  type Conversation,
+  type ConversationStatus,
+  type Message,
+  type QuickReply,
+} from "@/lib/atendimento/types";
+
+/** Erros com código estável: a API devolve o código e o painel mostra a frase. */
+export class AtendimentoError extends Error {
+  constructor(
+    readonly code: "CONVERSATION_NOT_FOUND" | "ASSIGNED_TO_OTHER" | "NOT_ASSIGNED" | "INVALID_REQUEST" | "QUICK_REPLY_NOT_FOUND" | "DUPLICATE_SHORTCUT",
+    message?: string,
+    readonly detail?: string,
+  ) {
+    super(message ?? code);
+  }
+}
+
+export type StaffActor = { id: string; name: string };
+
+const nowIso = () => new Date().toISOString();
+export const phoneDigits = (value: string) => value.replace(/\D/g, "");
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
+/** Primeira versão do banco do atendimento. Idempotente (pode rodar a cada acesso). */
+export function runAtendimentoMigrations(db: DatabaseSync) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS atd_conversations (
+      id TEXT PRIMARY KEY,
+      channel TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      contact_name TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      assigned_staff_id TEXT,
+      assigned_staff_name TEXT,
+      summary TEXT NOT NULL DEFAULT '',
+      handoff_reason TEXT,
+      last_message_at TEXT NOT NULL,
+      last_message_preview TEXT NOT NULL DEFAULT '',
+      last_message_author TEXT,
+      unread INTEGER NOT NULL DEFAULT 0,
+      waiting_since TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS atd_conversations_phone ON atd_conversations (channel, phone);
+    CREATE TABLE IF NOT EXISTS atd_messages (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT NOT NULL UNIQUE,
+      conversation_id TEXT NOT NULL REFERENCES atd_conversations (id),
+      author TEXT NOT NULL,
+      author_name TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL,
+      delivered_text TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS atd_messages_conversation ON atd_messages (conversation_id, seq);
+    CREATE TABLE IF NOT EXISTS atd_quick_replies (
+      id TEXT PRIMARY KEY,
+      shortcut TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS atd_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  `);
+  seedQuickReplies(db);
+}
+
+type ConversationRow = Record<string, string | number | null>;
+
+function toConversation(row: ConversationRow): Conversation {
+  const status = String(row.status);
+  return {
+    id: String(row.id),
+    channel: String(row.channel) as Channel,
+    phone: String(row.phone),
+    contactName: String(row.contact_name ?? ""),
+    status: isConversationStatus(status) ? status : "ia",
+    assignedStaffId: row.assigned_staff_id === null ? null : String(row.assigned_staff_id),
+    assignedStaffName: row.assigned_staff_name === null ? null : String(row.assigned_staff_name),
+    summary: String(row.summary ?? ""),
+    handoffReason: row.handoff_reason === null ? null : String(row.handoff_reason),
+    lastMessageAt: String(row.last_message_at),
+    lastMessagePreview: String(row.last_message_preview ?? ""),
+    lastMessageAuthor: row.last_message_author === null ? null : (String(row.last_message_author) as AuthorKind),
+    unread: Number(row.unread ?? 0),
+    waitingSince: row.waiting_since === null ? null : String(row.waiting_since),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function toMessage(row: ConversationRow): Message {
+  return {
+    seq: Number(row.seq),
+    id: String(row.id),
+    conversationId: String(row.conversation_id),
+    author: String(row.author) as AuthorKind,
+    authorName: String(row.author_name ?? ""),
+    body: String(row.body),
+    deliveredText: String(row.delivered_text ?? ""),
+    createdAt: String(row.created_at),
+  };
+}
+
+export function createConversation(db: DatabaseSync, input: { channel: Channel; phone: string; contactName?: string }): Conversation {
+  const phone = phoneDigits(input.phone);
+  if (phone.length < 8) throw new AtendimentoError("INVALID_REQUEST", "Telefone inválido.");
+  const at = nowIso();
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO atd_conversations (id, channel, phone, contact_name, status, last_message_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'ia', ?, ?, ?)`,
+  ).run(id, input.channel, phone, (input.contactName ?? "").trim().slice(0, 80), at, at, at);
+  return getConversation(db, id);
+}
+
+export function findConversation(db: DatabaseSync, id: string): Conversation | null {
+  const row = db.prepare("SELECT * FROM atd_conversations WHERE id = ?").get(id) as ConversationRow | undefined;
+  return row ? toConversation(row) : null;
+}
+
+export function getConversation(db: DatabaseSync, id: string): Conversation {
+  const conversation = findConversation(db, id);
+  if (!conversation) throw new AtendimentoError("CONVERSATION_NOT_FOUND", "Conversa não encontrada.");
+  return conversation;
+}
+
+/** Conversa aberta mais recente deste número (WhatsApp manda tudo do mesmo número para a mesma conversa). */
+export function findConversationByPhone(db: DatabaseSync, channel: Channel, phone: string): Conversation | null {
+  const row = db
+    .prepare("SELECT * FROM atd_conversations WHERE channel = ? AND phone = ? ORDER BY last_message_at DESC LIMIT 1")
+    .get(channel, phoneDigits(phone)) as ConversationRow | undefined;
+  return row ? toConversation(row) : null;
+}
+
+export function listConversations(db: DatabaseSync, options: { channel?: Channel } = {}): Conversation[] {
+  const rows = (options.channel
+    ? db.prepare("SELECT * FROM atd_conversations WHERE channel = ? ORDER BY last_message_at DESC").all(options.channel)
+    : db.prepare("SELECT * FROM atd_conversations ORDER BY last_message_at DESC").all()) as ConversationRow[];
+  return rows.map(toConversation);
+}
+
+export function listMessages(db: DatabaseSync, conversationId: string, afterSeq = 0): Message[] {
+  return (db
+    .prepare("SELECT * FROM atd_messages WHERE conversation_id = ? AND seq > ? ORDER BY seq")
+    .all(conversationId, afterSeq) as ConversationRow[]).map(toMessage);
+}
+
+export function addMessage(
+  db: DatabaseSync,
+  input: { conversationId: string; author: AuthorKind; authorName?: string; body: string; deliveredText?: string },
+): Message {
+  const body = input.body.trim();
+  if (!body) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
+  const at = nowIso();
+  const id = randomUUID();
+  const delivered = input.author === "sistema" ? "" : (input.deliveredText ?? body);
+  db.prepare(
+    "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), at);
+  if (input.author !== "sistema") {
+    // "Não lidas" só conta o que a equipe precisa ler: enquanto a IA atende, ela mesma responde.
+    db.prepare(
+      `UPDATE atd_conversations SET last_message_at = ?, last_message_preview = ?, last_message_author = ?, updated_at = ?,
+         unread = unread + (CASE WHEN ? = 1 AND status <> 'ia' THEN 1 ELSE 0 END) WHERE id = ?`,
+    ).run(at, body.replace(/\s+/g, " ").slice(0, 140), input.author, at, input.author === "cliente" ? 1 : 0, input.conversationId);
+  } else {
+    db.prepare("UPDATE atd_conversations SET updated_at = ? WHERE id = ?").run(at, input.conversationId);
+  }
+  const row = db.prepare("SELECT * FROM atd_messages WHERE id = ?").get(id) as ConversationRow;
+  return toMessage(row);
+}
+
+export function markConversationRead(db: DatabaseSync, id: string) {
+  db.prepare("UPDATE atd_conversations SET unread = 0 WHERE id = ?").run(id);
+}
+
+export function updateConversationProfile(db: DatabaseSync, id: string, input: { contactName?: string; summary?: string }) {
+  const current = getConversation(db, id);
+  db.prepare("UPDATE atd_conversations SET contact_name = ?, summary = ?, updated_at = ? WHERE id = ?").run(
+    (input.contactName ?? current.contactName).trim().slice(0, 80),
+    (input.summary ?? current.summary).trim().slice(0, 600),
+    nowIso(),
+    id,
+  );
+}
+
+function setStatus(
+  db: DatabaseSync,
+  id: string,
+  status: ConversationStatus,
+  fields: { staff?: StaffActor | null; handoffReason?: string | null; waiting?: boolean },
+) {
+  const at = nowIso();
+  db.prepare(
+    `UPDATE atd_conversations SET status = ?, assigned_staff_id = ?, assigned_staff_name = ?,
+       handoff_reason = ?, waiting_since = ?, updated_at = ? WHERE id = ?`,
+  ).run(
+    status,
+    fields.staff?.id ?? null,
+    fields.staff?.name ?? null,
+    fields.handoffReason ?? null,
+    fields.waiting ? at : null,
+    at,
+    id,
+  );
+}
+
+const system = (db: DatabaseSync, conversationId: string, body: string) => addMessage(db, { conversationId, author: "sistema", body });
+
+/**
+ * Vendedor assume: a IA para de responder nesta conversa.
+ * Se outro vendedor já está atendendo, só passa com force (transferência), para dois não responderem o mesmo cliente.
+ */
+export function assumeConversation(db: DatabaseSync, id: string, staff: StaffActor, options: { force?: boolean } = {}): Conversation {
+  const current = getConversation(db, id);
+  if (current.status === "em_atendimento" && current.assignedStaffId === staff.id) return current;
+  if (current.status === "em_atendimento" && current.assignedStaffId && !options.force) {
+    throw new AtendimentoError("ASSIGNED_TO_OTHER", `${current.assignedStaffName ?? "Outro vendedor"} já está atendendo.`, current.assignedStaffName ?? "");
+  }
+  setStatus(db, id, "em_atendimento", { staff, handoffReason: current.handoffReason });
+  system(
+    db,
+    id,
+    current.status === "em_atendimento" && current.assignedStaffName
+      ? `${staff.name} assumiu a conversa no lugar de ${current.assignedStaffName}.`
+      : `${staff.name} assumiu a conversa. A IA parou de responder.`,
+  );
+  return getConversation(db, id);
+}
+
+/** Devolve para a IA (com um recado opcional que entra no resumo para a IA continuar do ponto certo). */
+export function returnToAi(db: DatabaseSync, id: string, staff: StaffActor, note = ""): Conversation {
+  const current = getConversation(db, id);
+  const cleanNote = note.trim().slice(0, 400);
+  setStatus(db, id, "ia", { staff: null });
+  if (cleanNote) updateConversationProfile(db, id, { summary: `${current.summary}${current.summary ? "\n" : ""}Vendedor: ${cleanNote}` });
+  system(db, id, `${staff.name} devolveu a conversa para a IA.${cleanNote ? ` Recado: ${cleanNote}` : ""}`);
+  return getConversation(db, id);
+}
+
+/** Volta para a fila "Aguardando vendedor" (ninguém assumido). */
+export function sendToQueue(db: DatabaseSync, id: string, actor: StaffActor | null, reason: string): Conversation {
+  const current = getConversation(db, id);
+  if (current.status === "aguardando_vendedor") return current;
+  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: reason, waiting: true });
+  if (!actor) db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
+  system(db, id, actor ? `${actor.name} colocou a conversa na fila de vendedores.` : `A IA pediu um vendedor: ${reason}`);
+  return getConversation(db, id);
+}
+
+export function finishConversation(db: DatabaseSync, id: string, staff: StaffActor): Conversation {
+  const current = getConversation(db, id);
+  if (current.status === "finalizada") return current;
+  setStatus(db, id, "finalizada", { staff: null });
+  system(db, id, `${staff.name} finalizou o atendimento.`);
+  return getConversation(db, id);
+}
+
+/** Cliente voltou a escrever numa conversa finalizada: reabre com a IA. */
+export function reopenConversation(db: DatabaseSync, id: string) {
+  setStatus(db, id, "ia", { staff: null });
+  system(db, id, "O cliente voltou a escrever. Conversa reaberta com a IA.");
+}
+
+/** Arrastar no quadro: cada coluna de destino vira a ação correspondente. */
+export function moveConversation(db: DatabaseSync, id: string, target: ConversationStatus, staff: StaffActor, options: { force?: boolean } = {}) {
+  if (target === "em_atendimento") return assumeConversation(db, id, staff, options);
+  if (target === "ia") return returnToAi(db, id, staff);
+  if (target === "aguardando_vendedor") return sendToQueue(db, id, staff, "Colocada na fila pela equipe.");
+  return finishConversation(db, id, staff);
+}
+
+// ---------- Mensagens rápidas ----------
+
+const DEFAULT_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
+  { shortcut: "ola", title: "Saudação", body: "Olá! Aqui é da Fare Foto. Como posso te ajudar?" },
+  { shortcut: "horario", title: "Horário da loja", body: "Nosso horário é de segunda a sexta, das 9h às 18h, e aos sábados, das 9h às 13h. Fechamos aos domingos e feriados." },
+  { shortcut: "endereco", title: "Endereço", body: "Estamos na Rua do Rosário, 68, Centro, Jundiaí/SP." },
+  { shortcut: "3x4", title: "Foto 3x4", body: "A foto 3x4 sai em pacote de 6 fotos por R$ 30,00. Fazemos na hora, sem agendamento, durante o horário da loja." },
+  {
+    shortcut: "documentos",
+    title: "Fotos para documentos",
+    body: "Fotos para documentos (tiradas na loja, na hora):\n• 3x4: 6 fotos por R$ 30,00\n• Visto americano 5x5: 4 fotos por R$ 35,00\n• Passaporte brasileiro 5x7: 4 fotos por R$ 35,00\n• Passaporte italiano 3,5x4,5: 6 fotos por R$ 35,00",
+  },
+  {
+    shortcut: "revelacao",
+    title: "Revelação de fotos",
+    body: "Para revelar, envie as fotos em qualidade original pelo site: https://www.farefoto.com.br/produtos/revelacao-de-fotos\nValor por foto em 10x15 ou 9x12: 1 foto R$ 6,00 · 2 a 9 R$ 3,50 · 10 a 50 R$ 3,00 · 51 a 100 R$ 2,50 · 101 a 250 R$ 1,80.",
+  },
+  { shortcut: "brindes", title: "Orçamento de brindes", body: "Para montar seu orçamento de brindes, me conta: qual produto, a quantidade, para quando precisa e se já tem o logo?" },
+  { shortcut: "grafica", title: "Orçamento de gráfica", body: "Para orçar seu impresso, preciso de: quantidade, medidas, data desejada e se você já tem a arte pronta." },
+  { shortcut: "pronto", title: "Pedido pronto", body: "Seu pedido está pronto para retirada! Estamos na Rua do Rosário, 68, Centro, Jundiaí/SP — seg. a sex. das 9h às 18h e sáb. das 9h às 13h." },
+  { shortcut: "obrigado", title: "Agradecimento", body: "Obrigado pelo contato! Qualquer coisa, é só chamar por aqui." },
+];
+
+function seedQuickReplies(db: DatabaseSync) {
+  const seeded = db.prepare("SELECT value FROM atd_meta WHERE key = 'quick_replies_seeded'").get();
+  if (seeded) return;
+  const at = nowIso();
+  const insert = db.prepare("INSERT OR IGNORE INTO atd_quick_replies (id, shortcut, title, body, updated_at) VALUES (?, ?, ?, ?, ?)");
+  for (const reply of DEFAULT_QUICK_REPLIES) insert.run(randomUUID(), reply.shortcut, reply.title, reply.body, at);
+  db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_seeded', ?)").run(at);
+}
+
+const cleanShortcut = (value: string) =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^\/+/, "").replace(/[^a-z0-9_-]/g, "").slice(0, 30);
+
+export function listQuickReplies(db: DatabaseSync): QuickReply[] {
+  return (db.prepare("SELECT * FROM atd_quick_replies ORDER BY shortcut").all() as ConversationRow[]).map((row) => ({
+    id: String(row.id),
+    shortcut: String(row.shortcut),
+    title: String(row.title),
+    body: String(row.body),
+    updatedAt: String(row.updated_at),
+  }));
+}
+
+function validateQuickReply(input: { shortcut: string; title: string; body: string }) {
+  const shortcut = cleanShortcut(input.shortcut);
+  const title = input.title.trim().slice(0, 60);
+  const body = input.body.trim().slice(0, 2000);
+  if (!shortcut || !title || !body) throw new AtendimentoError("INVALID_REQUEST", "Preencha atalho, título e texto.");
+  return { shortcut, title, body };
+}
+
+export function saveQuickReply(db: DatabaseSync, input: { id?: string; shortcut: string; title: string; body: string }): QuickReply {
+  const clean = validateQuickReply(input);
+  const clash = db.prepare("SELECT id FROM atd_quick_replies WHERE shortcut = ?").get(clean.shortcut) as { id: string } | undefined;
+  if (clash && clash.id !== input.id) throw new AtendimentoError("DUPLICATE_SHORTCUT", `Já existe uma mensagem com o atalho /${clean.shortcut}.`);
+  const at = nowIso();
+  if (input.id) {
+    const result = db
+      .prepare("UPDATE atd_quick_replies SET shortcut = ?, title = ?, body = ?, updated_at = ? WHERE id = ?")
+      .run(clean.shortcut, clean.title, clean.body, at, input.id);
+    if (!result.changes) throw new AtendimentoError("QUICK_REPLY_NOT_FOUND", "Mensagem rápida não encontrada.");
+    return { id: input.id, ...clean, updatedAt: at };
+  }
+  const id = randomUUID();
+  db.prepare("INSERT INTO atd_quick_replies (id, shortcut, title, body, updated_at) VALUES (?, ?, ?, ?, ?)").run(id, clean.shortcut, clean.title, clean.body, at);
+  return { id, ...clean, updatedAt: at };
+}
+
+export function deleteQuickReply(db: DatabaseSync, id: string) {
+  const result = db.prepare("DELETE FROM atd_quick_replies WHERE id = ?").run(id);
+  if (!result.changes) throw new AtendimentoError("QUICK_REPLY_NOT_FOUND", "Mensagem rápida não encontrada.");
+}
