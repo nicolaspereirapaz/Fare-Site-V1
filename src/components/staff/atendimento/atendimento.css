@@ -271,6 +271,11 @@
 .sim-phone-input button { display: inline-grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: #1e9b5a; color: #fff; cursor: pointer; }
 .sim-phone-input button:disabled { opacity: .55; cursor: default; }
 
+/* Envio ao WhatsApp */
+.at-delivery.is-sent { color: #34b7f1; font-weight: 700; }
+.at-delivery.is-failed { color: #c62828; font-weight: 600; }
+.at-resend { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+
 /* "digitando…" */
 .at-typing, .sim-typing { font-style: italic; opacity: .75; animation: at-pulse 1.2s ease-in-out infinite; }
 .at-typing { display: inline-flex; align-items: center; gap: 5px; font-size: 0.82rem; }

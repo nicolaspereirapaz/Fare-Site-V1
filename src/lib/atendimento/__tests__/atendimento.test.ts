@@ -18,6 +18,7 @@ import {
 import { receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
+import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -296,6 +297,71 @@ describe("IA responde uma vez só", () => {
     await first;
     const ai = listMessages(db, id).filter((message) => message.author === "ia");
     expect(ai.map((message) => message.body)).toEqual(["vi 2"]);
+  });
+});
+
+describe("WhatsApp pela ponte", () => {
+  const bridge = { url: "http://ponte.local", token: "tk" };
+  const inbound = (externalId: string, text: string, extra: Record<string, unknown> = {}) =>
+    parseInbound({ externalId, chatId: "5511977776666@s.whatsapp.net", phone: "5511977776666", pushName: "Zé", text, ...extra });
+  const fakeBridge = (status = 200) => {
+    const sent: Array<{ url: string; token: string; body: { chatId: string; text: string } }> = [];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      sent.push({ url, token: (init.headers as Record<string, string>)["x-fare-token"], body: JSON.parse(String(init.body)) });
+      return new Response(JSON.stringify(status === 200 ? { messageId: `WA${sent.length}` } : { error: "Not connected to WhatsApp" }), { status });
+    }) as unknown as typeof fetch;
+    return { sent, fetcher };
+  };
+
+  it("valida a entrada e compara token", () => {
+    expect(() => parseInbound({ externalId: "1", chatId: "123@g.us", phone: "5511977776666", text: "oi" })).toThrow(AtendimentoError);
+    expect(() => parseInbound({ externalId: "1", chatId: "5511977776666@s.whatsapp.net", phone: "abc", text: "oi" })).toThrow(AtendimentoError);
+    expect(tokenMatches("tk", "tk")).toBe(true);
+    expect(tokenMatches("tx", "tk")).toBe(false);
+    expect(tokenMatches(null, "tk")).toBe(false);
+    expect(tokenMatches("tk", undefined)).toBe(false);
+  });
+
+  it("mesmo número cai na mesma conversa e mensagem repetida não duplica", () => {
+    const first = receiveWhatsAppMessage(db, inbound("A1", "oi"));
+    const again = receiveWhatsAppMessage(db, inbound("A1", "oi"));
+    const second = receiveWhatsAppMessage(db, inbound("A2", "tudo bem?", { chatId: "999@lid" }));
+    expect(again).toEqual({ conversationId: first.conversationId, duplicate: true });
+    expect(second.conversationId).toBe(first.conversationId);
+    const conversation = getConversation(db, first.conversationId);
+    expect(conversation.channel).toBe("whatsapp");
+    expect(conversation.waChatId).toBe("999@lid");
+    expect(conversation.contactName).toBe("Zé");
+    expect(listMessages(db, first.conversationId).map((message) => message.body)).toEqual(["oi", "tudo bem?"]);
+  });
+
+  it("resposta da IA e do vendedor saem pela ponte (assinada), e falha fica marcada para reenviar", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("B1", "oi"));
+    const ai = await runAi(db, id, async () => ({ reply: "Olá! Qual o seu nome?" }));
+    const ok = fakeBridge();
+    await deliverToWhatsApp(db, ai, bridge, ok.fetcher);
+    expect(ok.sent).toEqual([{ url: "http://ponte.local/fare/painel/enviar", token: "tk", body: expect.objectContaining({ chatId: "5511977776666@s.whatsapp.net", text: "Olá! Qual o seu nome?" }) }]);
+    expect(listMessages(db, id).at(-1)).toMatchObject({ delivery: "enviada", deliveryError: null });
+
+    assumeConversation(db, id, ana);
+    const staffMessage = sendStaffMessage(db, id, ana, "Oi, tudo bem?", { sign: true });
+    const down = fakeBridge(503);
+    await deliverToWhatsApp(db, [staffMessage], bridge, down.fetcher);
+    expect(down.sent[0].body.text).toBe("*Ana:*\nOi, tudo bem?");
+    expect(listMessages(db, id).at(-1)).toMatchObject({ delivery: "falhou", deliveryError: "Not connected to WhatsApp" });
+
+    await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
+    expect(listMessages(db, id).at(-1)?.delivery).toBe("enviada");
+    await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
+    expect(ok.sent).toHaveLength(2); // já enviada: não manda de novo
+  });
+
+  it("simulador nunca sai pelo WhatsApp", async () => {
+    const { id } = newConversation();
+    await say(id, "oi");
+    const ok = fakeBridge();
+    await deliverToWhatsApp(db, listMessages(db, id), bridge, ok.fetcher);
+    expect(ok.sent).toHaveLength(0);
   });
 });
 

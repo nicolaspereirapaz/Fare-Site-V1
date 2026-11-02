@@ -73,7 +73,18 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
     );
     CREATE TABLE IF NOT EXISTS atd_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `);
+  // v2 (WhatsApp): destino na ponte, id da mensagem no WhatsApp (sem duplicar) e status de envio.
+  addColumn(db, "atd_conversations", "wa_chat_id", "TEXT");
+  addColumn(db, "atd_messages", "external_id", "TEXT");
+  addColumn(db, "atd_messages", "delivery", "TEXT NOT NULL DEFAULT ''");
+  addColumn(db, "atd_messages", "delivery_error", "TEXT");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS atd_messages_external ON atd_messages (external_id) WHERE external_id IS NOT NULL");
   seedQuickReplies(db);
+}
+
+function addColumn(db: DatabaseSync, table: string, column: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((entry) => entry.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 type ConversationRow = Record<string, string | number | null>;
@@ -84,6 +95,7 @@ function toConversation(row: ConversationRow): Conversation {
     id: String(row.id),
     channel: String(row.channel) as Channel,
     phone: String(row.phone),
+    waChatId: row.wa_chat_id === null || row.wa_chat_id === undefined ? null : String(row.wa_chat_id),
     contactName: String(row.contact_name ?? ""),
     status: isConversationStatus(status) ? status : "ia",
     assignedStaffId: row.assigned_staff_id === null ? null : String(row.assigned_staff_id),
@@ -109,20 +121,62 @@ function toMessage(row: ConversationRow): Message {
     authorName: String(row.author_name ?? ""),
     body: String(row.body),
     deliveredText: String(row.delivered_text ?? ""),
+    delivery: (String(row.delivery ?? "") as Message["delivery"]) || "",
+    deliveryError: row.delivery_error === null || row.delivery_error === undefined ? null : String(row.delivery_error),
     createdAt: String(row.created_at),
   };
 }
 
-export function createConversation(db: DatabaseSync, input: { channel: Channel; phone: string; contactName?: string }): Conversation {
+export function createConversation(db: DatabaseSync, input: { channel: Channel; phone: string; contactName?: string; waChatId?: string }): Conversation {
   const phone = phoneDigits(input.phone);
   if (phone.length < 8) throw new AtendimentoError("INVALID_REQUEST", "Telefone inválido.");
   const at = nowIso();
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO atd_conversations (id, channel, phone, contact_name, status, last_message_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'ia', ?, ?, ?)`,
-  ).run(id, input.channel, phone, (input.contactName ?? "").trim().slice(0, 80), at, at, at);
+    `INSERT INTO atd_conversations (id, channel, phone, wa_chat_id, contact_name, status, last_message_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'ia', ?, ?, ?)`,
+  ).run(id, input.channel, phone, input.waChatId ?? null, (input.contactName ?? "").trim().slice(0, 80), at, at, at);
   return getConversation(db, id);
+}
+
+/** Conversa do WhatsApp deste contato (pelo destino da ponte ou pelo telefone); atualiza o destino se mudou. */
+export function findWhatsAppConversation(db: DatabaseSync, waChatId: string, phone: string): Conversation | null {
+  const row = db
+    .prepare("SELECT * FROM atd_conversations WHERE channel = 'whatsapp' AND (wa_chat_id = ? OR phone = ?) ORDER BY last_message_at DESC LIMIT 1")
+    .get(waChatId, phoneDigits(phone)) as ConversationRow | undefined;
+  if (!row) return null;
+  if (row.wa_chat_id !== waChatId) db.prepare("UPDATE atd_conversations SET wa_chat_id = ? WHERE id = ?").run(waChatId, row.id);
+  return getConversation(db, String(row.id));
+}
+
+export function messageByExternalId(db: DatabaseSync, externalId: string): Message | null {
+  const row = db.prepare("SELECT * FROM atd_messages WHERE external_id = ?").get(externalId) as ConversationRow | undefined;
+  return row ? toMessage(row) : null;
+}
+
+export function recentDeliveries(db: DatabaseSync, conversationId: string): Array<Pick<Message, "id" | "delivery" | "deliveryError">> {
+  return (db
+    .prepare("SELECT id, delivery, delivery_error FROM atd_messages WHERE conversation_id = ? AND delivery <> '' ORDER BY seq DESC LIMIT 30")
+    .all(conversationId) as ConversationRow[]).map((row) => ({
+    id: String(row.id),
+    delivery: String(row.delivery) as Message["delivery"],
+    deliveryError: row.delivery_error === null ? null : String(row.delivery_error),
+  }));
+}
+
+export function getMessage(db: DatabaseSync, id: string): Message | null {
+  const row = db.prepare("SELECT * FROM atd_messages WHERE id = ?").get(id) as ConversationRow | undefined;
+  return row ? toMessage(row) : null;
+}
+
+/** Status de envio ao WhatsApp (e o id que o WhatsApp devolveu). */
+export function setDelivery(db: DatabaseSync, messageId: string, delivery: Message["delivery"], details: { error?: string | null; externalId?: string | null } = {}) {
+  db.prepare("UPDATE atd_messages SET delivery = ?, delivery_error = ?, external_id = COALESCE(?, external_id) WHERE id = ?").run(
+    delivery,
+    details.error ? details.error.slice(0, 300) : null,
+    details.externalId ?? null,
+    messageId,
+  );
 }
 
 export function findConversation(db: DatabaseSync, id: string): Conversation | null {
@@ -159,7 +213,7 @@ export function listMessages(db: DatabaseSync, conversationId: string, afterSeq 
 
 export function addMessage(
   db: DatabaseSync,
-  input: { conversationId: string; author: AuthorKind; authorName?: string; body: string; deliveredText?: string },
+  input: { conversationId: string; author: AuthorKind; authorName?: string; body: string; deliveredText?: string; externalId?: string; delivery?: Message["delivery"] },
 ): Message {
   const body = input.body.trim();
   if (!body) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
@@ -167,8 +221,8 @@ export function addMessage(
   const id = randomUUID();
   const delivered = input.author === "sistema" ? "" : (input.deliveredText ?? body);
   db.prepare(
-    "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), at);
+    "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, external_id, delivery, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), input.externalId ?? null, input.delivery ?? "", at);
   if (input.author !== "sistema") {
     // "Não lidas" só conta o que a equipe precisa ler: enquanto a IA atende, ela mesma responde.
     db.prepare(

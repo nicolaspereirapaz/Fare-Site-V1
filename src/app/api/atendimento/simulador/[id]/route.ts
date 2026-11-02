@@ -1,7 +1,6 @@
-import { after } from "next/server";
 import { AtendimentoError, getConversation, listMessages } from "@/lib/atendimento/repository";
-import { activeBrain, atendimentoDb, json, readJson, text, withStaff } from "@/lib/atendimento/server";
-import { isAiThinking, recordCustomerMessage, runAi } from "@/lib/atendimento/service";
+import { activeBrain, atendimentoDb, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
+import { isAiThinking, recordCustomerMessage } from "@/lib/atendimento/service";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +37,6 @@ export const POST = withStaff(async (_staff, request, context: Context) => {
   const body = await readJson(request);
   const db = atendimentoDb();
   recordCustomerMessage(db, id, text(body.text, 2000));
-  const { brain, name } = activeBrain();
-  after(() => runAi(db, id, brain, name).catch((error) => console.error("[atendimento] IA:", error)));
+  respondInBackground(db, id);
   return json({ status: getConversation(db, id).status }, 201);
 });

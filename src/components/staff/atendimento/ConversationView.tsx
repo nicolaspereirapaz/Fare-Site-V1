@@ -229,7 +229,13 @@ function ChatPanel({
     lastSeq.current = 0;
     async function load(first: boolean) {
       try {
-        const data = await api<{ conversation: Conversation; messages: Message[]; customers?: LinkedCustomer[]; aiThinking?: boolean }>(
+        const data = await api<{
+          conversation: Conversation;
+          messages: Message[];
+          customers?: LinkedCustomer[];
+          aiThinking?: boolean;
+          deliveries?: Array<Pick<Message, "id" | "delivery" | "deliveryError">>;
+        }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
         );
         if (!active) return;
@@ -239,6 +245,14 @@ function ChatPanel({
         }
         if (data.customers) setCustomers(data.customers);
         setAiThinking(Boolean(data.aiThinking));
+        const deliveries = new Map((data.deliveries ?? []).map((entry) => [entry.id, entry]));
+        if (deliveries.size) {
+          setMessages((list) =>
+            list.some((message) => deliveries.has(message.id) && deliveries.get(message.id)!.delivery !== message.delivery)
+              ? list.map((message) => (deliveries.has(message.id) ? { ...message, ...deliveries.get(message.id)! } : message))
+              : list,
+          );
+        }
         if (data.conversation.unread) {
           const read = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "lida" } });
           if (active) onChanged(read.conversation);
@@ -262,7 +276,7 @@ function ChatPanel({
     if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
   }, [messages]);
 
-  async function act(action: "assumir" | "devolver" | "fila" | "finalizar" | "mover", extra: Record<string, unknown> = {}) {
+  async function act(action: "assumir" | "devolver" | "fila" | "finalizar" | "mover" | "reenviar", extra: Record<string, unknown> = {}) {
     setBusy(true);
     setError(null);
     try {
@@ -362,7 +376,7 @@ function ChatPanel({
           {loading ? <p className="at-muted at-center">Carregando…</p> : null}
           {!loading && !messages.length ? <p className="at-muted at-center">Nenhuma mensagem ainda.</p> : null}
           {messages.map((message, index) => (
-            <MessageBubble key={message.id} message={message} previous={messages[index - 1]} />
+            <MessageBubble key={message.id} message={message} previous={messages[index - 1]} onResend={(id) => void act("reenviar", { messageId: id })} />
           ))}
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
         </div>
@@ -412,7 +426,24 @@ function ReturnToAiForm({ busy, onCancel, onConfirm }: { busy: boolean; onCancel
   );
 }
 
-function MessageBubble({ message, previous }: { message: Message; previous?: Message }) {
+function DeliveryMark({ message, onResend }: { message: Message; onResend: (id: string) => void }) {
+  if (message.delivery === "pendente") return <span className="at-delivery">enviando… · </span>;
+  if (message.delivery === "enviada") return <span className="at-delivery is-sent" title="Enviada no WhatsApp">✓ </span>;
+  if (message.delivery === "falhou") {
+    return (
+      <span className="at-delivery is-failed" title={message.deliveryError ?? "Falha no envio"}>
+        não enviada ·{" "}
+        <button className="at-resend" onClick={() => onResend(message.id)} type="button">
+          reenviar
+        </button>{" "}
+        ·{" "}
+      </span>
+    );
+  }
+  return null;
+}
+
+function MessageBubble({ message, previous, onResend }: { message: Message; previous?: Message; onResend: (id: string) => void }) {
   const day = new Date(message.createdAt).toDateString();
   const showDay = !previous || new Date(previous.createdAt).toDateString() !== day;
   const dayLabel = showDay ? new Date(message.createdAt).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : null;
@@ -440,6 +471,7 @@ function MessageBubble({ message, previous }: { message: Message; previous?: Mes
         </div>
         <span className="at-bubble-time">
           {message.author === "vendedor" && message.deliveredText !== message.body ? "assinada · " : ""}
+          <DeliveryMark message={message} onResend={onResend} />
           {clockTime(message.createdAt)}
         </span>
       </div>

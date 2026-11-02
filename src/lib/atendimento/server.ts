@@ -1,8 +1,34 @@
 import { database } from "@/lib/auth";
 import { AtendimentoError, runAtendimentoMigrations, type StaffActor } from "@/lib/atendimento/repository";
+import type { DatabaseSync } from "node:sqlite";
+import { after } from "next/server";
 import { readStaffSession } from "@/lib/staff/server";
+import { runAi } from "@/lib/atendimento/service";
+import { deliverToWhatsApp } from "@/lib/atendimento/whatsapp";
+import type { Message } from "@/lib/atendimento/types";
 import { createRealBrain, realAiConfig, REAL_AI_NAME } from "@/lib/atendimento/hermesBrain";
 import { simulatedBrain, SIMULATED_AI_NAME, type Brain } from "@/lib/atendimento/simulatedBrain";
+
+/**
+ * Depois de responder ao navegador: a IA responde (se a conversa estiver com ela)
+ * e o que ela escreveu sai pelo WhatsApp. Conversas do simulador não saem do site.
+ */
+export function respondInBackground(db: DatabaseSync, conversationId: string) {
+  const { brain, name } = activeBrain();
+  after(async () => {
+    try {
+      const created = await runAi(db, conversationId, brain, name);
+      await deliverToWhatsApp(db, created);
+    } catch (error) {
+      console.error("[atendimento] IA:", error instanceof Error ? error.message : error);
+    }
+  });
+}
+
+/** Envia ao WhatsApp em segundo plano (mensagem do vendedor ou reenvio). */
+export function deliverInBackground(db: DatabaseSync, messages: Message[]) {
+  after(() => deliverToWhatsApp(db, messages).catch((error) => console.error("[atendimento] envio:", error)));
+}
 
 /** IA usada no painel: a real (Hermes) quando FARE_IA_URL/FARE_IA_TOKEN existem; senão, a de teste. */
 export function activeBrain(): { brain: Brain; name: string; mode: "real" | "teste" } {
@@ -11,11 +37,13 @@ export function activeBrain(): { brain: Brain; name: string; mode: "real" | "tes
 }
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
-const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoMigrated?: boolean };
+// Versão do esquema: o servidor de desenvolvimento mantém o globalThis entre recargas; com a versão, colunas novas entram sem reiniciar.
+const SCHEMA_VERSION = 2;
+const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoSchema?: number };
 export function atendimentoDb() {
-  if (!globalAtendimento.fareAtendimentoMigrated) {
+  if (globalAtendimento.fareAtendimentoSchema !== SCHEMA_VERSION) {
     runAtendimentoMigrations(database);
-    globalAtendimento.fareAtendimentoMigrated = true;
+    globalAtendimento.fareAtendimentoSchema = SCHEMA_VERSION;
   }
   return database;
 }

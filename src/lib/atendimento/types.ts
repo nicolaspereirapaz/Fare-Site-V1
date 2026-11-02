@@ -38,6 +38,8 @@ export type Conversation = {
   id: string;
   channel: Channel;
   phone: string;
+  /** Conversa do WhatsApp: destino exato na ponte (ex.: 5511...@s.whatsapp.net ou ...@lid). */
+  waChatId: string | null;
   contactName: string;
   status: ConversationStatus;
   assignedStaffId: string | null;
@@ -70,8 +72,13 @@ export type Message = {
   body: string;
   /** Texto exatamente como o cliente recebe (com assinatura do vendedor, quando houver). */
   deliveredText: string;
+  /** Só WhatsApp: "" (não se aplica), pendente, enviada ou falhou. */
+  delivery: Delivery;
+  deliveryError: string | null;
   createdAt: string;
 };
+
+export type Delivery = "" | "pendente" | "enviada" | "falhou";
 
 export type QuickReply = {
   id: string;

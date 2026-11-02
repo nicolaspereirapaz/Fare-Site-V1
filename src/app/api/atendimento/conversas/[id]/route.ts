@@ -4,15 +4,16 @@ import {
   assumeConversation,
   finishConversation,
   getConversation,
+  getMessage,
   listMessages,
+  recentDeliveries,
   markConversationRead,
   moveConversation,
   returnToAi,
   sendToQueue,
 } from "@/lib/atendimento/repository";
-import { after } from "next/server";
-import { activeBrain, atendimentoDb, json, readJson, text, withStaff } from "@/lib/atendimento/server";
-import { isAiThinking, runAi } from "@/lib/atendimento/service";
+import { activeBrain, atendimentoDb, deliverInBackground, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
+import { isAiThinking } from "@/lib/atendimento/service";
 import { isConversationStatus } from "@/lib/atendimento/types";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     customers: withCustomers ? customersForPhone(db, conversation.phone) : undefined,
     aiThinking: isAiThinking(id),
     aiMode: activeBrain().mode,
+    // Status de envio ao WhatsApp das últimas mensagens (muda depois que a mensagem já apareceu).
+    deliveries: conversation.channel === "whatsapp" ? recentDeliveries(db, id) : [],
   });
 });
 
@@ -42,12 +45,15 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
   const body = await readJson(request);
   const force = body.force === true;
   // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
-  const wakeAi = () => {
-    const { brain, name } = activeBrain();
-    after(() => runAi(db, id, brain, name).catch((error) => console.error("[atendimento] IA:", error)));
-  };
-  if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) wakeAi();
+  if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) respondInBackground(db, id);
   switch (body.action) {
+    case "reenviar": {
+      // Mensagem que falhou no WhatsApp: tenta de novo.
+      const message = getMessage(db, text(body.messageId, 80));
+      if (!message || message.conversationId !== id || message.delivery !== "falhou") throw new AtendimentoError("INVALID_REQUEST", "Nada para reenviar.");
+      deliverInBackground(db, [message]);
+      return json({ conversation: getConversation(db, id) });
+    }
     case "assumir":
       return json({ conversation: assumeConversation(db, id, staff, { force }) });
     case "devolver":
