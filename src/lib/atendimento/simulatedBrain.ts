@@ -75,7 +75,7 @@ export function extractName(text: string): string | null {
     .join(" ");
 }
 
-const ASK_NAME = "Como posso te chamar?";
+const ASK_NAME = "Qual o seu nome?";
 
 /** Resumo simples "Nome: X · Interesse: Y" mantido pela IA simulada. */
 function buildSummary(name: string, interest: string | undefined, previous: string) {

@@ -35,7 +35,7 @@ describe("IA simulada", () => {
     const { id } = newConversation();
     await say(id, "quanto custa a foto 3x4?");
     let messages = listMessages(db, id);
-    expect(messages.at(-1)?.body).toContain("Como posso te chamar?");
+    expect(messages.at(-1)?.body).toContain("Qual o seu nome?");
 
     await say(id, "Maria");
     messages = listMessages(db, id);
