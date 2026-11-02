@@ -10,7 +10,9 @@ import {
   returnToAi,
   sendToQueue,
 } from "@/lib/atendimento/repository";
-import { atendimentoDb, json, readJson, text, withStaff } from "@/lib/atendimento/server";
+import { after } from "next/server";
+import { activeBrain, atendimentoDb, json, readJson, text, withStaff } from "@/lib/atendimento/server";
+import { isAiThinking, runAi } from "@/lib/atendimento/service";
 import { isConversationStatus } from "@/lib/atendimento/types";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,8 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     conversation,
     messages: listMessages(db, id, after),
     customers: withCustomers ? customersForPhone(db, conversation.phone) : undefined,
+    aiThinking: isAiThinking(id),
+    aiMode: activeBrain().mode,
   });
 });
 
@@ -37,6 +41,12 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
   const db = atendimentoDb();
   const body = await readJson(request);
   const force = body.force === true;
+  // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
+  const wakeAi = () => {
+    const { brain, name } = activeBrain();
+    after(() => runAi(db, id, brain, name).catch((error) => console.error("[atendimento] IA:", error)));
+  };
+  if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) wakeAi();
   switch (body.action) {
     case "assumir":
       return json({ conversation: assumeConversation(db, id, staff, { force }) });

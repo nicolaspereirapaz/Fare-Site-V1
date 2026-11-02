@@ -271,6 +271,11 @@
 .sim-phone-input button { display: inline-grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: #1e9b5a; color: #fff; cursor: pointer; }
 .sim-phone-input button:disabled { opacity: .55; cursor: default; }
 
+/* "digitando…" */
+.at-typing, .sim-typing { font-style: italic; opacity: .75; animation: at-pulse 1.2s ease-in-out infinite; }
+.at-typing { display: inline-flex; align-items: center; gap: 5px; font-size: 0.82rem; }
+@keyframes at-pulse { 50% { opacity: .4; } }
+
 /* ===== Telas menores ===== */
 @media (max-width: 1280px) {
   .at-inbox { grid-template-columns: 290px minmax(0, 1fr) 260px; }

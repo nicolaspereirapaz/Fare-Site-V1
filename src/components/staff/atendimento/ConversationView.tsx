@@ -217,6 +217,7 @@ function ChatPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [returning, setReturning] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
   const lastSeq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -228,7 +229,7 @@ function ChatPanel({
     lastSeq.current = 0;
     async function load(first: boolean) {
       try {
-        const data = await api<{ conversation: Conversation; messages: Message[]; customers?: LinkedCustomer[] }>(
+        const data = await api<{ conversation: Conversation; messages: Message[]; customers?: LinkedCustomer[]; aiThinking?: boolean }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
         );
         if (!active) return;
@@ -237,6 +238,7 @@ function ChatPanel({
           setMessages((list) => (first ? data.messages : [...list, ...data.messages]));
         }
         if (data.customers) setCustomers(data.customers);
+        setAiThinking(Boolean(data.aiThinking));
         if (data.conversation.unread) {
           const read = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "lida" } });
           if (active) onChanged(read.conversation);
@@ -362,6 +364,7 @@ function ChatPanel({
           {messages.map((message, index) => (
             <MessageBubble key={message.id} message={message} previous={messages[index - 1]} />
           ))}
+          {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
         </div>
 
         <Composer

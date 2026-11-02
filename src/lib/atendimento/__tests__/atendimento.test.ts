@@ -15,7 +15,8 @@ import {
   runAtendimentoMigrations,
   saveQuickReply,
 } from "@/lib/atendimento/repository";
-import { receiveCustomerMessage, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 
 let db: DatabaseSync;
@@ -224,6 +225,77 @@ describe("aguardando orçamento / aguardando cliente", () => {
     const back = moveConversation(db, id, "em_atendimento", ana);
     expect(back.status).toBe("em_atendimento");
     expect(listMessages(db, id).at(-1)?.body).toContain("voltou a conversa");
+  });
+});
+
+describe("IA real (serviço do Hermes)", () => {
+  const config = { url: "http://ia.local", token: "segredo" };
+  const reply = (body: object, status = 200) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+
+  it("só liga com URL e token", () => {
+    expect(realAiConfig({})).toBeNull();
+    expect(realAiConfig({ FARE_IA_URL: "http://x/", FARE_IA_TOKEN: "t" })).toEqual({ url: "http://x", token: "t" });
+  });
+
+  it("manda histórico sem avisos internos, com token, e usa nome/resumo/handoff", async () => {
+    let sent: { url: string; headers: Record<string, string>; body: { messages: Array<{ author: string }> } } | null = null;
+    const fetcher = (async (url: string, init: RequestInit) => {
+      sent = { url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) };
+      return new Response(JSON.stringify({ reply: "Vou chamar um vendedor.", handoff: true, subject: "Quer falar com vendedor", name: "Maria", profile: { interests: ["revelação"], last_request: "40 fotos 10x15" } }));
+    }) as unknown as typeof fetch;
+    const { id } = newConversation();
+    assumeConversation(db, id, ana);
+    returnToAi(db, id, ana, "Retirada amanhã");
+    await say(id, "quero falar com vendedor", createRealBrain(config, fetcher));
+    expect(sent!.url).toBe("http://ia.local/responder");
+    expect(sent!.headers["x-fare-token"]).toBe("segredo");
+    expect(sent!.body.messages.every((message) => message.author !== "sistema")).toBe(true);
+    const conversation = getConversation(db, id);
+    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.handoffReason).toBe("Quer falar com vendedor");
+    expect(conversation.contactName).toBe("Maria");
+    expect(conversation.summary).toContain("Nome: Maria · Interesse: revelação");
+    expect(conversation.summary).toContain("Pedido: 40 fotos 10x15");
+    expect(conversation.summary).toContain("Vendedor: Retirada amanhã");
+  });
+
+  it("falha da IA chama a equipe em vez de deixar o cliente sem resposta", async () => {
+    const { id } = newConversation();
+    await say(id, "oi", createRealBrain(config, reply({ error: "MODELO" }, 502)));
+    const conversation = getConversation(db, id);
+    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.handoffReason).toContain("falha técnica");
+    expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
+  });
+
+  it("converte markdown do modelo para o formato do WhatsApp", () => {
+    expect(toWhatsAppFormat("Fica **R$ 3,00 por foto**.\n- brilho\n- fosco")).toBe("Fica *R$ 3,00 por foto*.\n• brilho\n• fosco");
+  });
+
+  it("resumo preserva o anterior quando a IA não traz novidade", () => {
+    expect(summaryFrom({ name: "", profile: {} }, "Nome: Ana · Interesse: Brindes\nPedido: 100 canecas", "Ana")).toBe("Nome: Ana · Interesse: Brindes\nPedido: 100 canecas");
+  });
+});
+
+describe("IA responde uma vez só", () => {
+  it("duas mensagens seguidas enquanto a IA pensa geram UMA resposta, que vê as duas", async () => {
+    const { id } = newConversation();
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const brain = async ({ messages }: { messages: Array<{ author: string; body: string }> }) => {
+      calls += 1;
+      if (calls === 1) await new Promise<void>((resolve) => (release = resolve));
+      return { reply: `vi ${messages.filter((message) => message.author === "cliente").length}` };
+    };
+    recordCustomerMessage(db, id, "oi");
+    const first = runAi(db, id, brain);
+    recordCustomerMessage(db, id, "tudo bem?");
+    const second = runAi(db, id, brain);
+    expect(await second).toEqual([]);
+    release();
+    await first;
+    const ai = listMessages(db, id).filter((message) => message.author === "ia");
+    expect(ai.map((message) => message.body)).toEqual(["vi 2"]);
   });
 });
 

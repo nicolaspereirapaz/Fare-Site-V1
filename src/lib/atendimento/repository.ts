@@ -12,14 +12,16 @@ import {
   type QuickReply,
 } from "@/lib/atendimento/types";
 
-/** Erros com código estável: a API devolve o código e o painel mostra a frase. */
+export type AtendimentoErrorCode = "CONVERSATION_NOT_FOUND" | "ASSIGNED_TO_OTHER" | "NOT_ASSIGNED" | "INVALID_REQUEST" | "QUICK_REPLY_NOT_FOUND" | "DUPLICATE_SHORTCUT";
+
+/** Erros com código estável: a API devolve o código e o painel mostra a frase. (Sem "parameter properties": scripts rodam com node --experimental-strip-types.) */
 export class AtendimentoError extends Error {
-  constructor(
-    readonly code: "CONVERSATION_NOT_FOUND" | "ASSIGNED_TO_OTHER" | "NOT_ASSIGNED" | "INVALID_REQUEST" | "QUICK_REPLY_NOT_FOUND" | "DUPLICATE_SHORTCUT",
-    message?: string,
-    readonly detail?: string,
-  ) {
+  readonly code: AtendimentoErrorCode;
+  readonly detail?: string;
+  constructor(code: AtendimentoErrorCode, message?: string, detail?: string) {
     super(message ?? code);
+    this.code = code;
+    this.detail = detail;
   }
 }
 

@@ -1,6 +1,14 @@
 import { database } from "@/lib/auth";
 import { AtendimentoError, runAtendimentoMigrations, type StaffActor } from "@/lib/atendimento/repository";
 import { readStaffSession } from "@/lib/staff/server";
+import { createRealBrain, realAiConfig, REAL_AI_NAME } from "@/lib/atendimento/hermesBrain";
+import { simulatedBrain, SIMULATED_AI_NAME, type Brain } from "@/lib/atendimento/simulatedBrain";
+
+/** IA usada no painel: a real (Hermes) quando FARE_IA_URL/FARE_IA_TOKEN existem; senão, a de teste. */
+export function activeBrain(): { brain: Brain; name: string; mode: "real" | "teste" } {
+  const config = realAiConfig();
+  return config ? { brain: createRealBrain(config), name: REAL_AI_NAME, mode: "real" } : { brain: simulatedBrain, name: SIMULATED_AI_NAME, mode: "teste" };
+}
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
 const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoMigrated?: boolean };

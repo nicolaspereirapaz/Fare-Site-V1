@@ -106,7 +106,7 @@ export function SimuladorApp() {
             <h3><FlaskConical aria-hidden="true" size={15} /> Como testar</h3>
             <ol>
               <li>Abra o <a href="/equipe/atendimento" target="_blank">painel de Atendimento</a> em outra janela, lado a lado.</li>
-              <li>Mande mensagens aqui. A <strong>IA de teste</strong> responde com o FAQ (respostas fixas, não é a IA real).</li>
+              <li>Mande mensagens aqui. A IA responde como no WhatsApp (mesmas regras, FAQ e modelo do bot) — nada é enviado ao WhatsApp.</li>
               <li>Peça um vendedor: a conversa vai para <strong>Aguardando vendedor</strong> e o painel toca um aviso.</li>
               <li>No painel, assuma e responda: a mensagem aparece aqui, assinada.</li>
             </ol>
@@ -125,6 +125,7 @@ export function SimuladorApp() {
 
 function Phone({ conversation }: { conversation: Conversation }) {
   const [messages, setMessages] = useState<SimMessage[]>([]);
+  const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,8 +134,9 @@ function Phone({ conversation }: { conversation: Conversation }) {
 
   const poll = useCallback(
     () =>
-      api<{ messages: SimMessage[]; lastSeq: number }>(`/api/atendimento/simulador/${conversation.id}?depois=${lastSeq.current}`).then((data) => {
+      api<{ messages: SimMessage[]; lastSeq: number; typing: boolean }>(`/api/atendimento/simulador/${conversation.id}?depois=${lastSeq.current}`).then((data) => {
         lastSeq.current = data.lastSeq;
+        setTyping(data.typing);
         if (data.messages.length) setMessages((list) => [...list, ...data.messages.filter((message) => !list.some((entry) => entry.id === message.id))]);
       }),
     [conversation.id],
@@ -149,7 +151,7 @@ function Phone({ conversation }: { conversation: Conversation }) {
 
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [messages]);
+  }, [messages, typing]);
 
   async function send(value = text) {
     const body = value.trim();
@@ -186,6 +188,7 @@ function Phone({ conversation }: { conversation: Conversation }) {
               <span className="sim-msg-time">{clockTime(message.createdAt)}</span>
             </div>
           ))}
+          {typing ? <div className="sim-msg sim-typing" aria-live="polite">digitando…</div> : null}
         </div>
         <div className="sim-suggestions">
           {SUGGESTIONS.map((suggestion) => (
