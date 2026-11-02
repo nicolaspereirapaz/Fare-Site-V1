@@ -38,18 +38,76 @@ export function detectIntent(text: string): Intent {
 }
 
 const ANSWERS: Record<Exclude<Intent, null | "vendedor" | "saudacao">, string> = {
-  "3x4": "A foto 3x4 sai em pacote de 6 fotos por R$ 30,00. Fazemos na hora, sem agendamento, durante o horário da loja.",
-  documentos:
-    "Fazemos fotos para documentos na hora, sem agendamento:\n• 3x4: 6 fotos por R$ 30,00\n• Visto americano 5x5: 4 fotos por R$ 35,00\n• Passaporte brasileiro 5x7: 4 fotos por R$ 35,00\n• Passaporte italiano 3,5x4,5: 6 fotos por R$ 35,00\nQual formato você precisa?",
+  "3x4": "A foto 3x4 sai em pacote de 6 fotos por R$ 30,00.",
+  documentos: "Fazemos sim! Qual o tamanho da foto que você precisa?",
   horario: "A loja abre de segunda a sexta, das 9h às 18h, e aos sábados, das 9h às 13h. Fechamos aos domingos e feriados. Por aqui eu atendo 24h.",
   endereco: "Estamos na Rua do Rosário, 68, Centro, Jundiaí/SP.",
-  revelacao:
-    "Você pode enviar as fotos em qualidade original pelo site: https://www.farefoto.com.br/produtos/revelacao-de-fotos\nNa 10x15 ou 9x12, de 10 a 50 fotos sai R$ 3,00 cada (brilho ou fosco). Quantas fotos você quer revelar?",
+  revelacao: "Revelamos sim! Qual o tamanho das fotos?",
   brindes: "Legal! Para o orçamento de brindes, me conta: qual produto, a quantidade, para quando precisa e se já tem o logo?",
   grafica: "Para orçar seu impresso, preciso de: quantidade, medidas, data desejada e se você já tem a arte pronta.",
   preco: "Claro! É sobre fotos, gráfica ou brindes? Me conta o que você precisa que eu passo o valor ou monto o orçamento.",
   obrigado: "Por nada! Se precisar de mais alguma coisa, é só chamar por aqui.",
 };
+
+// ---------- Preço: pergunta o que falta (tamanho, quantidade) antes de informar ----------
+
+const DOC_PRICES: Array<[RegExp, string]> = [
+  [/3\s*x\s*4\b/, "A foto 3x4 sai em pacote de 6 fotos por R$ 30,00."],
+  [/3[,.]5\s*x\s*4[,.]5/, "A foto 3,5x4,5 sai em pacote de 6 fotos por R$ 35,00."],
+  [/5\s*x\s*5/, "A foto 5x5 sai em pacote de 4 fotos por R$ 35,00."],
+  [/5\s*x\s*7/, "A foto 5x7 sai em pacote de 4 fotos por R$ 35,00."],
+];
+const ASK_DOC_SIZE = "Qual o tamanho da foto que você precisa?";
+
+const DEV_SIZES: Array<[RegExp, string, "pequena" | "grande"]> = [
+  [/10\s*x\s*15/, "10x15", "pequena"],
+  [/9\s*x\s*12/, "9x12", "pequena"],
+  [/13\s*x\s*18/, "13x18", "grande"],
+  [/15\s*x\s*21/, "15x21", "grande"],
+];
+/** [até quantidade, pequena (9x12/10x15), grande (13x18/15x21)] — tabela pública aprovada. */
+const DEV_TIERS: Array<[number, number, number]> = [
+  [1, 6, 9], [9, 3.5, 7], [50, 3, 6], [100, 2.5, 5], [250, 1.8, 4.5], [500, 1.5, 4], [999, 1.3, 3.5], [Infinity, 1, 2.5],
+];
+const ASK_DEV_SIZE = "Qual o tamanho das fotos?";
+const ASK_DEV_QTY = "Quantas fotos você quer revelar?";
+const brl = (value: number) => `R$ ${value.toFixed(2).replace(".", ",")}`;
+
+/** Quantidade de fotos no texto, ignorando os números do tamanho ("50 fotos 10x15" → 50). */
+export function extractQuantity(text: string): number | null {
+  const withoutSizes = fold(text).replace(/\d+([,.]\d+)?\s*x\s*\d+([,.]\d+)?/g, " ");
+  const match = withoutSizes.match(/\b(\d{1,5})\b/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Continua a conversa de preço: se a IA perguntou o tamanho/quantidade, usa a resposta;
+ * só informa o valor quando já sabe o tamanho (e, na revelação, a quantidade).
+ */
+export function priceFlow(customerTexts: string[], lastAiText: string): string | null {
+  const last = fold(customerTexts.at(-1) ?? "");
+  const recent = customerTexts.slice(-3).map(fold).join(" \n ");
+  const askedDoc = lastAiText.includes(ASK_DOC_SIZE) || /qual o tamanho da foto que voce precisa/.test(fold(lastAiText));
+  const askedDev = lastAiText.includes(ASK_DEV_SIZE) || lastAiText.includes(ASK_DEV_QTY);
+  const docIntent = /(visto|passaporte|documento|3\s*x\s*4|5\s*x\s*5|5\s*x\s*7|3[,.]5\s*x\s*4[,.]5)/.test(last);
+  const devIntent = /(revela|10\s*x\s*15|9\s*x\s*12|13\s*x\s*18|15\s*x\s*21|imprimir (minhas )?fotos|impressao de fotos)/.test(last);
+
+  if (docIntent || askedDoc) {
+    const found = DOC_PRICES.find(([pattern]) => pattern.test(last));
+    if (found) return found[1];
+    if (docIntent || askedDoc) return askedDoc ? `Não entendi o tamanho. ${ASK_DOC_SIZE}` : null;
+  }
+  if (devIntent || askedDev) {
+    const size = DEV_SIZES.find(([pattern]) => pattern.test(askedDev ? recent : last));
+    const quantity = extractQuantity(askedDev ? recent : last);
+    if (!size) return askedDev && lastAiText.includes(ASK_DEV_SIZE) ? `Não entendi o tamanho. ${ASK_DEV_SIZE}` : devIntent ? `Revelamos sim! ${ASK_DEV_SIZE}` : null;
+    if (!quantity) return ASK_DEV_QTY;
+    const tier = DEV_TIERS.find(([upTo]) => quantity <= upTo)!;
+    const unit = size[2] === "pequena" ? tier[1] : tier[2];
+    return `Na ${size[1]}, para ${quantity} ${quantity === 1 ? "foto" : "fotos"}, sai ${brl(unit)} cada.`;
+  }
+  return null;
+}
 
 const INTEREST_LABEL: Partial<Record<NonNullable<Intent>, string>> = {
   "3x4": "Foto 3x4",
@@ -119,7 +177,8 @@ export const simulatedBrain: Brain = async ({ conversation, messages }) => {
         .slice(0, -1)
         .map((message) => detectIntent(message.body))
         .find((found): found is keyof typeof ANSWERS => Boolean(found) && found !== "saudacao" && found !== "obrigado" && found !== "vendedor");
-      const answer = pending ? ANSWERS[pending] : "Em que posso te ajudar?";
+      const pendingText = customerMessages.slice(0, -1).map((message) => message.body).reverse().find((body) => detectIntent(body) === pending);
+      const answer = pending ? (priceFlow([pendingText ?? ""], "") ?? ANSWERS[pending]) : "Em que posso te ajudar?";
       return {
         reply: `Prazer, ${name}! ${answer}`,
         contactName: name,
@@ -130,6 +189,9 @@ export const simulatedBrain: Brain = async ({ conversation, messages }) => {
   }
 
   const summary = knownName ? buildSummary(knownName, intent ? INTEREST_LABEL[intent] : undefined, conversation.summary) : conversation.summary;
+  // Preço de fotos: pergunta tamanho/quantidade antes; informa só o valor do que foi escolhido.
+  const price = priceFlow(customerMessages.map((message) => message.body), aiMessages.at(-1)?.body ?? "");
+  if (price) return { reply: price, summary };
   if (intent && intent !== "saudacao") return { reply: ANSWERS[intent], summary };
   if (intent === "saudacao") return { reply: `Olá${knownName ? `, ${knownName}` : ""}! Em que posso te ajudar?`, summary };
   return {

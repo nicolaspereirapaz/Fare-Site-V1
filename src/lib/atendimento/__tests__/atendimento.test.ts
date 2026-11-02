@@ -39,12 +39,35 @@ describe("IA simulada", () => {
 
     await say(id, "Maria");
     messages = listMessages(db, id);
-    expect(messages.at(-1)?.body).toMatch(/^Prazer, Maria! A foto 3x4 sai em pacote de 6 fotos por R\$ 30,00/);
+    expect(messages.at(-1)?.body).toBe("Prazer, Maria! A foto 3x4 sai em pacote de 6 fotos por R$ 30,00.");
     const conversation = getConversation(db, id);
     expect(conversation.contactName).toBe("Maria");
     expect(conversation.summary).toContain("Nome: Maria");
     expect(conversation.summary).toContain("Interesse: Foto 3x4");
     expect(conversation.status).toBe("ia");
+  });
+
+  it("pergunta o tamanho antes de dar preço e informa só o valor escolhido", async () => {
+    const { id } = newConversation();
+    await say(id, "oi");
+    await say(id, "Maria");
+    await say(id, "preciso de foto pra passaporte");
+    expect(listMessages(db, id).at(-1)?.body).toBe("Fazemos sim! Qual o tamanho da foto que você precisa?");
+    await say(id, "5x7");
+    expect(listMessages(db, id).at(-1)?.body).toBe("A foto 5x7 sai em pacote de 4 fotos por R$ 35,00.");
+
+    await say(id, "quero revelar umas fotos");
+    expect(listMessages(db, id).at(-1)?.body).toBe("Revelamos sim! Qual o tamanho das fotos?");
+    await say(id, "10x15");
+    expect(listMessages(db, id).at(-1)?.body).toBe("Quantas fotos você quer revelar?");
+    await say(id, "40");
+    expect(listMessages(db, id).at(-1)?.body).toBe("Na 10x15, para 40 fotos, sai R$ 3,00 cada.");
+  });
+
+  it("nenhuma resposta despeja a tabela inteira", async () => {
+    const { id } = newConversation();
+    for (const text of ["oi", "Ana", "foto para documento", "quero revelar fotos"]) await say(id, text);
+    expect(listMessages(db, id).filter((message) => message.author === "ia").every((message) => !message.body.includes("•"))).toBe(true);
   });
 
   it("pedido de vendedor manda a conversa para a fila", async () => {
