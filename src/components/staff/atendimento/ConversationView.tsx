@@ -17,7 +17,13 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, type ConversationStatus } from "@/lib/atendimento/types";
+import {
+  CONVERSATION_STATUSES,
+  CONVERSATION_STATUS_COLORS,
+  CONVERSATION_STATUS_LABELS,
+  isSellerStatus,
+  type ConversationStatus,
+} from "@/lib/atendimento/types";
 import {
   ApiError,
   api,
@@ -42,12 +48,16 @@ const FILTERS: Array<{ id: ListFilter; label: string }> = [
   { id: "aguardando_vendedor", label: "Aguardando" },
   { id: "minhas", label: "Minhas" },
   { id: "ia", label: "IA" },
+  { id: "aguardando_orcamento", label: "Orçamento" },
+  { id: "aguardando_cliente", label: "Ag. cliente" },
   { id: "finalizada", label: "Finalizadas" },
 ];
 
+export const isMine = (conversation: Conversation, me: StaffUser) => isSellerStatus(conversation.status) && conversation.assignedStaffId === me.id;
+
 export function matchesFilter(conversation: Conversation, filter: ListFilter, me: StaffUser) {
   if (filter === "todas") return conversation.status !== "finalizada";
-  if (filter === "minhas") return conversation.status === "em_atendimento" && conversation.assignedStaffId === me.id;
+  if (filter === "minhas") return isMine(conversation, me);
   return conversation.status === filter;
 }
 
@@ -65,6 +75,7 @@ export function StatusChip({ status, assigned }: { status: ConversationStatus; a
     <span className="at-chip" style={{ background: colors.bg, color: colors.fg }}>
       <span aria-hidden="true" className="at-chip-dot" style={{ background: colors.dot }} />
       {status === "em_atendimento" && assigned ? `Com ${assigned.split(" ")[0]}` : CONVERSATION_STATUS_LABELS[status]}
+      {status !== "em_atendimento" && isSellerStatus(status) && assigned ? ` · ${assigned.split(" ")[0]}` : ""}
     </span>
   );
 }
@@ -102,7 +113,7 @@ export function ConversationView({
       return b.lastMessageAt.localeCompare(a.lastMessageAt);
     });
   const counts = useMemo(() => {
-    const result: Record<ListFilter, number> = { todas: 0, minhas: 0, ia: 0, aguardando_vendedor: 0, em_atendimento: 0, finalizada: 0 };
+    const result = Object.fromEntries([...FILTERS.map(({ id }) => [id, 0]), ["em_atendimento", 0]]) as Record<ListFilter, number>;
     for (const conversation of conversations) for (const { id } of FILTERS) if (matchesFilter(conversation, id, me)) result[id] += 1;
     return result;
   }, [conversations, me]);
@@ -249,7 +260,7 @@ function ChatPanel({
     if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
   }, [messages]);
 
-  async function act(action: "assumir" | "devolver" | "fila" | "finalizar", extra: Record<string, unknown> = {}) {
+  async function act(action: "assumir" | "devolver" | "fila" | "finalizar" | "mover", extra: Record<string, unknown> = {}) {
     setBusy(true);
     setError(null);
     try {
@@ -270,8 +281,8 @@ function ChatPanel({
     }
   }
 
-  const mine = conversation.status === "em_atendimento" && conversation.assignedStaffId === me.id;
-  const otherSeller = conversation.status === "em_atendimento" && !mine ? conversation.assignedStaffName : null;
+  const mine = isMine(conversation, me);
+  const otherSeller = isSellerStatus(conversation.status) && !mine ? conversation.assignedStaffName : null;
 
   return (
     <>
@@ -287,6 +298,18 @@ function ChatPanel({
           </div>
           <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
           <div className="at-chat-actions">
+            <label className="at-stage">
+              <span>Etapa</span>
+              <select
+                disabled={busy}
+                onChange={(event) => void act("mover", { status: event.target.value })}
+                value={conversation.status}
+              >
+                {CONVERSATION_STATUSES.map((status) => (
+                  <option key={status} value={status}>{CONVERSATION_STATUS_LABELS[status]}</option>
+                ))}
+              </select>
+            </label>
             {!mine ? (
               <button className="at-btn at-btn-primary" disabled={busy} onClick={() => void act("assumir")} type="button">
                 <Hand aria-hidden="true" size={16} /> Assumir
@@ -518,8 +541,8 @@ function Composer({
         <p>
           {conversation.status === "ia"
             ? "A IA está respondendo este cliente. Para escrever, assuma a conversa — a IA para na hora."
-            : conversation.status === "em_atendimento"
-              ? `${conversation.assignedStaffName ?? "Outro vendedor"} está com esta conversa.`
+            : isSellerStatus(conversation.status)
+              ? `${conversation.assignedStaffName ?? "Outro vendedor"} está com esta conversa (${CONVERSATION_STATUS_LABELS[conversation.status]}).`
               : "Assuma a conversa para responder o cliente."}
         </p>
         <button className="at-btn at-btn-primary" onClick={onAssume} type="button">

@@ -7,12 +7,13 @@ import {
   firstName,
   getConversation,
   listMessages,
+  customerReplied,
   reopenConversation,
   sendToQueue,
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import type { Conversation, Message } from "@/lib/atendimento/types";
+import { isSellerStatus, type Conversation, type Message } from "@/lib/atendimento/types";
 
 /**
  * Mensagem do cliente chegou (do simulador hoje; do WhatsApp na etapa seguinte).
@@ -27,6 +28,7 @@ export async function receiveCustomerMessage(
 ): Promise<{ conversation: Conversation; created: Message[] }> {
   const before = getConversation(db, conversationId);
   if (before.status === "finalizada") reopenConversation(db, conversationId);
+  if (before.status === "aguardando_cliente") customerReplied(db, conversationId);
   const customerMessage = addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text });
   const created: Message[] = [customerMessage];
 
@@ -55,7 +57,7 @@ export function signedText(staffName: string, text: string) {
 /** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */
 export function sendStaffMessage(db: DatabaseSync, conversationId: string, staff: StaffActor, text: string, options: { sign: boolean }): Message {
   const conversation = getConversation(db, conversationId);
-  if (conversation.status !== "em_atendimento" || conversation.assignedStaffId !== staff.id) {
+  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
     throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
   }
   const body = text.trim();

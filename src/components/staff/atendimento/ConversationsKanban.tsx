@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Bot, UserRound } from "lucide-react";
 import { KanbanBoard, KanbanColumn } from "@/components/backofficeShared";
-import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, type ConversationStatus } from "@/lib/atendimento/types";
+import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, isSellerStatus, type ConversationStatus } from "@/lib/atendimento/types";
 import { displayName, formatPhone, initials, shortTime, waitingFor, type Conversation } from "@/components/staff/atendimento/shared";
 
 const EMPTY: Record<ConversationStatus, string> = {
   ia: "Nenhum cliente com a IA agora.",
   aguardando_vendedor: "Ninguém esperando. 🎉",
   em_atendimento: "Arraste para cá para assumir.",
+  aguardando_orcamento: "Conversas esperando o orçamento ficar pronto.",
+  aguardando_cliente: "Conversas esperando resposta do cliente.",
   finalizada: "Arraste para cá para finalizar.",
 };
 
@@ -34,7 +36,7 @@ export function ConversationsKanban({
   return (
     <KanbanBoard
       canDrop={(cardId, column) => conversations.find((entry) => entry.id === cardId)?.status !== column}
-      className="kb-board-4 at-board"
+      className="kb-board-6 at-board"
       onMove={(cardId, column) => {
         const conversation = conversations.find((entry) => entry.id === cardId);
         if (conversation && conversation.status !== column) onMove(conversation, column as ConversationStatus);
@@ -102,7 +104,7 @@ function CardBody({ conversation }: { conversation: Conversation }) {
       {conversation.status === "aguardando_vendedor" && conversation.handoffReason ? <p className="at-kb-reason">{conversation.handoffReason}</p> : null}
       <div className="kb-card-meta">
         {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
-        {conversation.status === "em_atendimento" && conversation.assignedStaffName ? <span className="at-kb-seller"><UserRound aria-hidden="true" size={12} /> {conversation.assignedStaffName.split(" ")[0]}</span> : null}
+        {isSellerStatus(conversation.status) && conversation.assignedStaffName ? <span className="at-kb-seller"><UserRound aria-hidden="true" size={12} /> {conversation.assignedStaffName.split(" ")[0]}</span> : null}
         <span className="kb-meta">
           {conversation.status === "aguardando_vendedor" && conversation.waitingSince ? `Esperando ${waitingFor(conversation.waitingSince)}` : shortTime(conversation.lastMessageAt)}
         </span>

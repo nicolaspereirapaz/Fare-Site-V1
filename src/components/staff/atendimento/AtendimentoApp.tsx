@@ -4,7 +4,7 @@ import "@/components/staff/quoteEditor.css";
 import "@/components/staff/atendimento/atendimento.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bell, BellOff, FlaskConical, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
-import { ConversationView } from "@/components/staff/atendimento/ConversationView";
+import { ConversationView, isMine } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
 import { ApiError, api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
@@ -13,6 +13,18 @@ import type { ConversationStatus } from "@/lib/atendimento/types";
 type View = "conversas" | "quadro";
 
 const noSubscribe = () => () => undefined;
+
+/** Notificação do computador (se o vendedor permitiu); clicar abre a conversa. */
+function notifyDesktop(items: Array<{ conversation: Conversation; title: string }>, onOpen: (id: string) => void) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  for (const { conversation, title } of items) {
+    const notification = new Notification(title, { body: conversation.lastMessagePreview || conversation.handoffReason || "", tag: `atendimento-${conversation.id}` });
+    notification.onclick = () => {
+      window.focus();
+      onOpen(conversation.id);
+    };
+  }
+}
 const readPermission = (): NotificationPermission | "unsupported" => (typeof Notification === "undefined" ? "unsupported" : Notification.permission);
 
 /** Página Atendimento: lista de conversas (estilo WhatsApp Web) ou quadro Kanban, com avisos de "cliente pediu vendedor". */
@@ -30,11 +42,37 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   const [askedPermission, setAskedPermission] = useState<NotificationPermission | null>(null);
   const alerts = askedPermission ?? permission;
   const waitingIds = useRef<Set<string> | null>(null);
+  const unreadById = useRef<Map<string, number> | null>(null);
+  const selectedRef = useRef<string | null>(selectedId);
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
+
+  const openFromAlert = useCallback((id: string) => {
+    setView("conversas");
+    setSelectedId(id);
+  }, []);
 
   const applyList = useCallback((data: { conversations: Conversation[] }) => {
       setConversations(data.conversations);
       setError(null);
       setLoaded(true);
+
+      // Aviso para o vendedor: cliente de uma conversa DELE escreveu (e ele não está com ela aberta na tela).
+      const previousUnread = unreadById.current;
+      unreadById.current = new Map(data.conversations.map((conversation) => [conversation.id, conversation.unread]));
+      if (previousUnread) {
+        const mineWithNews = data.conversations.filter(
+          (conversation) =>
+            isMine(conversation, me) &&
+            conversation.unread > (previousUnread.get(conversation.id) ?? 0) &&
+            (document.hidden || selectedRef.current !== conversation.id),
+        );
+        if (mineWithNews.length) {
+          playChime();
+          notifyDesktop(mineWithNews.map((conversation) => ({ conversation, title: `${displayName(conversation)} respondeu` })), openFromAlert);
+        }
+      }
 
       // Aviso: conversa que ENTROU agora em "Aguardando vendedor" (não avisa as que já estavam ao abrir a página).
       const waiting = data.conversations.filter((conversation) => conversation.status === "aguardando_vendedor");
@@ -44,22 +82,12 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
         const fresh = waiting.filter((conversation) => !previous.has(conversation.id));
         if (fresh.length) {
           playChime();
-          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-            for (const conversation of fresh) {
-              const notification = new Notification(`${displayName(conversation)} quer falar com um vendedor`, {
-                body: conversation.lastMessagePreview || conversation.handoffReason || "",
-                tag: `atendimento-${conversation.id}`,
-              });
-              notification.onclick = () => {
-                window.focus();
-                setView("conversas");
-                setSelectedId(conversation.id);
-              };
-            }
-          }
+          notifyDesktop(fresh.map((conversation) => ({ conversation, title: `${displayName(conversation)} quer falar com um vendedor` })), openFromAlert);
         }
       }
-  }, []);
+  }, [me, openFromAlert]);
+
+
 
   const refresh = useCallback(
     () =>
@@ -141,12 +169,8 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
 
   return (
     <div className={`kb-page container-shell at-page${view === "conversas" ? " at-page-inbox" : ""}`}>
-      <header className="kb-heading at-heading">
-        <h1>Atendimento</h1>
-        <p>{view === "conversas" ? "Converse com os clientes do WhatsApp. A IA atende primeiro e chama a equipe quando precisa." : "Cada cliente em uma etapa. Arraste o cartão para assumir, devolver para a IA ou finalizar."}</p>
-      </header>
-
       <div className="kb-toolbar at-toolbar">
+        <h1 className="at-title">Atendimento</h1>
         <div aria-label="Visualização" className="kb-tabs" role="tablist">
           <button aria-selected={view === "conversas"} className={view === "conversas" ? "active" : undefined} onClick={() => changeView("conversas")} role="tab" type="button">
             <MessagesSquare aria-hidden="true" size={16} /> Conversas

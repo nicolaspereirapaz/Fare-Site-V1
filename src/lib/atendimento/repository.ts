@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import {
+  CONVERSATION_STATUS_LABELS,
   isConversationStatus,
+  isSellerStatus,
   type AuthorKind,
   type Channel,
   type Conversation,
@@ -222,18 +224,51 @@ const system = (db: DatabaseSync, conversationId: string, body: string) => addMe
 export function assumeConversation(db: DatabaseSync, id: string, staff: StaffActor, options: { force?: boolean } = {}): Conversation {
   const current = getConversation(db, id);
   if (current.status === "em_atendimento" && current.assignedStaffId === staff.id) return current;
-  if (current.status === "em_atendimento" && current.assignedStaffId && !options.force) {
+  const owned = isSellerStatus(current.status) && current.assignedStaffId;
+  if (owned && current.assignedStaffId !== staff.id && !options.force) {
     throw new AtendimentoError("ASSIGNED_TO_OTHER", `${current.assignedStaffName ?? "Outro vendedor"} já está atendendo.`, current.assignedStaffName ?? "");
   }
   setStatus(db, id, "em_atendimento", { staff, handoffReason: current.handoffReason });
   system(
     db,
     id,
-    current.status === "em_atendimento" && current.assignedStaffName
-      ? `${staff.name} assumiu a conversa no lugar de ${current.assignedStaffName}.`
-      : `${staff.name} assumiu a conversa. A IA parou de responder.`,
+    owned && current.assignedStaffId === staff.id
+      ? `${staff.name} voltou a conversa para Em atendimento.`
+      : owned && current.assignedStaffName
+        ? `${staff.name} assumiu a conversa no lugar de ${current.assignedStaffName}.`
+        : `${staff.name} assumiu a conversa. A IA parou de responder.`,
   );
   return getConversation(db, id);
+}
+
+/**
+ * Aguardando orçamento / Aguardando cliente: a conversa continua com o vendedor (a IA segue calada).
+ * Se ninguém tinha assumido, quem move passa a ser o responsável.
+ */
+export function setSellerStage(
+  db: DatabaseSync,
+  id: string,
+  stage: "aguardando_orcamento" | "aguardando_cliente",
+  staff: StaffActor,
+  options: { force?: boolean } = {},
+): Conversation {
+  const current = getConversation(db, id);
+  if (current.status === stage) return current;
+  const owner = isSellerStatus(current.status) && current.assignedStaffId ? { id: current.assignedStaffId, name: current.assignedStaffName ?? "" } : null;
+  if (owner && owner.id !== staff.id && !options.force) {
+    throw new AtendimentoError("ASSIGNED_TO_OTHER", `${owner.name || "Outro vendedor"} já está atendendo.`, owner.name);
+  }
+  setStatus(db, id, stage, { staff: owner && owner.id === staff.id ? owner : staff, handoffReason: current.handoffReason });
+  system(db, id, `${staff.name} moveu para ${CONVERSATION_STATUS_LABELS[stage]}.`);
+  return getConversation(db, id);
+}
+
+/** Cliente respondeu enquanto estava em "Aguardando cliente": volta para "Em atendimento" com o mesmo vendedor. */
+export function customerReplied(db: DatabaseSync, id: string) {
+  const current = getConversation(db, id);
+  if (current.status !== "aguardando_cliente") return;
+  db.prepare("UPDATE atd_conversations SET status = 'em_atendimento', updated_at = ? WHERE id = ?").run(nowIso(), id);
+  system(db, id, "O cliente respondeu. A conversa voltou para Em atendimento.");
 }
 
 /** Devolve para a IA (com um recado opcional que entra no resumo para a IA continuar do ponto certo). */
@@ -275,6 +310,7 @@ export function moveConversation(db: DatabaseSync, id: string, target: Conversat
   if (target === "em_atendimento") return assumeConversation(db, id, staff, options);
   if (target === "ia") return returnToAi(db, id, staff);
   if (target === "aguardando_vendedor") return sendToQueue(db, id, staff, "Colocada na fila pela equipe.");
+  if (target === "aguardando_orcamento" || target === "aguardando_cliente") return setSellerStage(db, id, target, staff, options);
   return finishConversation(db, id, staff);
 }
 
@@ -301,13 +337,30 @@ const DEFAULT_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body
   { shortcut: "obrigado", title: "Agradecimento", body: "Obrigado pelo contato! Qualquer coisa, é só chamar por aqui." },
 ];
 
+/** Pix aprovado por Nicolas: chave CNPJ. /chavepix manda só a chave, para o cliente copiar com um toque. */
+const PIX_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
+  {
+    shortcut: "pix",
+    title: "Pagamento por Pix",
+    body: "*Pagamento via Pix*\nChave Pix (CNPJ): *50.344.377/0001-36*\n\nVou te mandar a chave sozinha na próxima mensagem para você copiar. Depois de pagar, envie o comprovante por aqui, por favor.",
+  },
+  { shortcut: "chavepix", title: "Chave Pix (só a chave, para copiar)", body: "50344377000136" },
+];
+
+/** Cada leva de mensagens iniciais entra uma única vez; apagar/editar depois é decisão da equipe. */
+const QUICK_REPLY_SEEDS: Array<[string, Array<Pick<QuickReply, "shortcut" | "title" | "body">>]> = [
+  ["quick_replies_seeded", DEFAULT_QUICK_REPLIES],
+  ["quick_replies_seed_pix", PIX_QUICK_REPLIES],
+];
+
 function seedQuickReplies(db: DatabaseSync) {
-  const seeded = db.prepare("SELECT value FROM atd_meta WHERE key = 'quick_replies_seeded'").get();
-  if (seeded) return;
-  const at = nowIso();
   const insert = db.prepare("INSERT OR IGNORE INTO atd_quick_replies (id, shortcut, title, body, updated_at) VALUES (?, ?, ?, ?, ?)");
-  for (const reply of DEFAULT_QUICK_REPLIES) insert.run(randomUUID(), reply.shortcut, reply.title, reply.body, at);
-  db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_seeded', ?)").run(at);
+  for (const [key, replies] of QUICK_REPLY_SEEDS) {
+    if (db.prepare("SELECT value FROM atd_meta WHERE key = ?").get(key)) continue;
+    const at = nowIso();
+    for (const reply of replies) insert.run(randomUUID(), reply.shortcut, reply.title, reply.body, at);
+    db.prepare("INSERT INTO atd_meta (key, value) VALUES (?, ?)").run(key, at);
+  }
 }
 
 const cleanShortcut = (value: string) =>

@@ -159,7 +159,67 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
   });
 });
 
+describe("aguardando orçamento / aguardando cliente", () => {
+  it("continua com o vendedor, a IA fica calada e só ele responde", async () => {
+    const { id } = newConversation();
+    const moved = moveConversation(db, id, "aguardando_orcamento", ana);
+    expect(moved.status).toBe("aguardando_orcamento");
+    expect(moved.assignedStaffName).toBe("Ana Souza");
+    let called = false;
+    await say(id, "e aí, o orçamento?", async () => {
+      called = true;
+      return { reply: "x" };
+    });
+    expect(called).toBe(false);
+    expect(getConversation(db, id).status).toBe("aguardando_orcamento");
+    expect(getConversation(db, id).unread).toBe(1);
+    expect(sendStaffMessage(db, id, ana, "Já estou terminando", { sign: true }).deliveredText).toContain("*Ana:*");
+    expect(() => sendStaffMessage(db, id, bruno, "Oi", { sign: true })).toThrowError(AtendimentoError);
+  });
+
+  it("cliente responde em Aguardando cliente: volta para Em atendimento com o mesmo vendedor", async () => {
+    const { id } = newConversation();
+    assumeConversation(db, id, ana);
+    moveConversation(db, id, "aguardando_cliente", ana);
+    await say(id, "Pode fazer sim!");
+    const conversation = getConversation(db, id);
+    expect(conversation.status).toBe("em_atendimento");
+    expect(conversation.assignedStaffId).toBe(ana.id);
+    expect(listMessages(db, id).some((message) => message.body.includes("voltou para Em atendimento"))).toBe(true);
+  });
+
+  it("outro vendedor só muda a etapa de conversa alheia com confirmação", () => {
+    const { id } = newConversation();
+    assumeConversation(db, id, ana);
+    expect(() => moveConversation(db, id, "aguardando_cliente", bruno)).toThrowError(AtendimentoError);
+    expect(moveConversation(db, id, "aguardando_cliente", bruno, { force: true }).assignedStaffName).toBe("Bruno Lima");
+  });
+
+  it("dono volta a conversa para Em atendimento sem pedir confirmação", () => {
+    const { id } = newConversation();
+    moveConversation(db, id, "aguardando_orcamento", ana);
+    const back = moveConversation(db, id, "em_atendimento", ana);
+    expect(back.status).toBe("em_atendimento");
+    expect(listMessages(db, id).at(-1)?.body).toContain("voltou a conversa");
+  });
+});
+
 describe("mensagens rápidas", () => {
+  it("inclui Pix com a chave CNPJ e a chave sozinha para copiar", () => {
+    const replies = listQuickReplies(db);
+    expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("50.344.377/0001-36");
+    expect(replies.find((reply) => reply.shortcut === "chavepix")?.body).toBe("50344377000136");
+  });
+
+  it("Pix entra uma vez mesmo em banco que já tinha a primeira lista, e não volta se apagado", () => {
+    const fresh = new DatabaseSync(":memory:");
+    runAtendimentoMigrations(fresh);
+    const pix = listQuickReplies(fresh).find((reply) => reply.shortcut === "pix")!;
+    deleteQuickReply(fresh, pix.id);
+    runAtendimentoMigrations(fresh);
+    expect(listQuickReplies(fresh).some((reply) => reply.shortcut === "pix")).toBe(false);
+  });
+
   it("vem com a lista inicial e não duplica ao migrar de novo", () => {
     const first = listQuickReplies(db).length;
     expect(first).toBeGreaterThan(5);
@@ -168,12 +228,12 @@ describe("mensagens rápidas", () => {
   });
 
   it("cria, edita, impede atalho repetido e apaga", () => {
-    const created = saveQuickReply(db, { shortcut: "/Pix ", title: "Pix", body: "Chave Pix: ..." });
-    expect(created.shortcut).toBe("pix");
-    expect(() => saveQuickReply(db, { shortcut: "pix", title: "Outro", body: "x" })).toThrowError(/já existe|Já existe/);
-    const edited = saveQuickReply(db, { id: created.id, shortcut: "pix", title: "Pix da loja", body: "Chave nova" });
-    expect(edited.title).toBe("Pix da loja");
+    const created = saveQuickReply(db, { shortcut: "/Frete ", title: "Frete", body: "O frete depende do CEP." });
+    expect(created.shortcut).toBe("frete");
+    expect(() => saveQuickReply(db, { shortcut: "frete", title: "Outro", body: "x" })).toThrowError(/Já existe/);
+    const edited = saveQuickReply(db, { id: created.id, shortcut: "frete", title: "Frete e entrega", body: "Me passa o CEP?" });
+    expect(edited.title).toBe("Frete e entrega");
     deleteQuickReply(db, created.id);
-    expect(listQuickReplies(db).some((reply) => reply.shortcut === "pix")).toBe(false);
+    expect(listQuickReplies(db).some((reply) => reply.shortcut === "frete")).toBe(false);
   });
 });
