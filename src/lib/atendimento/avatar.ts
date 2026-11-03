@@ -35,7 +35,7 @@ async function loadPhoto(db: DatabaseSync, conversationId: string, fetcher: type
   const old = await readFile(file).catch(() => null);
   if (!bridge) return old;
   try {
-    const response = await fetcher(`${bridge.url}/fare/painel/foto?chatId=${encodeURIComponent(conversation.waChatId)}`, {
+    const response = await fetcher(`${bridge.url}/fare/painel/foto?chatId=${encodeURIComponent(conversation.waChatId)}&phone=${encodeURIComponent(conversation.phone)}`, {
       headers: { "x-fare-token": bridge.token },
       signal: AbortSignal.timeout(20000),
     });

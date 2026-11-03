@@ -1,5 +1,8 @@
 /* ===== Atendimento (conversas, quadro e simulador) — mesma linguagem visual do Quadro da equipe ===== */
 
+/* Contraste maior no painel: texto secundário mais escuro (o cinza do site ficava apagado). */
+.atd-root { --muted: #4b5563; }
+
 /* Topo compacto: título, abas e ações numa linha só (mais espaço para a conversa). */
 .at-page { padding-top: 18px; }
 .at-toolbar { max-width: none; align-items: flex-end; gap: 8px 20px; margin-bottom: 14px; }
@@ -98,13 +101,13 @@
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .at-item:hover { background: #f4f5f8; }
-.at-item.is-active { border-left-color: #f65c2d; background: #fff; box-shadow: inset 0 0 0 1px #eceef2; }
+.at-item.is-active { border-left-color: var(--navy); background: #e8edf8; box-shadow: inset 0 0 0 1px #d5dcec; }
 .at-item.is-waiting:not(.is-active) { background: #fff8f4; }
 .at-item-main { display: grid; min-width: 0; flex: 1; gap: 3px; }
 .at-item-top { display: flex; align-items: baseline; gap: 8px; }
 .at-item-top strong { overflow: hidden; color: var(--navy-dark); font-size: 0.9rem; text-overflow: ellipsis; white-space: nowrap; }
 .at-item-time { margin-left: auto; color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
-.at-item-preview { display: flex; align-items: center; gap: 4px; overflow: hidden; color: #5b6170; font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
+.at-item-preview { display: flex; align-items: center; gap: 4px; overflow: hidden; color: #374151; font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
 .at-item-preview svg { flex: none; color: var(--muted); }
 /* Uma linha só: etapa encolhe com "…", tempo de espera e não lidas nunca quebram. */
 .at-item-bottom { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 6px; margin-top: 2px; }
@@ -117,7 +120,7 @@
 .at-item-bottom .at-sim-tag { margin-left: 0; }
 
 /* Conversa aberta */
-.at-chat { display: flex; min-width: 0; min-height: 0; flex-direction: column; background: #f6f6f4; }
+.at-chat { display: flex; min-width: 0; min-height: 0; flex-direction: column; background: #e7ebf0; }
 .at-chat-empty { grid-column: span 2; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 24px; color: var(--muted); text-align: center; background: #fbfbfc; }
 .at-chat-empty h2 { margin: 6px 0 0; color: var(--navy-dark); font-family: var(--font-outfit), sans-serif; font-size: 1.2rem; }
 .at-chat-empty p { max-width: 340px; margin: 0; font-size: 0.88rem; }
@@ -136,23 +139,24 @@
 .at-return div { display: flex; gap: 6px; }
 
 .at-messages { display: flex; flex: 1; flex-direction: column; gap: 4px; overflow-y: auto; padding: 16px 18px 10px; }
-.at-day { align-self: center; margin: 10px 0 6px; padding: 3px 10px; border-radius: 999px; background: #e9eaee; color: #5b6170; font-size: 0.72rem; font-weight: 600; text-transform: capitalize; }
-.at-system { align-self: center; max-width: 80%; margin: 6px 0; color: var(--muted); font-size: 0.75rem; text-align: center; }
+.at-day { align-self: center; margin: 10px 0 6px; padding: 3px 10px; border-radius: 999px; background: #fff; box-shadow: 0 1px 1px rgba(15, 23, 42, .12); color: #374151; font-size: 0.72rem; font-weight: 600; text-transform: capitalize; }
+.at-system { align-self: center; max-width: 80%; margin: 6px 0; padding: 3px 10px; border-radius: 8px; background: rgba(255, 255, 255, .7); color: #4b5563; font-size: 0.75rem; text-align: center; }
 
 .at-bubble {
   position: relative; max-width: min(72%, 560px); margin-top: 6px; padding: 7px 10px 6px; border-radius: 10px;
-  box-shadow: 0 1px 0 rgba(9, 30, 66, .08); font-size: 0.9rem; line-height: 1.42; overflow-wrap: anywhere;
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, .16); font-size: 0.9rem; line-height: 1.42; overflow-wrap: anywhere;
 }
 .at-bubble.is-grouped { margin-top: 0; }
-.at-bubble-cliente { align-self: flex-start; border-top-left-radius: 3px; background: #fff; color: var(--ink); }
-.at-bubble-ia { align-self: flex-end; border-top-right-radius: 3px; background: var(--navy-soft); color: var(--navy-dark); }
-.at-bubble-vendedor { align-self: flex-end; border-top-right-radius: 3px; background: #fbe6dc; color: #3c1a0c; }
+/* Cores dos balões: cliente branco, IA lilás, vendedor azul (bem distintos do fundo e entre si). */
+.at-bubble-cliente { align-self: flex-start; border: 1px solid #d3d8e0; border-top-left-radius: 3px; background: #fff; color: #111827; }
+.at-bubble-ia { align-self: flex-end; border: 1px solid #cdbff5; border-top-right-radius: 3px; background: #ebe4ff; color: #2e1065; }
+.at-bubble-vendedor { align-self: flex-end; border: 1px solid #93b8ee; border-top-right-radius: 3px; background: #cfe1fd; color: #0b1f44; }
 .at-bubble-author { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; font-size: 0.72rem; font-weight: 700; }
-.at-bubble-ia .at-bubble-author { color: var(--navy); }
-.at-bubble-vendedor .at-bubble-author { color: #af3c1a; }
+.at-bubble-ia .at-bubble-author { color: #6d28d9; }
+.at-bubble-vendedor .at-bubble-author { color: #1d4ed8; }
 .at-bubble-text a { color: inherit; }
 .at-mono { padding: 0 3px; border-radius: 4px; background: rgba(0, 0, 0, .06); font-family: ui-monospace, Consolas, monospace; font-size: 0.85em; }
-.at-bubble-time { display: block; margin-top: 2px; color: rgba(25, 26, 29, .5); font-size: 0.66rem; text-align: right; }
+.at-bubble-time { display: block; margin-top: 2px; color: #5b6472; font-size: 0.68rem; text-align: right; }
 
 /* Campo de resposta */
 .at-composer { position: relative; padding: 10px 14px 10px; border-top: 1px solid #eceef2; background: #fff; }
@@ -333,7 +337,7 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-find .at-muted { white-space: nowrap; }
 
 /* Áudio: transcrição e gravação */
-.at-transcript { max-width: 300px; margin: 2px 0 4px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, .045); font-size: 0.8rem; line-height: 1.4; }
+.at-transcript { max-width: 300px; margin: 2px 0 4px; padding: 5px 8px; border-radius: 6px; background: rgba(15, 23, 42, .06); font-size: 0.8rem; line-height: 1.4; }
 .at-transcript.is-pending { color: var(--muted); font-style: italic; animation: at-pulse 1.2s ease-in-out infinite; }
 .at-transcript.is-failed { color: #8f3416; }
 .at-recording { align-items: center; padding: 6px 4px; }
@@ -469,7 +473,7 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .sim-attach { display: grid; place-items: center; padding: 0 6px; cursor: pointer; color: #54656f; }
 
 /* Envio ao WhatsApp */
-.at-delivery.is-sent { color: #34b7f1; font-weight: 700; }
+.at-delivery.is-sent { color: #0b6bcb; font-weight: 700; }
 .at-delivery.is-failed { color: #c62828; font-weight: 600; }
 .at-resend { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 

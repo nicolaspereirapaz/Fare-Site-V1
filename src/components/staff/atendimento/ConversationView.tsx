@@ -60,10 +60,11 @@ import { stripWhatsApp,
   type StaffUser,
 } from "@/components/staff/atendimento/shared";
 
-export type ListFilter = "todas" | "minhas" | ConversationStatus;
+export type ListFilter = "todas" | "nao_lidas" | "minhas" | ConversationStatus;
 
 const FILTERS: Array<{ id: ListFilter; label: string }> = [
   { id: "todas", label: "Todas" },
+  { id: "nao_lidas", label: "Não lidas" },
   { id: "aguardando_vendedor", label: "Aguardando" },
   { id: "minhas", label: "Minhas" },
   { id: "ia", label: "IA" },
@@ -77,6 +78,7 @@ export const isMine = (conversation: Conversation, me: StaffUser) => isSellerSta
 export function matchesFilter(conversation: Conversation, filter: ListFilter, me: StaffUser) {
   if (filter === "todas") return conversation.status !== "finalizada";
   if (filter === "minhas") return isMine(conversation, me);
+  if (filter === "nao_lidas") return conversation.unread > 0;
   return conversation.status === filter;
 }
 
@@ -159,7 +161,7 @@ export function ConversationView({
           {FILTERS.map(({ id, label }) => (
             <button aria-selected={filter === id} className={filter === id ? "active" : undefined} key={id} onClick={() => setFilter(id)} role="tab" type="button">
               {label}
-              {counts[id] ? <span className={`at-filter-count${id === "aguardando_vendedor" ? " is-alert" : ""}`}>{counts[id]}</span> : null}
+              {counts[id] ? <span className={`at-filter-count${id === "aguardando_vendedor" || id === "nao_lidas" ? " is-alert" : ""}`}>{counts[id]}</span> : null}
             </button>
           ))}
         </div>

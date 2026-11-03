@@ -7,7 +7,7 @@
   --navy-dark: #e8ebf7;
   --navy-soft: #262c47;
   --ink: #e3e5ea;
-  --muted: #9aa1b0;
+  --muted: #a8afbd;
   --line: #2a2e38;
   --paper: #14161b;
   --d-bg: #0e1014;
@@ -66,10 +66,10 @@
 [data-atd-theme="dark"] .at-filters button.active { border-color: var(--d-accent); background: var(--d-accent); color: #fff; }
 [data-atd-theme="dark"] .at-item { border-bottom-color: var(--d-border); }
 [data-atd-theme="dark"] .at-item:hover { background: #1d2129; }
-[data-atd-theme="dark"] .at-item.is-active { background: #222733; box-shadow: inset 0 0 0 1px var(--d-border-strong); }
+[data-atd-theme="dark"] .at-item.is-active { border-left-color: #6f86e8; background: #232a3d; box-shadow: inset 0 0 0 1px var(--d-border-strong); }
 [data-atd-theme="dark"] .at-item.is-waiting:not(.is-active) { background: #2a1d17; }
 [data-atd-theme="dark"] .at-item-preview, [data-atd-theme="dark"] .at-kb-preview { color: var(--d-text-2); }
-[data-atd-theme="dark"] .at-chat { background: var(--d-chat); }
+[data-atd-theme="dark"] .at-chat { background: #0c0f13; }
 [data-atd-theme="dark"] .at-chat-empty { background: var(--d-list); }
 [data-atd-theme="dark"] .at-chat-head,
 [data-atd-theme="dark"] .at-return,
@@ -93,13 +93,16 @@
 [data-atd-theme="dark"] .at-composer textarea:focus { outline-color: rgba(141, 155, 240, .3); }
 
 /* Mensagens */
-[data-atd-theme="dark"] .at-day { background: #1f242c; color: var(--d-text-2); }
+[data-atd-theme="dark"] .at-day { background: #232831; box-shadow: none; color: #c3c8d2; }
 [data-atd-theme="dark"] .at-bubble { box-shadow: none; }
-[data-atd-theme="dark"] .at-bubble-cliente { background: #1f232b; color: var(--ink); }
-[data-atd-theme="dark"] .at-bubble-ia { background: #262c47; color: #dfe3f7; }
-[data-atd-theme="dark"] .at-bubble-vendedor { background: #4a2617; color: #fde6dc; }
-[data-atd-theme="dark"] .at-bubble-vendedor .at-bubble-author { color: #ffa27e; }
-[data-atd-theme="dark"] .at-bubble-time { color: rgba(255, 255, 255, .45); }
+[data-atd-theme="dark"] .at-bubble-cliente { border-color: #343b47; background: #232831; color: #eceef2; }
+[data-atd-theme="dark"] .at-bubble-ia { border-color: #4c3d80; background: #2f2650; color: #ece6ff; }
+[data-atd-theme="dark"] .at-bubble-ia .at-bubble-author { color: #c4b5fd; }
+[data-atd-theme="dark"] .at-bubble-vendedor { border-color: #2f5ea8; background: #1d3d73; color: #eaf2ff; }
+[data-atd-theme="dark"] .at-bubble-vendedor .at-bubble-author { color: #9cc3ff; }
+[data-atd-theme="dark"] .at-bubble-time { color: rgba(255, 255, 255, .62); }
+[data-atd-theme="dark"] .at-delivery.is-sent { color: #7cc4ff; }
+[data-atd-theme="dark"] .at-system { background: rgba(255, 255, 255, .06); color: var(--d-text-2); }
 [data-atd-theme="dark"] .at-bubble.is-flash { animation: at-flash-dark 1.6s ease-out; }
 @keyframes at-flash-dark { 0%, 40% { box-shadow: 0 0 0 3px #d9a441; } 100% { box-shadow: none; } }
 [data-atd-theme="dark"] .at-media-file,
