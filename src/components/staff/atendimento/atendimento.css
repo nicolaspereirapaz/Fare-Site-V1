@@ -322,7 +322,6 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 
 /* Áudio: transcrição e gravação */
 .at-transcript { max-width: 300px; margin: 2px 0 4px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, .045); font-size: 0.8rem; line-height: 1.4; }
-.at-transcript span { color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
 .at-transcript.is-pending { color: var(--muted); font-style: italic; animation: at-pulse 1.2s ease-in-out infinite; }
 .at-transcript.is-failed { color: #8f3416; }
 .at-recording { align-items: center; padding: 6px 4px; }

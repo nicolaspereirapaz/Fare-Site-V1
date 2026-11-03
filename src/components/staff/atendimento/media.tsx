@@ -66,7 +66,7 @@ export function MessageMediaView({
         {message.transcriptStatus === "pendente" ? <p className="at-transcript is-pending">transcrevendo o áudio…</p> : null}
         {message.transcriptStatus === "ok" ? (
           <p className="at-transcript" title="Transcrição automática (pode ter erros)">
-            <span>Transcrição:</span> {message.transcript || "(sem fala)"}
+            {message.transcript || "(sem fala)"}
           </p>
         ) : null}
         {message.transcriptStatus === "falhou" ? <p className="at-transcript is-failed">Não foi possível transcrever. Ouça o áudio.</p> : null}
