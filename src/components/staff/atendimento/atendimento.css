@@ -330,6 +330,16 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #d4532a; animation: at-pulse 1s ease-in-out infinite; }
 .at-send.at-mic { background: var(--navy); }
 
+/* Mensagens rápidas com anexo */
+.at-qr-attach { display: grid; gap: 6px; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.at-qr-file { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--ink); font-weight: 400; }
+.at-qr-file img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
+.at-qr-file small { color: var(--muted); }
+.at-qr-pick { justify-self: start; cursor: pointer; }
+.at-qr-has-media { display: flex; align-items: center; gap: 4px; color: var(--navy) !important; font-size: 0.76rem !important; }
+.at-picker-clip { margin-left: 4px; vertical-align: -1px; color: var(--navy); }
+.at-quick-attach { border-left-color: #b7791f; background: #fbf0dc; }
+
 /* Notas internas */
 .at-note { align-self: center; width: min(78%, 560px); margin: 8px 0; padding: 7px 12px 8px; border: 1px dashed #d9b44a; border-radius: 10px; background: #fff8dc; color: #4a3a0a; font-size: 0.86rem; line-height: 1.42; overflow-wrap: anywhere; }
 .at-note-head { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; color: #8a6a10; font-size: 0.72rem; font-weight: 700; }

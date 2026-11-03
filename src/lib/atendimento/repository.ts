@@ -96,6 +96,10 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   // v6: transcrição dos áudios.
   addColumn(db, "atd_messages", "transcript", "TEXT NOT NULL DEFAULT ''");
   addColumn(db, "atd_messages", "transcript_status", "TEXT NOT NULL DEFAULT ''");
+  // v7: anexo nas mensagens rápidas.
+  for (const [column, definition] of [["media_file", "TEXT"], ["media_kind", "TEXT"], ["media_mime", "TEXT"], ["media_name", "TEXT"], ["media_size", "INTEGER"], ["media_thumb", "INTEGER NOT NULL DEFAULT 0"]]) {
+    addColumn(db, "atd_quick_replies", column, definition);
+  }
   seedQuickReplies(db);
 }
 
@@ -575,14 +579,45 @@ function seedQuickReplies(db: DatabaseSync) {
 const cleanShortcut = (value: string) =>
   value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^\/+/, "").replace(/[^a-z0-9_-]/g, "").slice(0, 30);
 
+function mediaOfRow(row: ConversationRow): QuickReply["media"] {
+  return row.media_file
+    ? { kind: String(row.media_kind) as MediaKind, mime: String(row.media_mime ?? ""), name: String(row.media_name ?? ""), size: Number(row.media_size ?? 0), hasThumb: Number(row.media_thumb ?? 0) === 1 }
+    : null;
+}
+
+const toQuickReply = (row: ConversationRow): QuickReply => ({
+  id: String(row.id),
+  shortcut: String(row.shortcut),
+  title: String(row.title),
+  body: String(row.body),
+  media: mediaOfRow(row),
+  updatedAt: String(row.updated_at),
+});
+
 export function listQuickReplies(db: DatabaseSync): QuickReply[] {
-  return (db.prepare("SELECT * FROM atd_quick_replies ORDER BY shortcut").all() as ConversationRow[]).map((row) => ({
-    id: String(row.id),
-    shortcut: String(row.shortcut),
-    title: String(row.title),
-    body: String(row.body),
-    updatedAt: String(row.updated_at),
-  }));
+  return (db.prepare("SELECT * FROM atd_quick_replies ORDER BY shortcut").all() as ConversationRow[]).map(toQuickReply);
+}
+
+export function getQuickReply(db: DatabaseSync, id: string): QuickReply & { mediaFile: string | null } {
+  const row = db.prepare("SELECT * FROM atd_quick_replies WHERE id = ?").get(id) as ConversationRow | undefined;
+  if (!row) throw new AtendimentoError("QUICK_REPLY_NOT_FOUND", "Mensagem rápida não encontrada.");
+  return { ...toQuickReply(row), mediaFile: row.media_file ? String(row.media_file) : null };
+}
+
+/** Troca (ou tira, com null) o anexo da mensagem rápida. Devolve o arquivo antigo para apagar do disco. */
+export function setQuickReplyMedia(db: DatabaseSync, id: string, media: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean } | null) {
+  const old = getQuickReply(db, id).mediaFile;
+  db.prepare("UPDATE atd_quick_replies SET media_file = ?, media_kind = ?, media_mime = ?, media_name = ?, media_size = ?, media_thumb = ?, updated_at = ? WHERE id = ?").run(
+    media?.file ?? null,
+    media?.kind ?? null,
+    media?.mime ?? null,
+    media?.name.slice(0, 160) ?? null,
+    media?.size ?? null,
+    media?.hasThumb ? 1 : 0,
+    nowIso(),
+    id,
+  );
+  return { quickReply: getQuickReply(db, id), oldFile: old };
 }
 
 function validateQuickReply(input: { shortcut: string; title: string; body: string }) {
@@ -603,14 +638,16 @@ export function saveQuickReply(db: DatabaseSync, input: { id?: string; shortcut:
       .prepare("UPDATE atd_quick_replies SET shortcut = ?, title = ?, body = ?, updated_at = ? WHERE id = ?")
       .run(clean.shortcut, clean.title, clean.body, at, input.id);
     if (!result.changes) throw new AtendimentoError("QUICK_REPLY_NOT_FOUND", "Mensagem rápida não encontrada.");
-    return { id: input.id, ...clean, updatedAt: at };
+    return getQuickReply(db, input.id);
   }
   const id = randomUUID();
   db.prepare("INSERT INTO atd_quick_replies (id, shortcut, title, body, updated_at) VALUES (?, ?, ?, ?, ?)").run(id, clean.shortcut, clean.title, clean.body, at);
-  return { id, ...clean, updatedAt: at };
+  return getQuickReply(db, id);
 }
 
-export function deleteQuickReply(db: DatabaseSync, id: string) {
-  const result = db.prepare("DELETE FROM atd_quick_replies WHERE id = ?").run(id);
-  if (!result.changes) throw new AtendimentoError("QUICK_REPLY_NOT_FOUND", "Mensagem rápida não encontrada.");
+/** Apaga a mensagem rápida; devolve o anexo (se havia) para apagar do disco. */
+export function deleteQuickReply(db: DatabaseSync, id: string): string | null {
+  const old = getQuickReply(db, id).mediaFile;
+  db.prepare("DELETE FROM atd_quick_replies WHERE id = ?").run(id);
+  return old;
 }

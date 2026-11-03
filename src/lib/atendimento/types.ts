@@ -111,5 +111,7 @@ export type QuickReply = {
   shortcut: string;
   title: string;
   body: string;
+  /** Anexo enviado junto (ex.: imagem da tabela de preços). */
+  media: MessageMedia | null;
   updatedAt: string;
 };

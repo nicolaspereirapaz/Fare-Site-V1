@@ -1,11 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Brain } from "@/lib/atendimento/simulatedBrain";
 import { SIMULATED_AI_NAME } from "@/lib/atendimento/simulatedBrain";
+import { copyMedia } from "@/lib/atendimento/media";
 import {
   AtendimentoError,
   addMessage,
   firstName,
   getConversation,
+  getQuickReply,
   listMessages,
   customerReplied,
   reopenConversation,
@@ -124,6 +126,25 @@ export function sendStaffMedia(
     media,
     replyToId: options.replyToId,
   });
+}
+
+/** Mensagem rápida com anexo: o anexo vai com o texto como legenda (copiado para a conversa). */
+export async function sendQuickReplyMedia(
+  db: DatabaseSync,
+  conversationId: string,
+  staff: StaffActor,
+  quickReplyId: string,
+  caption: string,
+  options: { sign: boolean; replyToId?: string | null },
+): Promise<Message> {
+  const reply = getQuickReply(db, quickReplyId);
+  if (!reply.mediaFile || !reply.media) throw new AtendimentoError("INVALID_REQUEST", "Esta mensagem rápida não tem anexo.");
+  const conversation = getConversation(db, conversationId);
+  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
+    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
+  }
+  const file = await copyMedia(reply.mediaFile, conversationId);
+  return sendStaffMedia(db, conversationId, staff, { ...reply.media, file }, caption, options);
 }
 
 /** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */

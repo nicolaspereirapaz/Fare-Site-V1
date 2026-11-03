@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -120,6 +120,21 @@ export async function toVoiceNote(stored: StoredMedia): Promise<StoredMedia> {
   await rm(input, { force: true });
   const { size } = await stat(output);
   return { ...stored, file: relative, mime: "audio/ogg", name: "audio.ogg", size, kind: "audio" };
+}
+
+/** Copia um anexo (ex.: da mensagem rápida) para a pasta da conversa; cada envio fica com o seu arquivo. */
+export async function copyMedia(relative: string, conversationId: string) {
+  const target = path.join(conversationId, `${randomUUID()}${path.extname(relative)}`).split(path.sep).join("/");
+  await mkdir(path.dirname(mediaPath(target)), { recursive: true });
+  await copyFile(mediaPath(relative), mediaPath(target));
+  await copyFile(mediaPath(relative, true), mediaPath(target, true)).catch(() => undefined);
+  return target;
+}
+
+export async function removeMedia(relative: string | null) {
+  if (!relative) return;
+  await rm(mediaPath(relative), { force: true });
+  await rm(mediaPath(relative, true), { force: true });
 }
 
 /** Caminho absoluto, sem sair da pasta de mídias. */

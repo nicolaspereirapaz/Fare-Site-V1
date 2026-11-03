@@ -836,6 +836,8 @@ function Composer({
   const [progress, setProgress] = useState<string | null>(null);
   // Nota interna: só a equipe vê (não vai ao cliente nem à IA). Quem não assumiu a conversa também pode anotar.
   const [noteMode, setNoteMode] = useState(false);
+  // Mensagem rápida escolhida que tem anexo (vai junto, com o texto como legenda).
+  const [quickMedia, setQuickMedia] = useState<QuickReply | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const recorder = useRecorder();
@@ -904,6 +906,7 @@ function Composer({
 
   function choose(reply: QuickReply) {
     setText(reply.body);
+    setQuickMedia(reply.media ? reply : null);
     setPickerOpen(false);
     setHighlight(0);
     window.requestAnimationFrame(() => {
@@ -915,14 +918,15 @@ function Composer({
   async function send() {
     if (files.length && !noteMode) return sendFiles();
     const body = text.trim();
-    if (!body || sending) return;
+    if ((!body && !(quickMedia && !noteMode)) || sending) return;
     setSending(true);
     setError(null);
     try {
       const data = await api<{ message: Message; conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}/mensagens`, {
         method: "POST",
-        body: noteMode ? { text: body, note: true } : { text: body, sign, replyTo: replyTo?.id },
+        body: noteMode ? { text: body, note: true } : { text: body, sign, replyTo: replyTo?.id, quickReplyId: quickMedia?.id },
       });
+      setQuickMedia(null);
       setText("");
       onSent(data.message, data.conversation);
     } catch (sendError) {
@@ -1020,6 +1024,18 @@ function Composer({
           {progress ? <p className="at-muted" aria-live="polite">{progress}</p> : null}
         </div>
       ) : null}
+      {quickMedia?.media && !noteMode ? (
+        <div className="at-replying at-quick-attach">
+          <Paperclip aria-hidden="true" size={15} />
+          <span>
+            <strong>Anexo da mensagem rápida /{quickMedia.shortcut}</strong>
+            <small>{quickMedia.media.name} · o texto vai como legenda</small>
+          </span>
+          <button aria-label="Não enviar o anexo" onClick={() => setQuickMedia(null)} type="button">
+            <X aria-hidden="true" size={15} />
+          </button>
+        </div>
+      ) : null}
       {replyTo && !noteMode ? (
         <div className="at-replying">
           <Reply aria-hidden="true" size={15} />
@@ -1050,7 +1066,10 @@ function Composer({
                 type="button"
               >
                 <code>/{reply.shortcut}</code>
-                <strong>{reply.title}</strong>
+                <strong>
+                  {reply.title}
+                  {reply.media ? <Paperclip aria-label="com anexo" className="at-picker-clip" size={12} /> : null}
+                </strong>
                 <span>{reply.body}</span>
               </button>
             ))
@@ -1124,12 +1143,12 @@ function Composer({
           rows={Math.min(6, Math.max(1, text.split("\n").length))}
           value={text}
         />
-        {!noteMode && !text.trim() && !files.length ? (
+        {!noteMode && !text.trim() && !files.length && !quickMedia ? (
           <button aria-label="Gravar áudio" className="at-send at-mic" disabled={sending} onClick={() => void recorder.start()} title="Gravar áudio (vai como mensagem de voz)" type="button">
             <Mic aria-hidden="true" size={18} />
           </button>
         ) : (
-          <button aria-label={noteMode ? "Salvar nota" : "Enviar"} className={`at-send${noteMode ? " is-note" : ""}`} disabled={(!text.trim() && (!files.length || noteMode)) || sending} onClick={() => void send()} type="button">
+          <button aria-label={noteMode ? "Salvar nota" : "Enviar"} className={`at-send${noteMode ? " is-note" : ""}`} disabled={(!text.trim() && !(quickMedia && !noteMode) && (!files.length || noteMode)) || sending} onClick={() => void send()} type="button">
             <Send aria-hidden="true" size={18} />
           </button>
         )}
