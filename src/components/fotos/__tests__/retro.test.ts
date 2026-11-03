@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customSize, groupsFor, layout, minimumIssues, pricing, sizeById, summarize, type Photo } from "@/components/fotos/catalog";
+import { customSize, layout, listedMatch, minimumIssues, pricing, sizeById, summarize, type Photo } from "@/components/fotos/catalog";
 import { photoFromName, photoItemName } from "@/components/staff/photoItems";
 
 const photo = (sizeId: string, copies = 1): Photo => ({
@@ -81,18 +81,23 @@ describe("profissional: retrô e foto com ímã (tabela de 03/11)", () => {
     expect(pricing("ima-25x45", 1, true).unit).toBe(29);
     expect(pricing("ima-polaroid", 1, true).unit).toBe(4.4);
     expect(pricing("ima-instax", 2, true).total).toBe(4.5);
-    expect(minimumIssues([photo("ima-5x5", 3)])).toEqual(["Ímã 5 × 5: mínimo de 4 fotos."]);
+    expect(minimumIssues([photo("ima-5x5", 3)])).toEqual(["5 × 5 com ímã: mínimo de 4 fotos."]);
     expect(minimumIssues([photo("ima-5x5", 4)])).toEqual([]);
-    expect(minimumIssues([photo("ima-instax", 3)])).toEqual(["Ímã Instax 5,5 × 8,5: escolha um número par de fotos."]);
+    expect(minimumIssues([photo("ima-instax", 3)])).toEqual(["Instax 5,5 × 8,5 com ímã: escolha um número par de fotos."]);
     expect(sizeById("ima-instax").frame).toBe(sizeById("instax").frame);
-    expect(customSize("ima", 11, 16)).toBeNull();
   });
 
-  it("aba Fotos com ímã só para profissional; nome vai e volta", () => {
-    expect(groupsFor(false).map((group) => group.id)).not.toContain("ima");
-    expect(groupsFor(true).map((group) => group.id)).toContain("ima");
-    expect(photoItemName({ sizeId: "ima-10x15", paper: "fosco" })).toBe("Foto com ímã 10 × 15 cm · papel Fosco");
-    expect(photoFromName("Foto com ímã 10 × 15 cm · papel Fosco")).toEqual({ sizeId: "ima-10x15", paper: "fosco" });
-    expect(photoFromName("Foto com ímã Instax 5,5 × 8,5 cm")).toEqual({ sizeId: "ima-instax" });
+  it("ímã fica dentro de cada tipo, sem atrapalhar a tabela normal e o tamanho digitado", () => {
+    expect([sizeById("ima-5x5").group, sizeById("ima-30x40").group, sizeById("ima-polaroid").group]).toEqual(["revelacao", "ampliacao", "retro"]);
+    expect(listedMatch("revelacao", 10, 15)?.id).toBe("10x15");
+    expect(customSize("revelacao", 5, 5)?.base?.id).toBe("9x12"); // digitado não usa o tamanho com ímã como referência
+    expect(customSize("ampliacao", 25, 30)?.base?.magnet).toBeUndefined();
+  });
+
+  it("nome vai e volta (orçamento da equipe e pasta)", () => {
+    expect(photoItemName({ sizeId: "ima-10x15", paper: "fosco" })).toBe("Revelação 10 × 15 cm com ímã · papel Fosco");
+    expect(photoFromName("Revelação 10 × 15 cm com ímã · papel Fosco")).toEqual({ sizeId: "ima-10x15", paper: "fosco" });
+    expect(photoFromName("Ampliação 25 × 45 cm com ímã")).toEqual({ sizeId: "ima-25x45" });
+    expect(photoFromName("Foto retrô Instax 5,5 × 8,5 cm com ímã")).toEqual({ sizeId: "ima-instax" });
   });
 });

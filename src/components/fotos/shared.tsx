@@ -9,7 +9,7 @@ import "./fotos.css";
 import { queueUpload, retryUpload, uploadBlob } from "@/components/fotos/upload";
 import { photoStore, setPhotos } from "@/components/fotos/store";
 import {
-  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, TIERS, bigBand, brl, customSize, groupOf, groupsFor, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
+  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
   type FilterId, type Photo, type Size, type SizeGroup, type SizeId,
   PRO_PRICES,
 } from "@/components/fotos/catalog";
@@ -171,18 +171,31 @@ export { retryUpload } from "@/components/fotos/upload";
 export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Record<SizeId, number> }) {
   const pro = useProfessional();
   const count = (id: SizeId) => counts?.[id] ?? 0;
-  // Cliente profissional: tabela profissional (preço único por foto) nos tamanhos dela.
-  const proSizes = SIZES.filter((size) => size.group === group && PRO_PRICES[size.id] !== undefined);
+  // Cliente profissional: tabela profissional (preço único por foto) e, abaixo, a subtabela "Revelação com ímã"…
+  const proSizes = SIZES.filter((size) => size.group === group && !size.magnet && PRO_PRICES[size.id] !== undefined);
+  const magnets = SIZES.filter((size) => size.group === group && size.magnet);
   if (pro && proSizes.length) {
+    const rows = (list: Size[]) => list.map((size) => (
+      <div className="quantity-range-row fp-price-row two" key={size.id}>
+        <span>{size.label.replace(" com ímã", "")}</span>
+        <strong className={count(size.id) > 0 ? "fp-hit" : undefined}>
+          {brl(PRO_PRICES[size.id])}{size.magnet && (size.frame?.slots.length ?? 1) > 1 ? ` (${brl(PRO_PRICES[size.id] * 2)} o par)` : ""}
+        </strong>
+      </div>
+    ));
     return (
       <div className="fp-price-table">
         <div className="quantity-range-table">
           <div className="quantity-range-head fp-price-row two" aria-hidden="true"><span>Tabela profissional</span><span>Por foto</span></div>
-          {proSizes.map((size) => (
-            <div className="quantity-range-row fp-price-row two" key={size.id}><span>{size.label}</span><strong className={count(size.id) > 0 ? "fp-hit" : undefined}>{brl(PRO_PRICES[size.id])}</strong></div>
-          ))}
+          {rows(proSizes)}
         </div>
-        {proSizes.some((size) => count(size.id) > 0) ? <p className="fp-hit-legend"><i className="fp-hit-swatch" /> Preço das suas fotos agora</p> : null}
+        {magnets.length ? (
+          <div className="quantity-range-table fp-price-sub">
+            <div className="quantity-range-head fp-price-row two"><span>{groupOf(group).item} com ímã</span><span>Por foto</span></div>
+            {rows(magnets)}
+          </div>
+        ) : null}
+        {[...proSizes, ...magnets].some((size) => count(size.id) > 0) ? <p className="fp-hit-legend"><i className="fp-hit-swatch" /> Preço das suas fotos agora</p> : null}
       </div>
     );
   }
@@ -234,7 +247,7 @@ export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Recor
         {group === "ampliacao" ? (
           <>
             <div className="quantity-range-head fp-price-row" aria-hidden="true"><span>Tamanho</span><span>1 a 10 fotos</span><span>Acima de 10</span></div>
-            {SIZES.filter((size) => size.group === "ampliacao").map((size) => (
+            {SIZES.filter((size) => size.group === "ampliacao" && !size.magnet).map((size) => (
               <div className="quantity-range-row fp-price-row" key={size.id}>
                 <span>{size.label}</span>
                 <strong className={hit(ampCount(size).some((n) => n <= 10))}>{brl(size.prices![0])}</strong>
@@ -290,8 +303,7 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
   return (
     <div className={`sp sp-${kind}`}>
       <div className="sp-tabs" role="tablist">
-        {/* Foto com ímã: só profissional (ou foto que a equipe já pôs nesse tamanho). */}
-        {groupsFor(pro || valueGroup === "ima").map((item) => (
+        {SIZE_GROUPS.map((item) => (
           <button aria-selected={group === item.id} className={group === item.id ? "active" : ""} key={item.id} onClick={() => setGroup(item.id)} role="tab" type="button">
             {item.label}{valueGroup === item.id ? <i aria-label="(escolhido)" className="sp-dot" /> : null}
           </button>
@@ -300,7 +312,8 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
       {/* Em grandes formatos a lista é longa e digitar é comum: o campo fica aberto e vem antes. */}
       {group === "grande" ? <CustomSizeForm group={group} key={`${group}-${value ?? ""}`} onPick={onChange} value={value} /> : null}
       <div className="sp-options" role="tabpanel">
-        {[...SIZES.filter((size) => size.group === group), ...(value && !isListed(value) && sizeById(value).group === group ? [sizeById(value)] : [])].map((size) => {
+        {/* Com ímã: só profissional (ou foto que a equipe já pôs nesse tamanho). */}
+        {[...SIZES.filter((size) => size.group === group && (pro || !size.magnet || size.id === value)), ...(value && !isListed(value) && sizeById(value).group === group ? [sizeById(value)] : [])].map((size) => {
           const hint = pro && PRO_PRICES[size.id] !== undefined ? brl(PRO_PRICES[size.id]) : sizePriceHint(size);
           return (
             <button aria-pressed={value === size.id} className={value === size.id ? "active" : ""} key={size.id} onClick={() => onChange(size.id)} type="button">

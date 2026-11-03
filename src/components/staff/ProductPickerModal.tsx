@@ -495,7 +495,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onSt
 /* ------------------------------------------------------------------ fotos */
 
 const sizeRange = (group: SizeGroup) => {
-  const list = SIZES.filter((size) => size.group === group);
+  const list = SIZES.filter((size) => size.group === group && !size.magnet);
   return `${list[0].label.replace(" cm", "")} a ${list[list.length - 1].label}`;
 };
 

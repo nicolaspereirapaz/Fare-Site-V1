@@ -10,7 +10,7 @@ import { PaperChoice } from "@/components/fotos/PaperChoice";
 import { LinkSummary, type PhotoLinkProps } from "@/components/fotos/LinkSummary";
 import { PhotoEditor } from "@/components/fotos/PhotoEditor";
 import {
-  CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SizePicker, groupOf, groupsFor, sizeName, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
+  CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SIZE_GROUPS, SizePicker, groupOf, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
   isListed, minimumIssues, replacePhotoFile, retryUpload, setPhotos, sizeById, summarize, usePhotoState, type Photo, type SizeGroup,
 } from "@/components/fotos/shared";
 
@@ -159,9 +159,9 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
                     <div className="fp-card-selects">
                       <label><span>Tamanho</span>
                         <select onChange={(e) => patchPhoto(photo.id, { sizeId: e.target.value })} value={photo.sizeId}>
-                          {groupsFor(pro || sizeById(photo.sizeId).group === "ima").map((group) => (
+                          {SIZE_GROUPS.map((group) => (
                             <optgroup key={group.id} label={group.label}>
-                              {[...SIZES.filter((size) => size.group === group.id), ...(isListed(photo.sizeId) || sizeById(photo.sizeId).group !== group.id ? [] : [sizeById(photo.sizeId)])].map((size) => <option key={size.id} value={size.id}>{size.label.replace(" cm", "")}</option>)}
+                              {[...SIZES.filter((size) => size.group === group.id && (pro || !size.magnet || size.id === photo.sizeId)), ...(isListed(photo.sizeId) || sizeById(photo.sizeId).group !== group.id ? [] : [sizeById(photo.sizeId)])].map((size) => <option key={size.id} value={size.id}>{size.label.replace(" cm", "")}</option>)}
                             </optgroup>
                           ))}
                         </select>
@@ -189,7 +189,7 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
             <h2>{summary.copies} {summary.copies === 1 ? "foto" : "fotos"}<span className="fp-hide-mobile"> no pedido</span></h2>
             {summary.sizes.map((group) => (
               <div className="fp-summary-group fp-hide-mobile" key={group.size.id}>
-                <div className="fp-summary-row"><span>{sizeName(group.size)} · {group.copies} × {brl(group.price.unit)}</span><strong>{brl(group.price.total)}</strong></div>
+                <div className="fp-summary-row"><span>{group.size.label} · {group.copies} × {brl(group.price.unit)}</span><strong>{brl(group.price.total)}</strong></div>
                 {group.price.nudge ? <p className="fp-nudge"><Sparkles aria-hidden="true" size={16} /><span>Mais {group.price.nudge.missing} e cada uma sai por <strong>{brl(group.price.nudge.unit)}</strong>.</span></p> : null}
               </div>
             ))}

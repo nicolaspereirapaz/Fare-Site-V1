@@ -156,10 +156,10 @@ describe("pedido de fotos", () => {
       const photo = { ...edits, uploadId: sent.id, sizeId: "ima-10x15", paper: "brilho" as const, copies: 3 };
       await expect(createPhotoOrder(database, { id: "comum" }, { ...base, photos: [photo] })).rejects.toThrow("só para clientes profissionais");
       setProfessional(database, "pro-1", true, "Equipe");
-      await expect(createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [{ ...photo, sizeId: "ima-5x5" }] })).rejects.toThrow("Ímã 5 × 5: mínimo de 4 fotos");
+      await expect(createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [{ ...photo, sizeId: "ima-5x5" }] })).rejects.toThrow("5 × 5 com ímã: mínimo de 4 fotos");
       const { order } = await createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [photo] });
       expect(order.totalCents).toBe(1170); // 3 × R$ 3,90
-      expect(readdirSync(order.folder)).toContain("Ímã 10x15 Brilho");
+      expect(readdirSync(order.folder)).toContain("10x15 com ímã Brilho");
     });
   });
 });
