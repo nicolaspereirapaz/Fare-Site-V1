@@ -6,15 +6,17 @@ import { useRouter } from "next/navigation";
 import { Clock, Crop, ImagePlus, MessageCircle, Ruler, Upload } from "lucide-react";
 import { PHOTO_TYPE_EVENT } from "@/components/fotos/PhotoGallery";
 import { useProfessional } from "@/components/fotos/useProfessional";
-import { PriceTable, SIZES, SIZE_GROUPS, addPhotos, groupOf, loadDemoPhotos, loadFiles, type SizeGroup } from "@/components/fotos/shared";
+import { PriceTable, SIZES, addPhotos, groupOf, groupsFor, loadDemoPhotos, loadFiles, type SizeGroup } from "@/components/fotos/shared";
 
 /** `group`: tipo escolhido no menu "Fotos" (?tipo=…): a aba de preços já abre nele e as fotos enviadas já entram nesse tipo. */
 export function PhotoProductPreview({ name, shortDescription, group = "revelacao" }: { name: string; shortDescription: string; group?: SizeGroup }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [table, setTable] = useState<SizeGroup>(group);
+  const [chosen, setTable] = useState<SizeGroup>(group);
   const pro = useProfessional();
+  // ?tipo=ima sem ser profissional: abre na revelação.
+  const table = groupsFor(pro).some((item) => item.id === chosen) ? chosen : "revelacao";
   // Trocar a aba de preços leva a galeria para a foto desse tipo e guarda o tipo no endereço (recarregar mantém).
   function chooseTable(id: SizeGroup) {
     setTable(id);
@@ -70,7 +72,7 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
       <fieldset className="quantity-range-group fp-prices" id="tamanhos">
         <legend>Tamanhos e preços</legend>
         <div className="sp-tabs fp-price-tabs" role="tablist">
-          {SIZE_GROUPS.map((item) => (
+          {groupsFor(pro).map((item) => (
             <button aria-selected={table === item.id} className={table === item.id ? "active" : ""} key={item.id} onClick={() => chooseTable(item.id)} role="tab" type="button">{item.label}</button>
           ))}
         </div>

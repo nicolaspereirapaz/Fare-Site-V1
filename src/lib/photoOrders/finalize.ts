@@ -5,7 +5,7 @@ import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import sharp from "sharp";
 import {
-  FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
+  FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, sizeName, summarize, type Fit, type Paper, type Photo, type Size,
 } from "@/components/fotos/catalog";
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
@@ -37,8 +37,8 @@ export function firstAndLastName(name: string) {
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0] ?? "Cliente";
 }
 
-/** "10 × 15 cm" + brilho → "10x15 Brilho". */
-const itemFolder = (label: string, paper: Paper) => safeFolderName(`${label.replace(" cm", "").replace(/\s*×\s*/g, "x")} ${paperLabel(paper)}`);
+/** "10 × 15 cm" + brilho → "10x15 Brilho"; foto com ímã → "Ímã 10x15 Brilho". */
+const itemFolder = (size: Size, paper: Paper) => safeFolderName(`${sizeName(size).replace(" cm", "").replace(/\s*×\s*/g, "x")} ${paperLabel(paper)}`);
 const copiesLabel = (copies: number) => `${copies} ${copies === 1 ? "copia" : "copias"}`;
 const clamp = (value: unknown, min: number, max: number, fallback: number) => {
   const number = Number(value);
@@ -148,6 +148,7 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
 
 /** Lê os envios das fotos (falta algum = erro) e calcula o resumo com as medidas reais de cada arquivo. */
 export async function readPhotos(photos: ValidPhoto[], pro = false) {
+  if (!pro && photos.some((photo) => sizeById(photo.sizeId).group === "ima")) throw new PhotoOrderError("Foto com ímã é só para clientes profissionais.");
   const uploads = new Map<string, PhotoUpload>();
   for (const photo of photos) {
     const upload = uploads.get(photo.uploadId) ?? (await readUpload(photo.uploadId));
@@ -198,7 +199,7 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
     for (const group of summary.sizes) {
       const unit = priceOf(group.size.id, group.price.unit);
       for (const line of group.papers) {
-        const folder = itemFolder(group.size.label, line.paper);
+        const folder = itemFolder(group.size, line.paper);
         await mkdir(path.join(orderDir, folder), { recursive: true });
         const files: PhotoOrderLine["files"] = [];
         const frame = group.size.frame;

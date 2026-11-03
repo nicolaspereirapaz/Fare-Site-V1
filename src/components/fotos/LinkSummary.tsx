@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, Send } from "lucide-react";
-import { brl, minimumIssues, photoPayload, setPhotos, summarize, type Photo } from "@/components/fotos/shared";
+import { brl, minimumIssues, photoPayload, setPhotos, sizeName, summarize, type Photo } from "@/components/fotos/shared";
 import { applyDiscount } from "@/lib/quotes/discount";
 import type { PhotoLinkView } from "@/lib/photoLinks/links";
 
@@ -19,7 +19,7 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
   const photoLines = summary.sizes.map((group) => {
     const special = view.special[group.size.id];
     const unit = special ?? group.price.unit;
-    return { id: group.size.id, label: group.size.label, copies: group.copies, unit, total: Math.round(unit * group.copies * 100) / 100, special: special !== undefined };
+    return { id: group.size.id, label: sizeName(group.size), copies: group.copies, unit, total: Math.round(unit * group.copies * 100) / 100, special: special !== undefined };
   });
   const othersTotal = view.others.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0);
   const subtotalCents = Math.round((othersTotal + photoLines.reduce((sum, line) => sum + line.total, 0)) * 100);

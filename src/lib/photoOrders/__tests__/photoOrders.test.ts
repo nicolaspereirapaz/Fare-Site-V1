@@ -16,6 +16,7 @@ const { createPhotoOrder, firstAndLastName, safeFolderName, PhotoOrderError } = 
 const { saveUpload, readUpload } = await import("@/lib/photoOrders/uploads");
 const { listPhotoOrders } = await import("@/lib/photoOrders/repository");
 const { dayFolder } = await import("@/lib/photoOrders/config");
+const { setProfessional } = await import("@/lib/professional");
 
 const edits = { fit: "preencher", landscape: true, zoom: 1, x: 0.5, y: 0.5, border: 0, filter: "original", filterStrength: 100, brightness: 0, contrast: 0, saturation: 0 } as const;
 
@@ -147,6 +148,18 @@ describe("pedido de fotos", () => {
         .rejects.toThrow("mínimo de 2 fotos");
       await expect(createPhotoOrder(database, { id: "c" }, { ...base, photos: [{ ...edits, uploadId: sent.id, sizeId: "instax", paper: "brilho", copies: 3 }] }))
         .rejects.toThrow("número par");
+    });
+
+    it("foto com ímã: só profissional; pasta própria, preço fixo e mínimo de 4 no 5 × 5", async () => {
+      const base = { customer: { name: "Bia Pro", phone: "(11) 97777-1111" }, delivery: "retirada" as const };
+      const sent = await upload("ima.jpg", 1200, 1800);
+      const photo = { ...edits, uploadId: sent.id, sizeId: "ima-10x15", paper: "brilho" as const, copies: 3 };
+      await expect(createPhotoOrder(database, { id: "comum" }, { ...base, photos: [photo] })).rejects.toThrow("só para clientes profissionais");
+      setProfessional(database, "pro-1", true, "Equipe");
+      await expect(createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [{ ...photo, sizeId: "ima-5x5" }] })).rejects.toThrow("Ímã 5 × 5: mínimo de 4 fotos");
+      const { order } = await createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [photo] });
+      expect(order.totalCents).toBe(1170); // 3 × R$ 3,90
+      expect(readdirSync(order.folder)).toContain("Ímã 10x15 Brilho");
     });
   });
 });

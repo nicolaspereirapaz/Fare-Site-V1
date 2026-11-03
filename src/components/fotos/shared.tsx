@@ -9,7 +9,7 @@ import "./fotos.css";
 import { queueUpload, retryUpload, uploadBlob } from "@/components/fotos/upload";
 import { photoStore, setPhotos } from "@/components/fotos/store";
 import {
-  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
+  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, TIERS, bigBand, brl, customSize, groupOf, groupsFor, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
   type FilterId, type Photo, type Size, type SizeGroup, type SizeId,
   PRO_PRICES,
 } from "@/components/fotos/catalog";
@@ -285,10 +285,13 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
     setSeen(valueGroup);
     if (valueGroup) setGroup(valueGroup);
   }
+  // Tamanho digitado só em revelação e ampliação (grande formato tem o campo próprio, sempre aberto).
+  const typed = group === "revelacao" || group === "ampliacao";
   return (
     <div className={`sp sp-${kind}`}>
       <div className="sp-tabs" role="tablist">
-        {SIZE_GROUPS.map((item) => (
+        {/* Foto com ímã: só profissional (ou foto que a equipe já pôs nesse tamanho). */}
+        {groupsFor(pro || valueGroup === "ima").map((item) => (
           <button aria-selected={group === item.id} className={group === item.id ? "active" : ""} key={item.id} onClick={() => setGroup(item.id)} role="tab" type="button">
             {item.label}{valueGroup === item.id ? <i aria-label="(escolhido)" className="sp-dot" /> : null}
           </button>
@@ -310,10 +313,10 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
       {value && sizeById(value).group === group && realLabel(sizeById(value)) ? (
         <p className="sp-real">Tamanho real de impressão do {sizeById(value).label.replace(" cm", "")}: {realLabel(sizeById(value))}</p>
       ) : null}
-      {group !== "grande" && group !== "retro" && (customOpen || (value && sizeById(value).custom && sizeById(value).group === group)) ? (
+      {typed && (customOpen || (value && sizeById(value).custom && sizeById(value).group === group)) ? (
         <CustomSizeForm group={group} key={`${group}-${value ?? ""}`} onPick={onChange} value={value} />
       ) : null}
-      {group !== "grande" && group !== "retro" && !customOpen && !(value && sizeById(value).custom && sizeById(value).group === group) ? (
+      {typed && !customOpen && !(value && sizeById(value).custom && sizeById(value).group === group) ? (
         <button className="sp-custom-toggle" onClick={() => setCustomOpen(true)} type="button">+ Digitar outro tamanho</button>
       ) : null}
       <p className="sp-note">{(pro && groupOf(group).proNote) || groupOf(group).note}</p>

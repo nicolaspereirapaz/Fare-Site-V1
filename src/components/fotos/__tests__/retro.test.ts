@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layout, minimumIssues, pricing, sizeById, summarize, type Photo } from "@/components/fotos/catalog";
+import { customSize, groupsFor, layout, minimumIssues, pricing, sizeById, summarize, type Photo } from "@/components/fotos/catalog";
 import { photoFromName, photoItemName } from "@/components/staff/photoItems";
 
 const photo = (sizeId: string, copies = 1): Photo => ({
@@ -65,5 +65,34 @@ describe("fotos retrô", () => {
     expect(name).toBe("Foto retrô Polaroid 9 × 11 cm · papel Fosco");
     expect(photoFromName(name)).toEqual({ sizeId: "polaroid", paper: "fosco" });
     expect(photoFromName("Revelação 10 × 15 cm")).toEqual({ sizeId: "10x15" });
+  });
+});
+
+describe("profissional: retrô e foto com ímã (tabela de 03/11)", () => {
+  it("retrô sem ímã: preço único, sem faixa; quem não é profissional segue a tabela normal", () => {
+    expect(pricing("instax", 2, true).unit).toBe(0.7);
+    expect(pricing("instax", 60, true).unit).toBe(0.7);
+    expect(pricing("polaroid", 1, true).unit).toBe(1.5);
+    expect(pricing("polaroid", 1).unit).toBe(8);
+  });
+
+  it("foto com ímã: preço fixo, Instax R$ 4,50 o par, mínimo de 4 no 5 × 5 e 5 × 7, sem tamanho digitado", () => {
+    expect(pricing("ima-5x7", 4, true).unit).toBe(1.2);
+    expect(pricing("ima-25x45", 1, true).unit).toBe(29);
+    expect(pricing("ima-polaroid", 1, true).unit).toBe(4.4);
+    expect(pricing("ima-instax", 2, true).total).toBe(4.5);
+    expect(minimumIssues([photo("ima-5x5", 3)])).toEqual(["Ímã 5 × 5: mínimo de 4 fotos."]);
+    expect(minimumIssues([photo("ima-5x5", 4)])).toEqual([]);
+    expect(minimumIssues([photo("ima-instax", 3)])).toEqual(["Ímã Instax 5,5 × 8,5: escolha um número par de fotos."]);
+    expect(sizeById("ima-instax").frame).toBe(sizeById("instax").frame);
+    expect(customSize("ima", 11, 16)).toBeNull();
+  });
+
+  it("aba Fotos com ímã só para profissional; nome vai e volta", () => {
+    expect(groupsFor(false).map((group) => group.id)).not.toContain("ima");
+    expect(groupsFor(true).map((group) => group.id)).toContain("ima");
+    expect(photoItemName({ sizeId: "ima-10x15", paper: "fosco" })).toBe("Foto com ímã 10 × 15 cm · papel Fosco");
+    expect(photoFromName("Foto com ímã 10 × 15 cm · papel Fosco")).toEqual({ sizeId: "ima-10x15", paper: "fosco" });
+    expect(photoFromName("Foto com ímã Instax 5,5 × 8,5 cm")).toEqual({ sizeId: "ima-instax" });
   });
 });

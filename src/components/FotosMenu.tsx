@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useProfessional } from "@/components/fotos/useProfessional";
 import "./home/home.css";
 
 const PHOTO_HREF = "/produtos/revelacao-de-fotos";
@@ -16,9 +17,14 @@ const ITEMS = [
   { tipo: "ampliacao", title: "Ampliações", sizes: "20 × 20 a 30 × 45 cm", note: "Pronto em 1 hora", image: "/images/revelacao/04-ampliacao-30x45-parede.webp" },
   { tipo: "grande", title: "Grandes formatos", sizes: "30 × 60 até 60 × 250 cm", note: "3 dias úteis", image: "/images/revelacao/05-grande-formato-60x90.webp" },
 ];
+// Só para cliente profissional.
+const PRO_ITEMS = [
+  { tipo: "ima", title: "Fotos com ímã", sizes: "5 × 5 a 30 × 40 cm, Polaroid e Instax", note: "Tabela profissional", image: "/images/revelacao/01-pilha-fotos-10x15.webp" },
+];
 
 export function FotosMenu({ onNavigate }: { onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
+  const items = useProfessional() ? [...ITEMS, ...PRO_ITEMS] : ITEMS;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelClose = () => {
@@ -64,7 +70,7 @@ export function FotosMenu({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
         </div>
         <ul className="fotos-menu-grid">
-          {ITEMS.map((item) => (
+          {items.map((item) => (
             <li key={item.title}>
               <Link className="fotos-menu-card" href={`${PHOTO_HREF}?tipo=${item.tipo}`} onClick={navigate}>
                 <span className="fotos-menu-photo"><Image alt="" fill sizes="190px" src={item.image} /></span>

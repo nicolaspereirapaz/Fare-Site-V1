@@ -5,13 +5,13 @@ import { pricing, summarize, type Photo } from "@/components/fotos/catalog";
 import { createProfessionalInvite, inviteState, isProfessional, professionalLink, redeemProfessionalInvite, setProfessional } from "@/lib/professional";
 
 describe("tabela profissional", () => {
-  it("preço único por foto nos tamanhos da tabela; retrô e outros seguem o normal", () => {
+  it("preço único por foto nos tamanhos da tabela (retrô também); outros seguem o normal", () => {
     expect(pricing("10x15", 1, true).unit).toBe(1);
     expect(pricing("10x15", 500, true).unit).toBe(1);
     expect(pricing("20x30", 3, true).unit).toBe(4.3);
     expect(pricing("60x100", 1, true).unit).toBe(120);
     expect(pricing("10x15", 1).unit).toBe(6); // cliente normal: nada muda
-    expect(pricing("polaroid", 1, true).unit).toBe(pricing("polaroid", 1).unit);
+    expect(pricing("polaroid", 1, true).unit).toBe(1.5); // retrô profissional desde 03/11
     expect(pricing("60x120", 1, true).unit).toBe(pricing("60x120", 1).unit); // acima de 60x100: fora
     const photo = { id: "1", sizeId: "15x21", paper: "brilho", copies: 10 } as unknown as Photo;
     expect(summarize([photo], true).total).toBe(20);

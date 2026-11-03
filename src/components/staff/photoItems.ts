@@ -38,7 +38,7 @@ export function photoFromName(name: string): PhotoChoice | null {
 /** Preço por foto na tabela do site para essa quantidade do mesmo tamanho. */
 export const photoTablePrice = (sizeId: string, quantity: number, pro = false) => pricing(sizeId, Math.max(quantity, 1), pro).unit;
 
-const DOCUMENT_TITLE: Record<SizeGroup, string> = { revelacao: "Revelação de Fotos", retro: "Fotos Retrô", ampliacao: "Ampliação de Fotos", grande: "Fotos em Grande Formato" };
+const DOCUMENT_TITLE: Record<SizeGroup, string> = { revelacao: "Revelação de Fotos", retro: "Fotos Retrô", ampliacao: "Ampliação de Fotos", grande: "Fotos em Grande Formato", ima: "Fotos com Ímã" };
 // Mesmas informações da página da revelação (PhotoQualityBand). Grande formato: sem afirmar processo/papel que não está no site.
 const QUIMICA = "em processo químico, com papel fotográfico Fujifilm de alta durabilidade.";
 const DOCUMENT_DESCRIPTION: Record<SizeGroup, string> = {
@@ -46,6 +46,7 @@ const DOCUMENT_DESCRIPTION: Record<SizeGroup, string> = {
   retro: `Fotos estilo Polaroid e Instax, com moldura branca, ${QUIMICA}`,
   ampliacao: `Ampliação de fotos ${QUIMICA}`,
   grande: "Impressão de fotos em grande formato, com cores vivas e detalhes nítidos.",
+  ima: `Fotos com ímã ${QUIMICA}`,
 };
 
 /**
