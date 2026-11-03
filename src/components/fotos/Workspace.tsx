@@ -161,7 +161,7 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
                         <select onChange={(e) => patchPhoto(photo.id, { sizeId: e.target.value })} value={photo.sizeId}>
                           {SIZE_GROUPS.map((group) => (
                             <optgroup key={group.id} label={group.label}>
-                              {[...SIZES.filter((size) => size.group === group.id), ...(isListed(photo.sizeId) || sizeById(photo.sizeId).group !== group.id ? [] : [sizeById(photo.sizeId)])].map((size) => <option key={size.id} value={size.id}>{size.label.replace(" cm", "")}</option>)}
+                              {[...SIZES.filter((size) => size.group === group.id && (pro || !size.magnet || size.id === photo.sizeId)), ...(isListed(photo.sizeId) || sizeById(photo.sizeId).group !== group.id ? [] : [sizeById(photo.sizeId)])].map((size) => <option key={size.id} value={size.id}>{size.label.replace(" cm", "")}</option>)}
                             </optgroup>
                           ))}
                         </select>

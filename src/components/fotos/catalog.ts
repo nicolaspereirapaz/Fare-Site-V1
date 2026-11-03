@@ -20,7 +20,9 @@ export type Size = {
   id: SizeId; label: string; size: PrintSize; group: SizeGroup;
   tier?: "p" | "m"; // revelação: coluna da tabela por quantidade
   prices?: [number, number]; // ampliação: 1 a 10 fotos, acima de 10
-  price?: number; // grande formato: preço fixo
+  price?: number; // grande formato e foto com ímã: preço fixo
+  min?: number; // quantidade mínima do tamanho (foto com ímã 5 × 5 e 5 × 7)
+  magnet?: boolean; // foto com ímã: só profissional, fora da tabela normal e do tamanho digitado
   custom?: boolean; // tamanho digitado pelo cliente
   base?: Size; // revelação/ampliação digitada: tamanho da tabela usado como referência
   extra?: number; // acréscimo por foto sobre o tamanho de referência
@@ -72,6 +74,23 @@ export const RETRO_SIZES: Size[] = [
   }, [{ min: 2, unit: 4 }, { min: 4, unit: 3.5 }, { min: 12, unit: 3 }, { min: 22, unit: 2.75 }, { min: 32, unit: 2.5 }, { min: 42, unit: 2.25 }, { min: 50, unit: 2 }]),
 ];
 
+// Foto com ímã (só profissional): tamanhos próprios dentro de cada tipo, na subtabela "Revelação com ímã",
+// "Ampliação com ímã"… Preço fixo por foto (tabela de 03/11). 5 × 5 e 5 × 7: mínimo de 4.
+// Tamanho real da máquina igual ao da revelação/ampliação de mesma medida.
+const ima = (group: SizeGroup, w: number, h: number, price: number, real?: PrintSize, min?: number): Size =>
+  ({ ...cm(w, h), id: `ima-${w}x${h}`, label: `${num(w)} × ${num(h)} cm com ímã`, group, magnet: true, price, real, min });
+const withMagnet = (size: Size, price: number): Size =>
+  ({ ...size, id: `ima-${size.id}`, label: `${size.label} com ímã`, magnet: true, steps: undefined, price });
+export const IMA_SIZES: Size[] = [
+  ima("revelacao", 5, 5, 1.2, undefined, 4), ima("revelacao", 5, 7, 1.2, undefined, 4), ima("revelacao", 6, 9, 2), ima("revelacao", 7, 10, 2),
+  ima("revelacao", 9, 12, 3.9, mm(89, 127)), ima("revelacao", 10, 15, 3.9, mm(102, 152)),
+  ima("revelacao", 13, 18, 6.6, mm(127, 178)), ima("revelacao", 15, 21, 6.6, mm(152, 216)),
+  ima("ampliacao", 20, 25, 11.6, mm(203, 254)), ima("ampliacao", 20, 30, 11.6, mm(203, 305)),
+  ima("ampliacao", 24, 30, 13.2, mm(240, 305)), ima("ampliacao", 25, 30, 13.2), ima("ampliacao", 30, 40, 29, mm(305, 406)), ima("ampliacao", 25, 45, 29),
+  // Retrô com ímã: mesma moldura da retrô. Instax: R$ 4,50 o par.
+  withMagnet(RETRO_SIZES[0], 4.4), withMagnet(RETRO_SIZES[1], 2.25),
+];
+
 // Tabelas da loja (imagens de WhatsApp de 16/10). Grandes formatos: lista aprovada; outros tamanhos sob consulta.
 export const SIZES: Size[] = [
   rev(9, 12, "p", mm(89, 127)), rev(10, 15, "p", mm(102, 152)), rev(13, 18, "m", mm(127, 178)), rev(15, 21, "m", mm(152, 216)),
@@ -82,6 +101,7 @@ export const SIZES: Size[] = [
   amp(30, 45, 33, 32, mm(305, 457)),
   big(30, 60), big(40, 50), big(40, 60), big(45, 60), big(50, 60), big(50, 70), big(50, 75), big(50, 80),
   big(50, 90), big(50, 100), big(60, 80), big(60, 90), big(60, 100), big(60, 120), big(60, 180), big(60, 200),
+  ...IMA_SIZES,
 ];
 // Tamanho digitado pelo cliente:
 // - revelação e ampliação: cobra como o menor tamanho da tabela em que ele cabe, + R$ 1,00 (revelação) ou + R$ 3,00 (ampliação);
@@ -100,7 +120,7 @@ const PREFIX: Record<SizeGroup, string> = { revelacao: "rev", retro: "retro", am
 export function listedMatch(group: SizeGroup, w: number, h: number) {
   const short = Math.min(w, h);
   const long = Math.max(w, h);
-  return SIZES.find((size) => size.group === group && measures(size).some((m) => same(m.width, short) && same(m.height, long))) ?? null;
+  return SIZES.find((size) => size.group === group && !size.magnet && measures(size).some((m) => same(m.width, short) && same(m.height, long))) ?? null;
 }
 /** Monta o tamanho digitado; null quando não dá para cobrar (grande demais para o grupo ou sob consulta). */
 export function customSize(group: SizeGroup, w: number, h: number): Size | null {
@@ -113,7 +133,7 @@ export function customSize(group: SizeGroup, w: number, h: number): Size | null 
     const price = bigBand(short, long)?.price;
     return price ? { ...cm(short, long), id, group, price, custom: true } : null;
   }
-  const base = SIZES.find((size) => size.group === group && fits(size, short, long));
+  const base = SIZES.find((size) => size.group === group && !size.magnet && fits(size, short, long));
   if (!base) return null;
   const extra = CUSTOM_EXTRA[group];
   return {
@@ -128,11 +148,12 @@ export function sizeById(id: SizeId): Size {
   const group = (Object.keys(PREFIX) as SizeGroup[]).find((key) => PREFIX[key] === match?.[1]);
   return (match && group && customSize(group, Number(match[2]), Number(match[3]))) || SIZES[1];
 }
-/** `proNote`: aviso para o cliente profissional (preço único, sem faixa de quantidade). */
+/** `proNote`: aviso para o cliente profissional (preço único, sem faixa de quantidade; foto com ímã na subtabela). */
 export const SIZE_GROUPS: { id: SizeGroup; label: string; item: string; note: string; proNote?: string }[] = [
   { id: "revelacao", label: "Revelação", item: "Revelação", note: "Quanto mais fotos do mesmo tamanho, menor o preço. Tamanho digitado: preço do tamanho em que ele cabe + R$ 1,00. Pronto em 1 hora após o pagamento.",
-    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Tamanho digitado segue o preço normal. Pronto em 1 hora após o pagamento." },
-  { id: "retro", label: "Fotos retrô", item: "Foto retrô", note: "Estilo Polaroid e Instax, com a moldura branca. Quanto mais fotos do mesmo modelo, menor o preço. Instax: sempre em número par. Pronto em 1 hora após o pagamento." },
+    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Tamanho digitado segue o preço normal. Com ímã: 5 × 5 e 5 × 7 com mínimo de 4 fotos. Pronto em 1 hora após o pagamento." },
+  { id: "retro", label: "Fotos retrô", item: "Foto retrô", note: "Estilo Polaroid e Instax, com a moldura branca. Quanto mais fotos do mesmo modelo, menor o preço. Instax: sempre em número par. Pronto em 1 hora após o pagamento.",
+    proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Instax: sempre em número par. Instax ou Polaroid já montada: escolha Revelação 7 × 10 ou 10 × 15 com ímã. Pronto em 1 hora após o pagamento." },
   { id: "ampliacao", label: "Ampliações", item: "Ampliação", note: "Preço por foto: de 1 a 10 ou acima de 10 do mesmo tamanho. Tamanho digitado: preço do tamanho em que ele cabe + R$ 3,00. Pronto em 1 hora após o pagamento.",
     proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Outros tamanhos e tamanho digitado seguem o preço normal. Pronto em 1 hora após o pagamento." },
   { id: "grande", label: "Grandes formatos", item: "Grande formato", note: "Escolha um tamanho ou digite o seu: o preço segue a faixa da tabela. Pronto em 3 dias úteis.",
@@ -149,7 +170,7 @@ export const groupOf = (id: SizeGroup) => SIZE_GROUPS.find((group) => group.id =
 /** Preço que aparece no botão do tamanho (revelação depende da quantidade, então não mostra). */
 export function sizePriceHint(size: Size) {
   if (size.group === "ampliacao") return brl(size.prices![0]);
-  if (size.group === "grande") return brl(size.price!);
+  if (size.price !== undefined) return brl(size.price);
   if (size.base) return `${size.base.label.replace(" cm", "")} + ${brl(size.extra!)}`;
   if (size.steps) return `${brl(size.steps[0].unit)}${pairs(size) > 1 ? " · em pares" : ""}`;
   return null;
@@ -191,11 +212,14 @@ export function stepLabel(size: Size, i: number) {
 
 /**
  * Tabela de Revelação Profissional (clientes que se cadastraram pelo convite): preço único por foto,
- * sem faixa de quantidade. Só os tamanhos da tabela; os outros (retrô, tamanho digitado…) seguem o preço normal.
+ * sem faixa de quantidade. Só os tamanhos da tabela; os outros (tamanho digitado…) seguem o preço normal.
+ * Retrô sem ímã (03/11): Instax R$ 0,70 e Polaroid R$ 1,50. Foto com ímã: o preço fixo de cada tamanho.
  */
 export const PRO_PRICES: Record<string, number> = {
   "9x12": 1, "10x15": 1, "13x18": 2, "15x21": 2, "20x25": 4.3, "20x30": 4.3, "24x30": 5.4, "30x30": 8,
   "30x40": 14, "30x45": 14, "30x60": 30, "40x50": 58, "45x60": 58, "50x60": 65, "50x70": 74, "50x75": 74, "60x100": 120,
+  instax: 0.7, polaroid: 1.5,
+  ...Object.fromEntries(IMA_SIZES.map((size) => [size.id, size.price!])),
 };
 
 /** Preço de um tamanho: cada tamanho conta a sua própria faixa. `pro`: cliente profissional (tabela própria). */
@@ -205,7 +229,7 @@ export function pricing(sizeId: SizeId, total: number, pro = false) {
     ({ unit, tier, total: Math.round(total * unit * 100) / 100, nudge });
   if (pro && PRO_PRICES[size.id] !== undefined) return result(PRO_PRICES[size.id], "tabela profissional", null);
   const ref = size.base ? ` · como ${size.base.label.replace(" cm", "")} + ${brl(size.extra!)}` : "";
-  if (size.group === "grande") return result(size.price!, "preço fixo", null);
+  if (size.price !== undefined) return result(size.price, "preço fixo", null);
   if (size.steps) {
     // Faixa = última quantidade mínima alcançada (abaixo da primeira, vale a primeira).
     const steps = size.steps;
@@ -343,7 +367,8 @@ export function minimumIssues(photos: Photo[]) {
   return summarize(photos).sizes.flatMap((group) => {
     const name = group.size.label.replace(" cm", "");
     const per = pairs(group.size);
-    if (group.size.steps && group.copies < group.size.steps[0].min) return [`${name}: mínimo de ${group.size.steps[0].min} fotos.`];
+    const min = group.size.min ?? group.size.steps?.[0].min;
+    if (min && group.copies < min) return [`${name}: mínimo de ${min} fotos.`];
     if (per > 1 && group.papers.some((line) => line.copies % per)) {
       return [`${name}: escolha um número par de fotos${group.papers.length > 1 ? " em cada papel" : ""}.`];
     }

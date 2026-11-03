@@ -37,7 +37,7 @@ export function firstAndLastName(name: string) {
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0] ?? "Cliente";
 }
 
-/** "10 × 15 cm" + brilho → "10x15 Brilho". */
+/** "10 × 15 cm" + brilho → "10x15 Brilho"; com ímã → "10x15 com ímã Brilho". */
 const itemFolder = (label: string, paper: Paper) => safeFolderName(`${label.replace(" cm", "").replace(/\s*×\s*/g, "x")} ${paperLabel(paper)}`);
 const copiesLabel = (copies: number) => `${copies} ${copies === 1 ? "copia" : "copias"}`;
 const clamp = (value: unknown, min: number, max: number, fallback: number) => {
@@ -148,6 +148,7 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
 
 /** Lê os envios das fotos (falta algum = erro) e calcula o resumo com as medidas reais de cada arquivo. */
 export async function readPhotos(photos: ValidPhoto[], pro = false) {
+  if (!pro && photos.some((photo) => sizeById(photo.sizeId).magnet)) throw new PhotoOrderError("Foto com ímã é só para clientes profissionais.");
   const uploads = new Map<string, PhotoUpload>();
   for (const photo of photos) {
     const upload = uploads.get(photo.uploadId) ?? (await readUpload(photo.uploadId));

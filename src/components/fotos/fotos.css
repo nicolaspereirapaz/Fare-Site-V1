@@ -319,6 +319,7 @@
 .sp-tabs button { flex: 1 1 0; min-width: 0; padding: 4px 6px; white-space: normal; line-height: 1.2; text-align: center; }
 /* Tabela de preços dentro da escolha de tamanho */
 .fp-price-table { display: grid; gap: 6px; }
+.fp-price-sub { margin-top: 10px; }
 .fp-price-row { cursor: default !important; }
 .fp-price-row:hover { background: #fff !important; }
 .fp-price-row strong { justify-self: end; padding: 2px 8px; border-radius: 6px; }

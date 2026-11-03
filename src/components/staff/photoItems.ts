@@ -58,7 +58,7 @@ export function photoDocumentLines(item: { productName: string; selections?: Rec
   const size = sizeById(photo.sizeId);
   const paper = photo.paper ? paperLabel(photo.paper) : item.selections?.Papel;
   return {
-    name: DOCUMENT_TITLE[size.group],
+    name: size.magnet ? `${DOCUMENT_TITLE[size.group]} com Ímã` : DOCUMENT_TITLE[size.group],
     color: paper ? `Papel ${paper}` : null,
     unitLabel: { one: "Cópia", many: "Cópias" },
     description: DOCUMENT_DESCRIPTION[size.group],
