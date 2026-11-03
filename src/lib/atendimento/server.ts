@@ -38,7 +38,7 @@ export function activeBrain(): { brain: Brain; name: string; mode: "real" | "tes
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
 // Versão do esquema: o servidor de desenvolvimento mantém o globalThis entre recargas; com a versão, colunas novas entram sem reiniciar.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoSchema?: number };
 export function atendimentoDb() {
   if (globalAtendimento.fareAtendimentoSchema !== SCHEMA_VERSION) {

@@ -108,7 +108,7 @@ export function sendStaffMedia(
   staff: StaffActor,
   media: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
   caption: string,
-  options: { sign: boolean },
+  options: { sign: boolean; replyToId?: string | null },
 ): Message {
   const conversation = getConversation(db, conversationId);
   if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
@@ -122,11 +122,18 @@ export function sendStaffMedia(
     body,
     deliveredText: body && options.sign ? signedText(staff.name, body) : body,
     media,
+    replyToId: options.replyToId,
   });
 }
 
 /** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */
-export function sendStaffMessage(db: DatabaseSync, conversationId: string, staff: StaffActor, text: string, options: { sign: boolean }): Message {
+export function sendStaffMessage(
+  db: DatabaseSync,
+  conversationId: string,
+  staff: StaffActor,
+  text: string,
+  options: { sign: boolean; replyToId?: string | null },
+): Message {
   const conversation = getConversation(db, conversationId);
   if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
     throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
@@ -139,5 +146,6 @@ export function sendStaffMessage(db: DatabaseSync, conversationId: string, staff
     authorName: staff.name,
     body,
     deliveredText: options.sign ? signedText(staff.name, body) : body,
+    replyToId: options.replyToId,
   });
 }

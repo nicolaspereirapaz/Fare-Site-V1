@@ -7,6 +7,7 @@ import {
   createConversation,
   findWhatsAppConversation,
   getConversation,
+  externalIdOf,
   getMessage,
   mediaFileOf,
   messageByExternalId,
@@ -54,6 +55,8 @@ export type InboundWhatsApp = {
   fromPhone: boolean;
   /** Foto/arquivo já gravado no disco (ver media.ts). Com mídia, o texto (legenda) pode ser vazio. */
   media?: StoredMediaRef;
+  /** Id no WhatsApp da mensagem que o cliente citou ao responder. */
+  quotedId?: string;
 };
 
 export type StoredMediaRef = { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
@@ -71,6 +74,7 @@ export function parseInbound(body: Record<string, unknown>, media?: StoredMediaR
     text: str(body.text, 4000),
     fromPhone: body.fromPhone === true,
     media,
+    quotedId: str(body.quotedId, 200) || undefined,
   };
   if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || (!inbound.text && !media)) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
@@ -91,6 +95,7 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   const existing = messageByExternalId(db, inbound.externalId);
   if (existing) return { conversationId: existing.conversationId, duplicate: true, fromPhone: inbound.fromPhone };
   const conversation = ensureWhatsAppConversation(db, inbound.chatId, inbound.phone);
+  const replyToId = inbound.quotedId ? (messageByExternalId(db, inbound.quotedId)?.id ?? null) : null;
   if (inbound.fromPhone) {
     addMessage(db, {
       conversationId: conversation.id,
@@ -100,6 +105,7 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
       externalId: inbound.externalId,
       delivery: "enviada",
       media: inbound.media,
+      replyToId,
     });
     phoneReplied(db, conversation.id);
     return { conversationId: conversation.id, duplicate: false, fromPhone: true };
@@ -107,8 +113,17 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
   if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
   const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media);
-  db.prepare("UPDATE atd_messages SET external_id = ? WHERE id = ?").run(inbound.externalId, message.id);
+  db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
   return { conversationId: conversation.id, duplicate: false, fromPhone: false };
+}
+
+/** Citação para o WhatsApp: id da mensagem citada, se foi nossa e o texto (a ponte monta a resposta "citando"). */
+function quoteFor(db: DatabaseSync, message: Message) {
+  if (!message.replyToId) return null;
+  const quoted = getMessage(db, message.replyToId);
+  const id = quoted && externalIdOf(db, quoted.id);
+  if (!quoted || !id) return null;
+  return { id, fromMe: quoted.author !== "cliente", text: (quoted.deliveredText || quoted.body || (quoted.media ? `[${quoted.media.kind}]` : "")).slice(0, 300) };
 }
 
 /**
@@ -133,6 +148,7 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
     setDelivery(db, message.id, "pendente");
     try {
       const stored = current.media ? mediaFileOf(db, current.id) : null;
+      const quote = quoteFor(db, current);
       const response = stored
         ? // Foto/arquivo: corpo bruto + dados nos cabeçalhos (codificados: cabeçalho HTTP só aceita ASCII).
           await fetcher(`${config.url}/fare/painel/enviar-midia`, {
@@ -145,6 +161,7 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
               "x-mime": current.media!.mime,
               "x-file-name": encodeURIComponent(current.media!.name),
               "x-caption": encodeURIComponent(current.deliveredText),
+              ...(quote ? { "x-quote": encodeURIComponent(JSON.stringify(quote)) } : {}),
             },
             body: new Uint8Array(await readFile(mediaPath(stored.file))),
             signal: AbortSignal.timeout(180_000),
@@ -152,7 +169,7 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
         : await fetcher(`${config.url}/fare/painel/enviar`, {
             method: "POST",
             headers: { "content-type": "application/json", "x-fare-token": config.token },
-            body: JSON.stringify({ chatId: conversation.waChatId, text: current.deliveredText, ref: message.id }),
+            body: JSON.stringify({ chatId: conversation.waChatId, text: current.deliveredText, ref: message.id, ...(quote ? { quote } : {}) }),
             signal: AbortSignal.timeout(30_000),
           });
       const data = (await response.json().catch(() => ({}))) as { messageId?: string; error?: string };

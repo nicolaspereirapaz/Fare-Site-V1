@@ -13,6 +13,7 @@ import {
   Paperclip,
   MessageSquareText,
   Send,
+  Reply,
   Smartphone,
   StickyNote,
   Undo2,
@@ -235,6 +236,18 @@ function ChatPanel({
   const photos = useMemo(() => messages.filter((message) => message.media?.mime.startsWith("image/")), [messages]);
   const openPhoto = (id: string) => setViewerIndex(Math.max(0, photos.findIndex((photo) => photo.id === id)));
   const resend = (id: string) => void act("reenviar", { messageId: id });
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+  const lookup = (id: string) => byId.get(id);
+  /** Clicar na citação leva até a mensagem original (e pisca). */
+  const jumpTo = (id: string) => {
+    const element = document.getElementById(`msg-${id}`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.classList.add("is-flash");
+    window.setTimeout(() => element.classList.remove("is-flash"), 1600);
+  };
+
   const lastSeq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -316,6 +329,9 @@ function ChatPanel({
 
   const mine = isMine(conversation, me);
   const otherSeller = isSellerStatus(conversation.status) && !mine ? conversation.assignedStaffName : null;
+
+  // Citar só quem pode responder (quem assumiu a conversa).
+  const quoteProps = { lookup, onJump: jumpTo, onReply: mine ? setReplyTo : undefined };
 
   return (
     <>
@@ -402,9 +418,9 @@ function ChatPanel({
           {!loading && !messages.length ? <p className="at-muted at-center">Nenhuma mensagem ainda.</p> : null}
           {blocks.map((block) =>
             block.kind === "album" ? (
-              <AlbumBubble key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} />
+              <AlbumBubble key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ) : (
-              <MessageBubble key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} />
+              <MessageBubble key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ),
           )}
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
@@ -421,8 +437,11 @@ function ChatPanel({
             lastSeq.current = Math.max(lastSeq.current, message.seq);
             setMessages((list) => (list.some((entry) => entry.id === message.id) ? list : [...list, message]));
             onChanged(updated);
+            setReplyTo(null);
           }}
+          onCancelReply={() => setReplyTo(null)}
           quickReplies={quickReplies}
+          replyTo={replyTo}
         />
       </section>
 
@@ -489,8 +508,43 @@ function AuthorLabel({ message }: { message: Message }) {
   );
 }
 
+type QuoteProps = { lookup: (id: string) => Message | undefined; onJump: (id: string) => void; onReply?: (message: Message) => void };
+
+const MEDIA_SNIPPET: Record<string, string> = { imagem: "📷 Foto", video: "🎥 Vídeo", audio: "🎤 Áudio", documento: "📄 Documento", figurinha: "Figurinha" };
+export const snippetOf = (message: Message) => message.body || (message.media ? MEDIA_SNIPPET[message.media.kind] : "") || "Mensagem";
+const whoOf = (message: Message) => (message.author === "cliente" ? "Cliente" : message.author === "ia" ? "IA" : message.authorName || "Equipe");
+
+/** Trecho da mensagem citada, dentro do balão (clicar leva até a original). */
+function QuotedSnippet({ id, lookup, onJump }: { id: string | null } & Pick<QuoteProps, "lookup" | "onJump">) {
+  if (!id) return null;
+  const quoted = lookup(id);
+  return (
+    <button className="at-quote" disabled={!quoted} onClick={() => onJump(id)} title="Ir para a mensagem citada" type="button">
+      <strong>{quoted ? whoOf(quoted) : "Mensagem"}</strong>
+      <span>{quoted ? snippetOf(quoted) : "Mensagem antiga"}</span>
+    </button>
+  );
+}
+
+function ReplyButton({ message, onReply }: { message: Message; onReply?: (message: Message) => void }) {
+  if (!onReply) return null;
+  return (
+    <button aria-label="Responder citando esta mensagem" className="at-reply-btn" onClick={() => onReply(message)} title="Responder citando" type="button">
+      <Reply aria-hidden="true" size={14} />
+    </button>
+  );
+}
+
 /** Lote de fotos seguidas: mosaico 2×2; a 4ª mostra "+N"; clicar abre o visualizador. */
-function AlbumBubble({ messages, previous, onOpenPhoto, onResend }: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void }) {
+function AlbumBubble({
+  messages,
+  previous,
+  onOpenPhoto,
+  onResend,
+  lookup,
+  onJump,
+  onReply,
+}: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void } & QuoteProps) {
   const first = messages[0];
   const last = messages[messages.length - 1];
   const dayLabel = dayLabelFor(first, previous);
@@ -502,8 +556,10 @@ function AlbumBubble({ messages, previous, onOpenPhoto, onResend }: { messages: 
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`}>
+      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`} id={`msg-${first.id}`}>
+        <ReplyButton message={first} onReply={onReply} />
         {!sameAuthor ? <AuthorLabel message={first} /> : null}
+        <QuotedSnippet id={first.replyToId} lookup={lookup} onJump={onJump} />
         <div className="at-album-grid">
           {messages.slice(0, 4).map((message, index) => (
             <button
@@ -546,7 +602,15 @@ function AlbumBubble({ messages, previous, onOpenPhoto, onResend }: { messages: 
   );
 }
 
-function MessageBubble({ message, previous, onResend, onOpenPhoto }: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void }) {
+function MessageBubble({
+  message,
+  previous,
+  onResend,
+  onOpenPhoto,
+  lookup,
+  onJump,
+  onReply,
+}: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void } & QuoteProps) {
   const dayLabel = dayLabelFor(message, previous);
   const showDay = Boolean(dayLabel);
   if (message.author === "nota") {
@@ -574,8 +638,10 @@ function MessageBubble({ message, previous, onResend, onOpenPhoto }: { message: 
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`}>
+      <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`} id={`msg-${message.id}`}>
+        <ReplyButton message={message} onReply={onReply} />
         {!sameAuthor ? <AuthorLabel message={message} /> : null}
+        <QuotedSnippet id={message.replyToId} lookup={lookup} onJump={onJump} />
         <MessageMediaView message={message} onOpen={onOpenPhoto} />
         {message.body ? (
           <div className="at-bubble-text">
@@ -603,6 +669,8 @@ function Composer({
   onAssume,
   onOpenQuickReplies,
   onSent,
+  replyTo,
+  onCancelReply,
 }: {
   conversation: Conversation;
   me: StaffUser;
@@ -611,6 +679,8 @@ function Composer({
   onAssume: () => void;
   onOpenQuickReplies: () => void;
   onSent: (message: Message, conversation: Conversation) => void;
+  replyTo: Message | null;
+  onCancelReply: () => void;
 }) {
   const [text, setText] = useState("");
   // O Composer só aparece depois que a lista carrega no navegador, então dá para ler a preferência já no início.
@@ -646,6 +716,7 @@ function Composer({
           "x-caption": encodeURIComponent(sent === 0 ? caption : ""),
           "x-sign": sign ? "1" : "0",
           "x-original": original && file.type.startsWith("image/") ? "1" : "0",
+          ...(sent === 0 && replyTo ? { "x-reply-to": replyTo.id } : {}),
         });
         sent += 1;
         onSent(data.message, data.conversation);
@@ -688,7 +759,7 @@ function Composer({
     try {
       const data = await api<{ message: Message; conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}/mensagens`, {
         method: "POST",
-        body: noteMode ? { text: body, note: true } : { text: body, sign },
+        body: noteMode ? { text: body, note: true } : { text: body, sign, replyTo: replyTo?.id },
       });
       setText("");
       onSent(data.message, data.conversation);
@@ -785,6 +856,18 @@ function Composer({
             </label>
           ) : null}
           {progress ? <p className="at-muted" aria-live="polite">{progress}</p> : null}
+        </div>
+      ) : null}
+      {replyTo && !noteMode ? (
+        <div className="at-replying">
+          <Reply aria-hidden="true" size={15} />
+          <span>
+            <strong>Respondendo {replyTo.author === "cliente" ? "o cliente" : replyTo.author === "ia" ? "a IA" : replyTo.authorName}</strong>
+            <small>{snippetOf(replyTo)}</small>
+          </span>
+          <button aria-label="Cancelar a citação" onClick={onCancelReply} type="button">
+            <X aria-hidden="true" size={15} />
+          </button>
         </div>
       ) : null}
       {showPicker ? (

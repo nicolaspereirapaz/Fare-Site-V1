@@ -91,6 +91,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "media_thumb", "INTEGER NOT NULL DEFAULT 0");
   // v4: etiquetas da conversa (lista JSON).
   addColumn(db, "atd_conversations", "tags", "TEXT NOT NULL DEFAULT '[]'");
+  // v5: resposta citando outra mensagem.
+  addColumn(db, "atd_messages", "reply_to_id", "TEXT");
   seedQuickReplies(db);
 }
 
@@ -204,6 +206,7 @@ function toMessage(row: ConversationRow): Message {
           hasThumb: Number(row.media_thumb ?? 0) === 1,
         }
       : null,
+    replyToId: row.reply_to_id === null || row.reply_to_id === undefined ? null : String(row.reply_to_id),
     createdAt: String(row.created_at),
   };
 }
@@ -243,6 +246,12 @@ export function recentDeliveries(db: DatabaseSync, conversationId: string): Arra
     delivery: String(row.delivery) as Message["delivery"],
     deliveryError: row.delivery_error === null ? null : String(row.delivery_error),
   }));
+}
+
+/** Id da mensagem no WhatsApp (para citar). */
+export function externalIdOf(db: DatabaseSync, messageId: string): string | null {
+  const row = db.prepare("SELECT external_id FROM atd_messages WHERE id = ?").get(messageId) as ConversationRow | undefined;
+  return row?.external_id ? String(row.external_id) : null;
 }
 
 export function getMessage(db: DatabaseSync, id: string): Message | null {
@@ -303,6 +312,7 @@ export function addMessage(
     externalId?: string;
     delivery?: Message["delivery"];
     media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
+    replyToId?: string | null;
   },
 ): Message {
   const body = input.body.trim();
@@ -313,6 +323,16 @@ export function addMessage(
   db.prepare(
     "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, external_id, delivery, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), input.externalId ?? null, input.delivery ?? "", at);
+  if (input.replyToId) {
+    // Só cita mensagem do mesmo contato (mesmo canal e telefone).
+    const quoted = db
+      .prepare(
+        `SELECT m.id FROM atd_messages m JOIN atd_conversations q ON q.id = m.conversation_id JOIN atd_conversations c ON c.id = ?
+         WHERE m.id = ? AND q.channel = c.channel AND q.phone = c.phone`,
+      )
+      .get(input.conversationId, input.replyToId);
+    if (quoted) db.prepare("UPDATE atd_messages SET reply_to_id = ? WHERE id = ?").run(input.replyToId, id);
+  }
   if (input.media) {
     db.prepare("UPDATE atd_messages SET media_file = ?, media_kind = ?, media_mime = ?, media_name = ?, media_size = ?, media_thumb = ? WHERE id = ?").run(
       input.media.file,

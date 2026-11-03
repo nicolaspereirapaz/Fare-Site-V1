@@ -13,7 +13,7 @@ export const POST = withStaff(async (staff, request, context: RouteContext<"/api
     // Nota interna: fica só no painel.
     return json({ message: addNote(db, id, staff, text(body.text, 2000)), conversation: getConversation(db, id) }, 201);
   }
-  const message = sendStaffMessage(db, id, staff, text(body.text), { sign: body.sign !== false });
+  const message = sendStaffMessage(db, id, staff, text(body.text), { sign: body.sign !== false, replyToId: text(body.replyTo, 80) || null });
   deliverInBackground(db, [message]);
   return json({ message, conversation: getConversation(db, id) }, 201);
 });

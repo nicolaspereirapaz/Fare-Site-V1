@@ -84,6 +84,8 @@ export type Message = {
   delivery: Delivery;
   deliveryError: string | null;
   media: MessageMedia | null;
+  /** Mensagem citada (resposta a uma mensagem específica, como no WhatsApp). */
+  replyToId: string | null;
   createdAt: string;
 };
 

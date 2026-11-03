@@ -486,6 +486,39 @@ describe("álbum de fotos na conversa", () => {
   });
 });
 
+describe("responder citando", () => {
+  const chat = "5511933332222@s.whatsapp.net";
+  const inboundMsg = (externalId: string, text: string, extra: Record<string, unknown> = {}) =>
+    receiveWhatsAppMessage(db, parseInbound({ externalId, chatId: chat, phone: "5511933332222", text, ...extra }));
+
+  it("cliente cita uma mensagem nossa: o painel liga as duas", async () => {
+    const { conversationId: id } = inboundMsg("Q1", "oi");
+    const [ai] = await runAi(db, id, async () => ({ reply: "Qual o tamanho?" }));
+    await deliverToWhatsApp(db, [ai], { url: "http://p", token: "t" }, (async () => new Response(JSON.stringify({ messageId: "WA-AI-1" }))) as unknown as typeof fetch);
+    inboundMsg("Q2", "10x15", { quotedId: "WA-AI-1" });
+    expect(listMessages(db, id).at(-1)).toMatchObject({ body: "10x15", replyToId: ai.id });
+    inboundMsg("Q3", "e essa?", { quotedId: "NAO-EXISTE" });
+    expect(listMessages(db, id).at(-1)?.replyToId).toBeNull();
+  });
+
+  it("vendedor cita: a ponte recebe id, se foi nossa e o texto; mensagem de outro contato não é citada", async () => {
+    const { conversationId: id } = inboundMsg("R1", "quero 20 fotos");
+    const customerMessage = listMessages(db, id).at(-1)!;
+    const other = newConversation();
+    const foreign = addNote(db, other.id, ana, "outro contato");
+    assumeConversation(db, id, ana);
+    const reply = sendStaffMessage(db, id, ana, "Perfeito!", { sign: true, replyToId: customerMessage.id });
+    const wrong = sendStaffMessage(db, id, ana, "teste", { sign: false, replyToId: foreign.id });
+    expect([reply.replyToId, wrong.replyToId]).toEqual([customerMessage.id, null]);
+    const bodies: Array<Record<string, unknown>> = [];
+    await deliverToWhatsApp(db, [reply], { url: "http://p", token: "t" }, (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response("{}");
+    }) as unknown as typeof fetch);
+    expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
 describe("notas internas e etiquetas", () => {
   it("nota: qualquer um da equipe escreve, não muda prévia/não lidas, não vai à IA nem ao WhatsApp e não trava a IA", async () => {
     const { conversationId: id } = receiveWhatsAppMessage(db, parseInbound({ externalId: "N1", chatId: "5511944443333@s.whatsapp.net", phone: "5511944443333", text: "quanto custa?" }));
