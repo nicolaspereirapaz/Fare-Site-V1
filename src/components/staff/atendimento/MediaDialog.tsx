@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, FileText, Images, Mic, Video, X } from "lucide-react";
+import { Download, FileText, Images, Mic, Printer, Video, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatBytes, mediaUrl } from "@/components/staff/atendimento/media";
-import { api, displayName, type Conversation } from "@/components/staff/atendimento/shared";
+import { PhotoOrderForm } from "@/components/staff/atendimento/PhotoOrderForm";
+import { api, displayName, type Conversation, type LinkedCustomer } from "@/components/staff/atendimento/shared";
 import type { MessageMedia } from "@/lib/atendimento/types";
 
 type MediaItem = {
@@ -22,7 +23,7 @@ type Kind = "todas" | "fotos";
  * Mídias do contato, numeradas (nº 1 = a mais antiga). Para baixar em lote:
  * clique na primeira e na última (ou digite "De" e "Até") e baixe o ZIP.
  */
-export function MediaDialog({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) {
+export function MediaDialog({ conversation, customers, onClose }: { conversation: Conversation; customers: LinkedCustomer[] | null; onClose: () => void }) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [items, setItems] = useState<MediaItem[] | null>(null);
@@ -31,6 +32,7 @@ export function MediaDialog({ conversation, onClose }: { conversation: Conversat
   const [onlyCustomer, setOnlyCustomer] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [ordering, setOrdering] = useState(false);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -60,6 +62,7 @@ export function MediaDialog({ conversation, onClose }: { conversation: Conversat
   const high = Math.max(start, end);
   const selected = visible.filter((item) => item.number >= low && item.number <= high);
   const hasRange = Boolean(from || to);
+  const selectedPhotos = selected.filter((item) => item.media.mime.startsWith("image/"));
 
   /** 1º clique = "De"; 2º = "Até"; 3º recomeça. */
   function pick(number: number) {
@@ -124,13 +127,19 @@ export function MediaDialog({ conversation, onClose }: { conversation: Conversat
               </button>
             ) : null}
           </span>
-          <span className="at-media-actions">
+          <span className="at-media-actions at-order-actions">
+            <button className="at-btn" disabled={!selectedPhotos.length || ordering} onClick={() => setOrdering(true)} title="Pedido de revelação com as fotos selecionadas" type="button">
+              <Printer aria-hidden="true" size={16} /> Criar pedido de fotos ({selectedPhotos.length})
+            </button>
             <a aria-disabled={!selected.length} className={`at-btn at-btn-primary${selected.length ? "" : " is-disabled"}`} download href={selected.length ? zipUrl(false) : undefined}>
               <Download aria-hidden="true" size={16} /> {hasRange ? `Baixar nº ${low} a ${high}` : "Baixar todas"} · {selected.length} {selected.length === 1 ? "arquivo" : "arquivos"}
             </a>
           </span>
         </div>
 
+        {ordering ? (
+          <PhotoOrderForm conversation={conversation} customers={customers} messageIds={selectedPhotos.map((item) => item.id)} onCancel={() => setOrdering(false)} />
+        ) : null}
         {error ? <div className="at-banner at-banner-error" role="alert">{error}</div> : null}
         {!items && !error ? <p className="at-muted at-center at-media-status">Carregando…</p> : null}
         {items && !visible.length ? <p className="at-muted at-center at-media-status">Nenhuma mídia {items.length ? "com esse filtro" : "nesta conversa"}.</p> : null}

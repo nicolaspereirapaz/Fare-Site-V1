@@ -292,6 +292,16 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-album-tile:hover img { filter: brightness(.92); }
 .at-album-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 18, 38, .55); color: #fff; font-size: 1.6rem; font-weight: 700; }
 
+/* Pedido de fotos a partir da conversa */
+.at-order-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.at-order-form { display: grid; gap: 10px; margin: 12px 22px 0; padding: 14px 16px; border: 1px solid #d5d9e6; border-radius: 12px; background: #fafbfd; font-size: 0.88rem; }
+.at-order-form.is-done { border-color: #a9d8c1; background: #e3f3ea; color: #0f5a3e; }
+.at-order-form > .at-order-actions { justify-content: flex-end; }
+.at-order-title { display: flex; align-items: center; gap: 6px; color: var(--navy-dark); }
+.at-order-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.at-order-fields label { display: grid; gap: 4px; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.at-order-fields select, .at-order-fields input { padding: 7px 8px; border: 1px solid #d5d9e6; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; font-size: 0.86rem; font-weight: 400; }
+
 /* Visualizador de fotos */
 .at-viewer { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(10, 12, 24, .97); }
 .at-viewer-img { max-width: calc(100vw - 160px); max-height: calc(100vh - 110px); object-fit: contain; border-radius: 4px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }

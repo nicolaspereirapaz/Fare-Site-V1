@@ -361,7 +361,7 @@ function ChatPanel({
           </div>
         </header>
 
-        {mediaOpen ? <MediaDialog conversation={conversation} onClose={() => setMediaOpen(false)} /> : null}
+        {mediaOpen ? <MediaDialog conversation={conversation} customers={customers} onClose={() => setMediaOpen(false)} /> : null}
         {viewerIndex !== null && photos.length ? (
           <PhotoViewer index={Math.min(viewerIndex, photos.length - 1)} onClose={() => setViewerIndex(null)} onIndex={setViewerIndex} photos={photos} />
         ) : null}
