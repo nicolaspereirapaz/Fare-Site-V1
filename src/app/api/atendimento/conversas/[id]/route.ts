@@ -1,4 +1,4 @@
-import { customersForPhone } from "@/lib/atendimento/customer";
+import { customersForPhone, linkConversationCustomer } from "@/lib/atendimento/customer";
 import {
   AtendimentoError,
   aiEnabled,
@@ -27,9 +27,10 @@ type Context = RouteContext<"/api/atendimento/conversas/[id]">;
 export const GET = withStaff(async (_staff, request, context: Context) => {
   const { id } = await context.params;
   const db = atendimentoDb();
-  const conversation = getConversation(db, id);
-  const after = Number(new URL(request.url).searchParams.get("depois") ?? 0) || 0;
   const withCustomers = new URL(request.url).searchParams.get("clientes") !== "0";
+  // Conversas antigas (de antes do cadastro automático) ganham o cadastro ao abrir.
+  const conversation = withCustomers ? linkConversationCustomer(db, id) : getConversation(db, id);
+  const after = Number(new URL(request.url).searchParams.get("depois") ?? 0) || 0;
   return json({
     conversation,
     messages: listMessages(db, id, after),

@@ -34,6 +34,9 @@ import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
 import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
 import { parseWhatsApp, stripWhatsApp } from "@/lib/atendimento/waFormat";
+import { linkConversationCustomer } from "@/lib/atendimento/customer";
+import { normalizeOutboundPhone, startWhatsAppConversation } from "@/lib/atendimento/whatsapp";
+import { createPanelCustomer } from "@/lib/customers/repository";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -525,6 +528,67 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("cadastro do site na conversa", () => {
+  const inbound = (externalId: string, phone: string, pushName: string) =>
+    receiveWhatsAppMessage(db, parseInbound({ externalId, chatId: `${phone}@s.whatsapp.net`, phone, pushName, text: "oi" }));
+
+  it("número já cadastrado: usa o cadastro existente e o nome dele", () => {
+    const maria = createPanelCustomer(db, { name: "Maria Souza", phone: "(11) 98888-7777" }, ana);
+    const { conversationId } = inbound("W1", "5511988887777", "mary 🌸");
+    const conversation = getConversation(db, conversationId);
+    expect(conversation.customerRef).toBe(maria.ref);
+    expect(conversation.customerName).toBe("Maria Souza");
+    expect(conversation.contactName).toBe("Maria Souza");
+  });
+
+  it("sem cadastro: cria um com o nome do WhatsApp e o telefone (uma vez só)", () => {
+    const { conversationId } = inbound("W2", "5511977776666", "euamobrecho");
+    const first = getConversation(db, conversationId);
+    expect(first.customerRef).toMatch(/^painel:/);
+    expect(first.customerName).toBe("Euamobrecho");
+    inbound("W3", "5511977776666", "euamobrecho");
+    expect(getConversation(db, conversationId).customerRef).toBe(first.customerRef);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM fare_panel_customers").get()).toEqual({ n: 1 });
+  });
+
+  it("sem nome e sem cadastro: fica sem cadastro (não inventa)", () => {
+    const { conversationId } = inbound("W4", "5511966665555", "");
+    expect(getConversation(db, conversationId).customerRef).toBeNull();
+    expect(linkConversationCustomer(db, conversationId, "Joana").customerName).toBe("Joana");
+  });
+});
+
+describe("nova conversa pelo número", () => {
+  it("normaliza o número e não aceita número curto", () => {
+    expect(normalizeOutboundPhone("(11) 98888-7777")).toBe("5511988887777");
+    expect(normalizeOutboundPhone("+55 11 98888-7777")).toBe("5511988887777");
+    expect(() => normalizeOutboundPhone("98888-7777")).toThrow(AtendimentoError);
+  });
+
+  it("confere na ponte, cria a conversa assumida por quem chamou e liga o cadastro", async () => {
+    process.env.FARE_PONTE_URL = "http://ponte";
+    process.env.FARE_PONTE_TOKEN = "t";
+    try {
+      let asked = "";
+      const fetcher = (async (url: string, init: RequestInit) => {
+        asked = `${url} ${String(init.body)}`;
+        return new Response(JSON.stringify({ chatId: "5511955554444@s.whatsapp.net", phone: "5511955554444" }));
+      }) as unknown as typeof fetch;
+      const conversation = await startWhatsAppConversation(db, ana, { phone: "11 95555-4444", name: "Carla Dias" }, fetcher);
+      expect(asked).toBe('http://ponte/fare/painel/numero {"phone":"5511955554444"}');
+      expect(conversation).toMatchObject({ channel: "whatsapp", waChatId: "5511955554444@s.whatsapp.net", status: "em_atendimento", assignedStaffId: ana.id, contactName: "Carla Dias", customerName: "Carla Dias" });
+      // Chamar de novo o mesmo número abre a mesma conversa.
+      expect((await startWhatsAppConversation(db, ana, { phone: "5511955554444" }, fetcher)).id).toBe(conversation.id);
+
+      const noWhatsApp = (async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
+      await expect(startWhatsAppConversation(db, ana, { phone: "11 94444-3333" }, noWhatsApp)).rejects.toThrow("Esse número não tem WhatsApp.");
+    } finally {
+      delete process.env.FARE_PONTE_URL;
+      delete process.env.FARE_PONTE_TOKEN;
+    }
   });
 });
 

@@ -4,10 +4,11 @@ import "@/components/staff/quoteEditor.css";
 import "@/components/staff/atendimento/atendimento.css";
 import "@/components/staff/atendimento/atendimento-dark.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BarChart3, Bell, BellOff, Bot, BotOff, FlaskConical, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
+import { BarChart3, Bell, BellOff, Bot, BotOff, FlaskConical, MessageSquarePlus, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
 import { ConversationView, isMine, matchesQuery } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
+import { NewConversationDialog } from "@/components/staff/atendimento/NewConversationDialog";
 import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import { AiEnabledContext } from "@/components/staff/atendimento/aiStatus";
 import { ApiError, api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
@@ -41,6 +42,14 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   const [editingReplies, setEditingReplies] = useState(false);
   const [search, setSearch] = useState("");
   const [aiOn, setAiOn] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const closeStart = useCallback(() => setStarting(false), []);
+  const onStarted = useCallback((conversation: Conversation) => {
+    setStarting(false);
+    setConversations((list) => [conversation, ...list.filter((entry) => entry.id !== conversation.id)]);
+    setSelectedId(conversation.id);
+    setView("conversas");
+  }, []);
   const [aiBusy, setAiBusy] = useState(false);
 
   async function toggleAi() {
@@ -211,6 +220,9 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
               {alerts === "denied" ? "Avisos bloqueados" : "Ativar avisos"}
             </button>
           ) : null}
+          <button className="kb-new-quote" onClick={() => setStarting(true)} type="button">
+            <MessageSquarePlus aria-hidden="true" size={16} /> Nova conversa
+          </button>
           <button
             aria-pressed={aiOn}
             className={`at-btn at-toolbar-btn at-ai-toggle${aiOn ? " is-on" : ""}`}
@@ -263,6 +275,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
         />
       )}
 
+      {starting ? <NewConversationDialog onClose={closeStart} onStarted={onStarted} /> : null}
       {editingReplies ? <QuickRepliesDialog onChanged={setQuickReplies} onClose={closeReplies} quickReplies={quickReplies} /> : null}
     </div>
     </AiEnabledContext.Provider>

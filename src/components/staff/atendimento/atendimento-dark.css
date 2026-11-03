@@ -144,6 +144,8 @@
 [data-atd-theme="dark"] .at-hits mark, [data-atd-theme="dark"] .at-find mark { background: #6b5a12; color: #fff3c4; }
 [data-atd-theme="dark"] .at-find { border-color: var(--d-border); background: var(--d-list); }
 
+[data-atd-theme="dark"] .at-customer-link { border-color: #2f5ea8; background: #1d3d73; color: #cfe1ff; }
+
 /* Notas e etiquetas */
 [data-atd-theme="dark"] .at-note { border-color: #8a6a10; background: #2e2810; color: #f1e2a6; }
 [data-atd-theme="dark"] .at-note-head, [data-atd-theme="dark"] .at-note-hint { color: #e0b84d; }

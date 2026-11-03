@@ -11,6 +11,7 @@ import {
   FileText,
   Hand,
   Images,
+  IdCard,
   Inbox,
   Mic,
   Paperclip,
@@ -447,6 +448,11 @@ function ChatPanel({
             <p>
               {formatPhone(conversation.phone)}
               {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
+              {conversation.customerRef ? (
+                <Link className="at-customer-link" href={`/equipe/clientes/${encodeURIComponent(conversation.customerRef)}`} title="Abrir o cadastro do site">
+                  <IdCard aria-hidden="true" size={13} /> Cadastro: {conversation.customerName || "abrir"}
+                </Link>
+              ) : null}
             </p>
             <TagEditor conversation={conversation} onChanged={onChanged} />
           </div>

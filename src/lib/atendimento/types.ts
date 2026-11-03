@@ -57,6 +57,9 @@ export type Conversation = {
   unread: number;
   /** Quando entrou em "Aguardando vendedor" (para mostrar há quanto tempo espera). */
   waitingSince: string | null;
+  /** Cadastro do site ligado a esta conversa (ref "conta:…" ou "painel:…") e o nome dele. */
+  customerRef: string | null;
+  customerName: string | null;
   createdAt: string;
   updatedAt: string;
 };

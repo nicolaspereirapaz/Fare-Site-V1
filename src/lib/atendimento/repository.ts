@@ -96,6 +96,9 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   // v6: transcrição dos áudios.
   addColumn(db, "atd_messages", "transcript", "TEXT NOT NULL DEFAULT ''");
   addColumn(db, "atd_messages", "transcript_status", "TEXT NOT NULL DEFAULT ''");
+  // v10: cadastro do site ligado à conversa.
+  addColumn(db, "atd_conversations", "customer_ref", "TEXT");
+  addColumn(db, "atd_conversations", "customer_name", "TEXT");
   // v9: original apagado pela limpeza automática de mídias.
   addColumn(db, "atd_messages", "media_pruned", "TEXT");
   // v8: evento dos avisos do sistema (relatório da equipe).
@@ -206,6 +209,8 @@ function toConversation(row: ConversationRow): Conversation {
     lastMessageAuthor: row.last_message_author === null ? null : (String(row.last_message_author) as AuthorKind),
     unread: Number(row.unread ?? 0),
     waitingSince: row.waiting_since === null ? null : String(row.waiting_since),
+    customerRef: row.customer_ref ? String(row.customer_ref) : null,
+    customerName: row.customer_ref ? String(row.customer_name ?? "") : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -402,6 +407,10 @@ export function addMessage(
 
 export function markConversationRead(db: DatabaseSync, id: string) {
   db.prepare("UPDATE atd_conversations SET unread = 0 WHERE id = ?").run(id);
+}
+
+export function setConversationCustomer(db: DatabaseSync, id: string, ref: string, name: string) {
+  db.prepare("UPDATE atd_conversations SET customer_ref = ?, customer_name = ?, updated_at = ? WHERE id = ?").run(ref, name.slice(0, 120), nowIso(), id);
 }
 
 export function updateConversationProfile(db: DatabaseSync, id: string, input: { contactName?: string; summary?: string }) {
