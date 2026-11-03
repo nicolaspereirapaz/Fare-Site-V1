@@ -355,6 +355,18 @@ export function finishConversation(db: DatabaseSync, id: string, staff: StaffAct
   return getConversation(db, id);
 }
 
+/**
+ * Alguém respondeu pelo celular (app do WhatsApp Business). A IA para de responder:
+ * a conversa vai para a fila até um vendedor assumir pelo painel. Se já está com um vendedor, nada muda.
+ */
+export function phoneReplied(db: DatabaseSync, id: string): Conversation {
+  const current = getConversation(db, id);
+  if (current.status !== "ia" && current.status !== "finalizada") return current;
+  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: "Respondido pelo celular", waiting: true });
+  system(db, id, "Alguém respondeu pelo celular. A IA parou; assuma a conversa para continuar pelo painel.");
+  return getConversation(db, id);
+}
+
 /** Cliente voltou a escrever numa conversa finalizada: reabre com a IA. */
 export function reopenConversation(db: DatabaseSync, id: string) {
   setStatus(db, id, "ia", { staff: null });

@@ -326,7 +326,7 @@ describe("WhatsApp pela ponte", () => {
     const first = receiveWhatsAppMessage(db, inbound("A1", "oi"));
     const again = receiveWhatsAppMessage(db, inbound("A1", "oi"));
     const second = receiveWhatsAppMessage(db, inbound("A2", "tudo bem?", { chatId: "999@lid" }));
-    expect(again).toEqual({ conversationId: first.conversationId, duplicate: true });
+    expect(again).toEqual({ conversationId: first.conversationId, duplicate: true, fromPhone: false });
     expect(second.conversationId).toBe(first.conversationId);
     const conversation = getConversation(db, first.conversationId);
     expect(conversation.channel).toBe("whatsapp");
@@ -354,6 +354,37 @@ describe("WhatsApp pela ponte", () => {
     expect(listMessages(db, id).at(-1)?.delivery).toBe("enviada");
     await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
     expect(ok.sent).toHaveLength(2); // já enviada: não manda de novo
+  });
+
+  it("resposta digitada no celular entra como \"Celular\", para a IA e não é reenviada", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("C1", "vocês abrem sábado?"));
+    const phone = receiveWhatsAppMessage(db, inbound("C2", "Abrimos sim, até 13h.", { fromPhone: true }));
+    expect(phone).toEqual({ conversationId: id, duplicate: false, fromPhone: true });
+    const last = listMessages(db, id).filter((message) => message.author !== "sistema").at(-1);
+    expect(last).toMatchObject({ author: "vendedor", authorName: "Celular", body: "Abrimos sim, até 13h.", delivery: "enviada" });
+    const conversation = getConversation(db, id);
+    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.handoffReason).toBe("Respondido pelo celular");
+    // IA não responde mais; e a mensagem do celular nunca volta para a ponte.
+    expect(await runAi(db, id, async () => ({ reply: "não deveria" }))).toEqual([]);
+    const ok = fakeBridge();
+    await deliverToWhatsApp(db, listMessages(db, id), bridge, ok.fetcher);
+    expect(ok.sent).toHaveLength(0);
+  });
+
+  it("eco do que o painel enviou (mesmo id) não entra de novo", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("D1", "oi"));
+    const ai = await runAi(db, id, async () => ({ reply: "Olá! Qual o seu nome?" }));
+    await deliverToWhatsApp(db, ai, bridge, fakeBridge().fetcher); // ponte devolve messageId "WA1"
+    expect(receiveWhatsAppMessage(db, inbound("WA1", "Olá! Qual o seu nome?", { fromPhone: true })).duplicate).toBe(true);
+    expect(getConversation(db, id).status).toBe("ia");
+  });
+
+  it("vendedor já atendendo: resposta do celular entra sem mudar a etapa", () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("E1", "oi"));
+    assumeConversation(db, id, ana);
+    receiveWhatsAppMessage(db, inbound("E2", "já te respondo", { fromPhone: true }));
+    expect(getConversation(db, id)).toMatchObject({ status: "em_atendimento", assignedStaffId: ana.id });
   });
 
   it("simulador nunca sai pelo WhatsApp", async () => {

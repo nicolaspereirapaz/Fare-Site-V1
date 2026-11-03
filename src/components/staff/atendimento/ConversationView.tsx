@@ -11,6 +11,7 @@ import {
   Inbox,
   MessageSquareText,
   Send,
+  Smartphone,
   Undo2,
   UserPlus,
   UserRound,
@@ -456,14 +457,15 @@ function MessageBubble({ message, previous, onResend }: { message: Message; prev
     );
   }
   const sameAuthor = previous && previous.author === message.author && previous.authorName === message.authorName && !showDay;
-  const label = message.author === "ia" ? "IA" : message.author === "vendedor" ? message.authorName : null;
+  const fromPhone = message.author === "vendedor" && message.authorName === "Celular";
+  const label = message.author === "ia" ? "IA" : fromPhone ? "Celular (WhatsApp)" : message.author === "vendedor" ? message.authorName : null;
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
       <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`}>
         {label && !sameAuthor ? (
           <span className="at-bubble-author">
-            {message.author === "ia" ? <Bot aria-hidden="true" size={12} /> : <UserRound aria-hidden="true" size={12} />} {label}
+            {message.author === "ia" ? <Bot aria-hidden="true" size={12} /> : fromPhone ? <Smartphone aria-hidden="true" size={12} /> : <UserRound aria-hidden="true" size={12} />} {label}
           </span>
         ) : null}
         <div className="at-bubble-text">

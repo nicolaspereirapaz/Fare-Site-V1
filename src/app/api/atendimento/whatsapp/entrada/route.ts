@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const db = atendimentoDb();
     const result = receiveWhatsAppMessage(db, parseInbound(body));
-    if (!result.duplicate) respondInBackground(db, result.conversationId);
+    if (!result.duplicate && !result.fromPhone) respondInBackground(db, result.conversationId);
     return json({ ok: true, ...result }, result.duplicate ? 200 : 201);
   } catch (error) {
     if (error instanceof AtendimentoError) return json({ error: error.code, message: error.message }, 400);

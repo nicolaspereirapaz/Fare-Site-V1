@@ -1,12 +1,14 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
   AtendimentoError,
+  addMessage,
   createConversation,
   findWhatsAppConversation,
   getConversation,
   getMessage,
   messageByExternalId,
   phoneDigits,
+  phoneReplied,
   setDelivery,
   updateConversationProfile,
 } from "@/lib/atendimento/repository";
@@ -45,7 +47,12 @@ export type InboundWhatsApp = {
   /** Nome do perfil do WhatsApp (pushName), quando houver. */
   pushName?: string;
   text: string;
+  /** Mensagem digitada no celular da loja (app do WhatsApp Business), não pelo cliente. */
+  fromPhone: boolean;
 };
+
+/** Nome mostrado no painel para respostas digitadas no celular (o WhatsApp não diz quem digitou). */
+export const PHONE_AUTHOR = "Celular";
 
 export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
   const str = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
@@ -55,6 +62,7 @@ export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
     phone: phoneDigits(str(body.phone, 30)),
     pushName: str(body.pushName, 80),
     text: str(body.text, 4000),
+    fromPhone: body.fromPhone === true,
   };
   if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || !inbound.text) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
@@ -62,17 +70,25 @@ export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
   return inbound;
 }
 
-/** Grava a mensagem do cliente vinda do WhatsApp. Repetida (mesmo id)? Ignora. */
-export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsApp): { conversationId: string; duplicate: boolean } {
+/**
+ * Grava a mensagem vinda do WhatsApp. Repetida (mesmo id, inclusive o eco do que o painel enviou)? Ignora.
+ * Do cliente: a IA pode responder. Do celular da loja: entra como resposta "Celular" e a IA para.
+ */
+export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsApp): { conversationId: string; duplicate: boolean; fromPhone: boolean } {
   const existing = messageByExternalId(db, inbound.externalId);
-  if (existing) return { conversationId: existing.conversationId, duplicate: true };
+  if (existing) return { conversationId: existing.conversationId, duplicate: true, fromPhone: inbound.fromPhone };
   let conversation = findWhatsAppConversation(db, inbound.chatId, inbound.phone);
   if (!conversation) conversation = createConversation(db, { channel: "whatsapp", phone: inbound.phone, waChatId: inbound.chatId });
+  if (inbound.fromPhone) {
+    addMessage(db, { conversationId: conversation.id, author: "vendedor", authorName: PHONE_AUTHOR, body: inbound.text, externalId: inbound.externalId, delivery: "enviada" });
+    phoneReplied(db, conversation.id);
+    return { conversationId: conversation.id, duplicate: false, fromPhone: true };
+  }
   // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
   if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
   const message = recordCustomerMessage(db, conversation.id, inbound.text);
   db.prepare("UPDATE atd_messages SET external_id = ? WHERE id = ?").run(inbound.externalId, message.id);
-  return { conversationId: conversation.id, duplicate: false };
+  return { conversationId: conversation.id, duplicate: false, fromPhone: false };
 }
 
 /**
