@@ -1,5 +1,6 @@
 import { AtendimentoError, getConversation, listContactMedia } from "@/lib/atendimento/repository";
-import { mediaPath, zipStream } from "@/lib/atendimento/media";
+import { existsSync } from "node:fs";
+import { mediaPath, mediaRetentionDays, zipStream } from "@/lib/atendimento/media";
 import { atendimentoDb, withStaff } from "@/lib/atendimento/server";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 
@@ -21,7 +22,9 @@ export const GET = withStaff(async (_staff, request, context: RouteContext<"/api
     onlyCustomer: params.get("quem") === "cliente",
   });
   if (!plan.entries.length) throw new AtendimentoError("INVALID_REQUEST", "Nenhuma mídia nesse intervalo.");
-  const entries = plan.entries.map((entry) => ({ ...entry, file: mediaPath(entry.file) }));
+  // Originais apagados pela limpeza (mais de N dias) ficam fora do ZIP.
+  const entries = plan.entries.map((entry) => ({ ...entry, file: mediaPath(entry.file) })).filter((entry) => existsSync(entry.file));
+  if (!entries.length) throw new AtendimentoError("INVALID_REQUEST", `Os originais desse intervalo já foram apagados (guardamos ${mediaRetentionDays()} dias).`);
   return new Response(zipStream(entries), {
     headers: {
       "content-type": "application/zip",

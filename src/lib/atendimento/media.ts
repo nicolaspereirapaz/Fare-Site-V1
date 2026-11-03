@@ -7,7 +7,9 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import sharp from "sharp";
+import type { DatabaseSync } from "node:sqlite";
 import type { MediaKind } from "@/lib/atendimento/types";
+import { markMediaPruned, mediaToPrune } from "@/lib/atendimento/repository";
 import { FFMPEG } from "@/lib/photoOrders/config";
 
 /**
@@ -129,6 +131,35 @@ export async function copyMedia(relative: string, conversationId: string) {
   await copyFile(mediaPath(relative), mediaPath(target));
   await copyFile(mediaPath(relative, true), mediaPath(target, true)).catch(() => undefined);
   return target;
+}
+
+/** Dias que as mídias originais das conversas ficam guardadas (FARE_MIDIAS_DIAS; 0 = guardar tudo). */
+export function mediaRetentionDays(env: NodeJS.ProcessEnv = process.env) {
+  const days = Number(env.FARE_MIDIAS_DIAS ?? 90);
+  return Number.isFinite(days) && days >= 0 ? Math.floor(days) : 90;
+}
+
+/**
+ * Limpeza: apaga o ORIGINAL das mídias com mais de N dias e deixa a miniatura (a conversa continua mostrando a foto pequena).
+ * Fotos de pedidos e anexos de mensagens rápidas são cópias à parte e não são apagados.
+ */
+export async function pruneOldMedia(db: DatabaseSync, days = mediaRetentionDays(), now = new Date()) {
+  if (!days) return { pruned: 0, bytes: 0 };
+  const before = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  let pruned = 0;
+  let bytes = 0;
+  for (;;) {
+    const batch = mediaToPrune(db, before);
+    if (!batch.length) break;
+    for (const item of batch) {
+      const file = mediaPath(item.file);
+      bytes += (await stat(file).catch(() => null))?.size ?? 0;
+      await rm(file, { force: true });
+      markMediaPruned(db, item.id);
+      pruned += 1;
+    }
+  }
+  return { pruned, bytes };
 }
 
 export async function removeMedia(relative: string | null) {

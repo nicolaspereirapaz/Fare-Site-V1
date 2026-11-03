@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AtendimentoApp } from "@/components/staff/atendimento/AtendimentoApp";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
+import { AtdRoot } from "@/components/staff/atendimento/AtdRoot";
 import { getStaffSession } from "@/lib/staff/server";
 
 export const metadata: Metadata = { title: "Atendimento" };
@@ -12,13 +13,13 @@ export default async function AtendimentoPage({ searchParams }: { searchParams: 
   if (!session) redirect("/equipe/entrar");
   const params = await searchParams;
   return (
-    <>
+    <AtdRoot>
       <StaffTopbar current="atendimento" name={session.user.name} role={session.user.role} />
       <AtendimentoApp
         initialConversation={typeof params.conversa === "string" ? params.conversa.slice(0, 64) : undefined}
         initialView={params.visao === "quadro" ? "quadro" : "conversas"}
         me={{ id: session.user.id, name: session.user.name, role: session.user.role }}
       />
-    </>
+    </AtdRoot>
   );
 }

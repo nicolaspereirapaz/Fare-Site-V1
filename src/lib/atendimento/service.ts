@@ -8,6 +8,8 @@ import {
   firstName,
   getConversation,
   getQuickReply,
+  aiEnabled,
+  holdForSeller,
   listMessages,
   customerReplied,
   reopenConversation,
@@ -75,6 +77,17 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
   } finally {
     aiRuns.delete(conversationId);
   }
+}
+
+/**
+ * IA desligada: a conversa com mensagem nova do cliente vai para a fila de vendedores (ninguém responde sozinho).
+ * Devolve true se a IA está desligada (quem chamou não deve rodar a IA).
+ */
+export function queueIfAiOff(db: DatabaseSync, conversationId: string): boolean {
+  if (aiEnabled(db)) return false;
+  const last = listMessages(db, conversationId).filter((message) => !isInternal(message.author)).at(-1);
+  if (last?.author === "cliente") holdForSeller(db, conversationId);
+  return true;
 }
 
 /** Mensagem do cliente + resposta da IA, esperando terminar (testes e uso simples). */

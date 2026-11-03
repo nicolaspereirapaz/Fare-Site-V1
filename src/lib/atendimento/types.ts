@@ -103,6 +103,8 @@ export type MessageMedia = {
   name: string;
   size: number;
   hasThumb: boolean;
+  /** Original apagado pela limpeza automática (fica só a miniatura). */
+  pruned?: boolean;
 };
 
 export type QuickReply = {

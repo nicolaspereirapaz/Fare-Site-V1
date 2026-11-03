@@ -1,6 +1,7 @@
 "use client";
 
 import "@/components/staff/atendimento/atendimento.css";
+import "@/components/staff/atendimento/atendimento-dark.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, FlaskConical, Paperclip, Plus, Send, Smartphone } from "lucide-react";
 import { MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";

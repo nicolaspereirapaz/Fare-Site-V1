@@ -38,6 +38,20 @@ export function MessageMediaView({
   const media = message.media;
   if (!media) return null;
   const isImage = media.mime.startsWith("image/");
+  if (media.pruned) {
+    // Limpeza automática: o original foi apagado; fica a miniatura (fotos) ou só o nome.
+    return media.hasThumb ? (
+      <span className="at-media-image is-pruned" title="Original apagado pela limpeza automática (fica só a miniatura)">
+        {/* eslint-disable-next-line @next/next/no-img-element -- arquivo privado servido pela API */}
+        <img alt={media.name || "Foto"} loading="lazy" src={mediaUrl(message.id, { mini: true })} />
+        <span className="at-media-badge">original apagado</span>
+      </span>
+    ) : (
+      <p className="at-media-file is-pruned">
+        <FileText aria-hidden="true" size={18} /> {media.name || "arquivo"} — apagado pela limpeza automática
+      </p>
+    );
+  }
   if (isImage && onOpen) {
     return (
       <button className="at-media-image" onClick={() => onOpen(message.id)} title={`${media.name} — ver em tamanho real`} type="button">

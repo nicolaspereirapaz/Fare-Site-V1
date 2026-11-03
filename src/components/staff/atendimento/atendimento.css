@@ -283,6 +283,8 @@
 .at-media-file small { font-size: .75rem; opacity: .7; }
 
 button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in; }
+.at-media-image.is-pruned img { filter: grayscale(.35); }
+.at-media-file.is-pruned { color: var(--muted); font-size: 0.8rem; }
 
 /* Álbum: fotos seguidas num mosaico 2×2 */
 .at-album { width: 260px; max-width: 100%; }

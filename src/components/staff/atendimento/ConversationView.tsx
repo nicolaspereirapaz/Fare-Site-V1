@@ -32,6 +32,7 @@ import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
 import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
 import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recorder";
+import { useAiEnabled } from "@/components/staff/atendimento/aiStatus";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
@@ -306,6 +307,7 @@ function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [returning, setReturning] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
+  const aiOn = useAiEnabled();
   const [mediaOpen, setMediaOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const blocks = useMemo(() => groupMessages(messages), [messages]);
@@ -462,7 +464,10 @@ function ChatPanel({
                 value={conversation.status}
               >
                 {CONVERSATION_STATUSES.map((status) => (
-                  <option key={status} value={status}>{CONVERSATION_STATUS_LABELS[status]}</option>
+                  <option disabled={status === "ia" && !aiOn && conversation.status !== "ia"} key={status} value={status}>
+                    {CONVERSATION_STATUS_LABELS[status]}
+                    {status === "ia" && !aiOn ? " (desligada)" : ""}
+                  </option>
                 ))}
               </select>
             </label>
@@ -471,7 +476,7 @@ function ChatPanel({
                 <Hand aria-hidden="true" size={16} /> Assumir
               </button>
             ) : null}
-            {conversation.status !== "ia" ? (
+            {conversation.status !== "ia" && aiOn ? (
               <button className="at-btn" disabled={busy} onClick={() => setReturning((open) => !open)} type="button">
                 <Bot aria-hidden="true" size={16} /> Devolver para IA
               </button>
@@ -841,6 +846,7 @@ function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const recorder = useRecorder();
+  const aiOn = useAiEnabled();
 
   /** Para a gravação e manda como mensagem de voz. */
   async function sendRecording() {
@@ -966,7 +972,9 @@ function Composer({
     return (
       <div className="at-composer at-composer-locked">
         <p>
-          {conversation.status === "ia"
+          {conversation.status === "ia" && !aiOn
+            ? "A IA está desligada: quando o cliente escrever, a conversa vai para a fila de vendedores. Para escrever agora, assuma a conversa."
+            : conversation.status === "ia"
             ? "A IA está respondendo este cliente. Para escrever, assuma a conversa — a IA para na hora."
             : isSellerStatus(conversation.status)
               ? `${conversation.assignedStaffName ?? "Outro vendedor"} está com esta conversa (${CONVERSATION_STATUS_LABELS[conversation.status]}).`

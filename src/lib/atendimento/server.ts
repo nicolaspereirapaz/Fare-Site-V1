@@ -3,9 +3,10 @@ import { AtendimentoError, runAtendimentoMigrations, type StaffActor } from "@/l
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "next/server";
 import { readStaffSession } from "@/lib/staff/server";
-import { runAi } from "@/lib/atendimento/service";
+import { queueIfAiOff, runAi } from "@/lib/atendimento/service";
 import { deliverToWhatsApp } from "@/lib/atendimento/whatsapp";
 import { transcribeMessage } from "@/lib/atendimento/transcribe";
+import { pruneOldMedia } from "@/lib/atendimento/media";
 import type { Message } from "@/lib/atendimento/types";
 import { createRealBrain, realAiConfig, REAL_AI_NAME } from "@/lib/atendimento/hermesBrain";
 import { simulatedBrain, SIMULATED_AI_NAME, type Brain } from "@/lib/atendimento/simulatedBrain";
@@ -20,6 +21,8 @@ export function respondInBackground(db: DatabaseSync, conversationId: string, op
     try {
       // Áudio do cliente: transcreve antes, para a IA "ouvir" o que ele disse.
       if (options.transcribeFirst) await transcribeMessage(db, options.transcribeFirst);
+      // IA desligada no painel: a conversa vai para a fila de vendedores.
+      if (queueIfAiOff(db, conversationId)) return;
       const created = await runAi(db, conversationId, brain, name);
       await deliverToWhatsApp(db, created);
     } catch (error) {
@@ -46,14 +49,31 @@ export function activeBrain(): { brain: Brain; name: string; mode: "real" | "tes
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
 // Versão do esquema: o servidor de desenvolvimento mantém o globalThis entre recargas; com a versão, colunas novas entram sem reiniciar.
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoSchema?: number };
 export function atendimentoDb() {
   if (globalAtendimento.fareAtendimentoSchema !== SCHEMA_VERSION) {
     runAtendimentoMigrations(database);
     globalAtendimento.fareAtendimentoSchema = SCHEMA_VERSION;
   }
+  scheduleMediaCleanup();
   return database;
+}
+
+/** Limpeza das mídias antigas (originais com mais de FARE_MIDIAS_DIAS, padrão 90): no máximo a cada 6 h, em segundo plano. */
+const CLEANUP_EVERY = 6 * 60 * 60 * 1000;
+const globalCleanup = globalThis as typeof globalThis & { fareMediaCleanupAt?: number };
+function scheduleMediaCleanup() {
+  const now = Date.now();
+  if (globalCleanup.fareMediaCleanupAt && now - globalCleanup.fareMediaCleanupAt < CLEANUP_EVERY) return;
+  globalCleanup.fareMediaCleanupAt = now;
+  setTimeout(() => {
+    pruneOldMedia(database)
+      .then(({ pruned, bytes }) => {
+        if (pruned) console.log(`[atendimento] limpeza: ${pruned} mídias antigas apagadas (${Math.round(bytes / 1024 / 1024)} MB); miniaturas mantidas.`);
+      })
+      .catch((error) => console.error("[atendimento] limpeza de mídias:", error));
+  }, 0);
 }
 
 const STATUS_BY_CODE: Record<AtendimentoError["code"], number> = {

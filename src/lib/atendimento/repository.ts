@@ -96,6 +96,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   // v6: transcrição dos áudios.
   addColumn(db, "atd_messages", "transcript", "TEXT NOT NULL DEFAULT ''");
   addColumn(db, "atd_messages", "transcript_status", "TEXT NOT NULL DEFAULT ''");
+  // v9: original apagado pela limpeza automática de mídias.
+  addColumn(db, "atd_messages", "media_pruned", "TEXT");
   // v8: evento dos avisos do sistema (relatório da equipe).
   addColumn(db, "atd_messages", "event", "TEXT");
   // v7: anexo nas mensagens rápidas.
@@ -116,6 +118,20 @@ export function listContactMedia(db: DatabaseSync, conversationId: string): Arra
        WHERE c.channel = ? AND c.phone = ? AND m.media_file IS NOT NULL ORDER BY m.created_at, m.seq`,
     )
     .all(conversation.channel, conversation.phone) as ConversationRow[]).map((row) => ({ ...toMessage(row), mediaFile: String(row.media_file) }));
+}
+
+/**
+ * Mídias de conversa mais antigas que `before` e ainda no disco (quem chamou apaga o original e marca).
+ * Mensagens rápidas e pedidos de fotos guardam cópias próprias: não entram aqui.
+ */
+export function mediaToPrune(db: DatabaseSync, before: Date, limit = 500): Array<{ id: string; file: string; hasThumb: boolean }> {
+  return (db
+    .prepare("SELECT id, media_file, media_thumb FROM atd_messages WHERE media_file IS NOT NULL AND media_pruned IS NULL AND created_at < ? ORDER BY created_at LIMIT ?")
+    .all(before.toISOString(), limit) as ConversationRow[]).map((row) => ({ id: String(row.id), file: String(row.media_file), hasThumb: Number(row.media_thumb ?? 0) === 1 }));
+}
+
+export function markMediaPruned(db: DatabaseSync, messageId: string) {
+  db.prepare("UPDATE atd_messages SET media_pruned = ? WHERE id = ?").run(nowIso(), messageId);
 }
 
 /** Arquivo da mensagem no disco (relativo à pasta de mídias). */
@@ -213,6 +229,7 @@ function toMessage(row: ConversationRow): Message {
           name: String(row.media_name ?? ""),
           size: Number(row.media_size ?? 0),
           hasThumb: Number(row.media_thumb ?? 0) === 1,
+          ...(row.media_pruned ? { pruned: true } : {}),
         }
       : null,
     replyToId: row.reply_to_id === null || row.reply_to_id === undefined ? null : String(row.reply_to_id),
@@ -499,6 +516,25 @@ export function sendToQueue(db: DatabaseSync, id: string, actor: StaffActor | nu
   setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: reason, waiting: true });
   if (!actor) db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
   system(db, id, actor ? `${actor.name} colocou a conversa na fila de vendedores.` : `A IA pediu um vendedor: ${reason}`, "fila", actor);
+  return getConversation(db, id);
+}
+
+/** IA respondendo clientes: ligada/desligada pelo painel (começa DESLIGADA: só vendedores respondem). */
+export function aiEnabled(db: DatabaseSync) {
+  return (db.prepare("SELECT value FROM atd_meta WHERE key = 'ia_ligada'").get() as { value?: string } | undefined)?.value === "1";
+}
+
+export function setAiEnabled(db: DatabaseSync, enabled: boolean) {
+  db.prepare("INSERT INTO atd_meta (key, value) VALUES ('ia_ligada', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(enabled ? "1" : "0");
+}
+
+/** IA desligada e o cliente escreveu numa conversa \"com a IA\": vai direto para a fila de vendedores. */
+export function holdForSeller(db: DatabaseSync, id: string): Conversation {
+  const current = getConversation(db, id);
+  if (current.status !== "ia") return current;
+  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: "Cliente escreveu (IA desligada)", waiting: true });
+  db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
+  system(db, id, "IA desligada: a conversa foi direto para a fila de vendedores.", "fila");
   return getConversation(db, id);
 }
 

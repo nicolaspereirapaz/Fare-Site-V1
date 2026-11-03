@@ -1,6 +1,7 @@
 import { customersForPhone } from "@/lib/atendimento/customer";
 import {
   AtendimentoError,
+  aiEnabled,
   assumeConversation,
   finishConversation,
   getConversation,
@@ -48,7 +49,10 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
   const body = await readJson(request);
   const force = body.force === true;
   // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
-  if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) respondInBackground(db, id);
+  if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) {
+    if (!aiEnabled(db)) throw new AtendimentoError("INVALID_REQUEST", "A IA está desligada. Ligue a IA no topo do Atendimento para devolver conversas para ela.");
+    respondInBackground(db, id);
+  }
   switch (body.action) {
     case "etiquetas":
       return json({ conversation: setConversationTags(db, id, body.tags) });

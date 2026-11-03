@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { AtendimentoError, getMessage, mediaFileOf } from "@/lib/atendimento/repository";
-import { mediaPath } from "@/lib/atendimento/media";
+import { mediaPath, mediaRetentionDays } from "@/lib/atendimento/media";
 import { atendimentoDb, withStaff } from "@/lib/atendimento/server";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,11 @@ export const GET = withStaff(async (_staff, request, context: RouteContext<"/api
   const message = getMessage(db, id);
   if (!stored || !message?.media) throw new AtendimentoError("CONVERSATION_NOT_FOUND", "Arquivo não encontrado.");
   const params = new URL(request.url).searchParams;
-  const thumb = params.get("mini") === "1" && message.media.hasThumb;
+  if (message.media.pruned && (params.get("baixar") === "1" || !message.media.hasThumb)) {
+    throw new AtendimentoError("CONVERSATION_NOT_FOUND", `O arquivo original foi apagado (guardamos só ${mediaRetentionDays()} dias).`);
+  }
+  // Original apagado pela limpeza: mostra a miniatura no lugar.
+  const thumb = (params.get("mini") === "1" || Boolean(message.media.pruned)) && message.media.hasThumb;
   let file = mediaPath(stored.file, thumb);
   let info = await stat(file).catch(() => null);
   if (!info && thumb) {

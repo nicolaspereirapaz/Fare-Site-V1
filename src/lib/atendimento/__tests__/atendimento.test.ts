@@ -19,11 +19,15 @@ import {
   runAtendimentoMigrations,
   saveQuickReply,
 } from "@/lib/atendimento/repository";
-import { addNote, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { addNote, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
+import { mkdtempSync, existsSync as fileExists, rmSync as removeDir } from "node:fs";
+import os from "node:os";
+import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
-import { crc32, safeFileName } from "@/lib/atendimento/media";
+import { crc32, mediaPath, mediaRetentionDays, pruneOldMedia, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
@@ -520,6 +524,71 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("IA ligada/desligada", () => {
+  it("começa desligada; cliente escreve -> fila de vendedores, sem resposta automática", () => {
+    expect(aiEnabled(db)).toBe(false);
+    const { id } = newConversation();
+    recordCustomerMessage(db, id, "oi, tem foto 3x4?");
+    expect(queueIfAiOff(db, id)).toBe(true);
+    const conversation = getConversation(db, id);
+    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.handoffReason).toBe("Cliente escreveu (IA desligada)");
+    expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
+    expect(listMessages(db, id).at(-1)?.body).toBe("IA desligada: a conversa foi direto para a fila de vendedores.");
+    // Outra mensagem: continua na fila, sem aviso repetido.
+    recordCustomerMessage(db, id, "alô?");
+    queueIfAiOff(db, id);
+    expect(listMessages(db, id).filter((message) => message.author === "sistema")).toHaveLength(1);
+  });
+
+  it("ligada: quem chamou roda a IA normalmente", () => {
+    setAiEnabled(db, true);
+    expect(aiEnabled(db)).toBe(true);
+    const { id } = newConversation();
+    recordCustomerMessage(db, id, "oi");
+    expect(queueIfAiOff(db, id)).toBe(false);
+    expect(getConversation(db, id).status).toBe("ia");
+    setAiEnabled(db, false);
+    expect(aiEnabled(db)).toBe(false);
+  });
+});
+
+describe("limpeza das mídias", () => {
+  it("apaga o original com mais de 90 dias e mantém a miniatura; o recente fica", async () => {
+    const dir = mkdtempSync(nodePath.join(os.tmpdir(), "atd-midias-"));
+    process.env.FARE_ATENDIMENTO_MEDIA_DIR = dir;
+    try {
+      expect(mediaRetentionDays({} as NodeJS.ProcessEnv)).toBe(90);
+      expect(mediaRetentionDays({ FARE_MIDIAS_DIAS: "0" } as unknown as NodeJS.ProcessEnv)).toBe(0);
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+      const { id } = newConversation();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-07-01T12:00:00Z"));
+      const oldMedia = { ...(await saveMedia(png, { conversationId: id, name: "antiga.png", mime: "image/png" })), hasThumb: true };
+      const old = recordCustomerMessage(db, id, "", oldMedia);
+      vi.setSystemTime(new Date("2026-10-30T12:00:00Z"));
+      const newMedia = { ...(await saveMedia(png, { conversationId: id, name: "nova.png", mime: "image/png" })), hasThumb: true };
+      const fresh = recordCustomerMessage(db, id, "", newMedia);
+      vi.useRealTimers();
+
+      const result = await pruneOldMedia(db, 90, new Date("2026-11-03T12:00:00Z"));
+      expect(result.pruned).toBe(1);
+      expect(fileExists(mediaPath(oldMedia.file))).toBe(false);
+      expect(fileExists(mediaPath(oldMedia.file, true))).toBe(true); // miniatura fica
+      expect(fileExists(mediaPath(newMedia.file))).toBe(true);
+      const messages = listMessages(db, id);
+      expect(messages.find((message) => message.id === old.id)?.media?.pruned).toBe(true);
+      expect(messages.find((message) => message.id === fresh.id)?.media?.pruned).toBeUndefined();
+      // Rodar de novo não apaga mais nada.
+      expect((await pruneOldMedia(db, 90, new Date("2026-11-03T12:00:00Z"))).pruned).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      delete process.env.FARE_ATENDIMENTO_MEDIA_DIR;
+      removeDir(dir, { recursive: true, force: true });
+    }
   });
 });
 

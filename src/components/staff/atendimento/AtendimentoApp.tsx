@@ -2,11 +2,14 @@
 
 import "@/components/staff/quoteEditor.css";
 import "@/components/staff/atendimento/atendimento.css";
+import "@/components/staff/atendimento/atendimento-dark.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BarChart3, Bell, BellOff, FlaskConical, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
+import { BarChart3, Bell, BellOff, Bot, BotOff, FlaskConical, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
 import { ConversationView, isMine, matchesQuery } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
+import { ThemeToggle } from "@/components/staff/atendimento/theme";
+import { AiEnabledContext } from "@/components/staff/atendimento/aiStatus";
 import { ApiError, api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
 import type { ConversationStatus } from "@/lib/atendimento/types";
 
@@ -37,6 +40,21 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [editingReplies, setEditingReplies] = useState(false);
   const [search, setSearch] = useState("");
+  const [aiOn, setAiOn] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  async function toggleAi() {
+    const next = !aiOn;
+    if (next && !window.confirm("Ligar a IA? Ela vai responder sozinha os clientes que estiverem em \"IA atendendo\".")) return;
+    setAiBusy(true);
+    try {
+      setAiOn((await api<{ aiEnabled: boolean }>("/api/atendimento/config", { method: "PATCH", body: { aiEnabled: next } })).aiEnabled);
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Não foi possível mudar a IA.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const permission = useSyncExternalStore(noSubscribe, readPermission, () => "default" as const);
   const [askedPermission, setAskedPermission] = useState<NotificationPermission | null>(null);
@@ -53,8 +71,9 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
     setSelectedId(id);
   }, []);
 
-  const applyList = useCallback((data: { conversations: Conversation[] }) => {
+  const applyList = useCallback((data: { conversations: Conversation[]; aiEnabled?: boolean }) => {
       setConversations(data.conversations);
+      if (typeof data.aiEnabled === "boolean") setAiOn(data.aiEnabled);
       setError(null);
       setLoaded(true);
 
@@ -91,7 +110,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
 
   const refresh = useCallback(
     () =>
-      api<{ conversations: Conversation[] }>("/api/atendimento/conversas")
+      api<{ conversations: Conversation[]; aiEnabled: boolean }>("/api/atendimento/conversas")
         .then(applyList)
         .catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : "Erro ao carregar as conversas.")),
     [applyList],
@@ -168,6 +187,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   }
 
   return (
+    <AiEnabledContext.Provider value={aiOn}>
     <div className={`kb-page container-shell at-page${view === "conversas" ? " at-page-inbox" : ""}`}>
       <div className="kb-toolbar at-toolbar">
         <h1 className="at-title">Atendimento</h1>
@@ -191,6 +211,17 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
               {alerts === "denied" ? "Avisos bloqueados" : "Ativar avisos"}
             </button>
           ) : null}
+          <button
+            aria-pressed={aiOn}
+            className={`at-btn at-toolbar-btn at-ai-toggle${aiOn ? " is-on" : ""}`}
+            disabled={aiBusy || me.role !== "admin"}
+            onClick={() => void toggleAi()}
+            title={me.role === "admin" ? (aiOn ? "A IA responde os clientes. Clique para desligar." : "Só vendedores respondem. Clique para ligar a IA.") : "Só administradores ligam ou desligam a IA."}
+            type="button"
+          >
+            {aiOn ? <Bot aria-hidden="true" size={16} /> : <BotOff aria-hidden="true" size={16} />} IA {aiOn ? "ligada" : "desligada"}
+          </button>
+          <ThemeToggle />
           <button className="at-btn at-toolbar-btn" onClick={() => setEditingReplies(true)} type="button">
             <Zap aria-hidden="true" size={16} /> Mensagens rápidas
           </button>
@@ -234,5 +265,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
 
       {editingReplies ? <QuickRepliesDialog onChanged={setQuickReplies} onClose={closeReplies} quickReplies={quickReplies} /> : null}
     </div>
+    </AiEnabledContext.Provider>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import "@/components/staff/atendimento/atendimento.css";
+import "@/components/staff/atendimento/atendimento-dark.css";
 import Link from "next/link";
 import { ArrowLeft, Bot, Clock, MessagesSquare, RefreshCw, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/components/staff/atendimento/shared";
+import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import type { TeamReport } from "@/lib/atendimento/report";
 
 type Period = "hoje" | "7" | "30";
@@ -72,6 +74,7 @@ export function ReportApp() {
             </button>
           ))}
         </div>
+        <ThemeToggle className="at-btn" />
         <button aria-label="Atualizar" className="at-btn at-btn-quiet" disabled={loading} onClick={() => void load(period)} type="button">
           <RefreshCw aria-hidden="true" size={15} /> Atualizar
         </button>
