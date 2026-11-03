@@ -1,5 +1,5 @@
 import { atendimentoDb, deliverInBackground, json, readJson, text, withStaff } from "@/lib/atendimento/server";
-import { sendStaffMessage } from "@/lib/atendimento/service";
+import { addNote, sendStaffMessage } from "@/lib/atendimento/service";
 import { getConversation } from "@/lib/atendimento/repository";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,10 @@ export const POST = withStaff(async (staff, request, context: RouteContext<"/api
   const { id } = await context.params;
   const body = await readJson(request);
   const db = atendimentoDb();
+  if (body.note === true) {
+    // Nota interna: fica só no painel.
+    return json({ message: addNote(db, id, staff, text(body.text, 2000)), conversation: getConversation(db, id) }, 201);
+  }
   const message = sendStaffMessage(db, id, staff, text(body.text), { sign: body.sign !== false });
   deliverInBackground(db, [message]);
   return json({ message, conversation: getConversation(db, id) }, 201);

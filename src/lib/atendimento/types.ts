@@ -46,6 +46,8 @@ export type Conversation = {
   assignedStaffName: string | null;
   /** Resumo que a IA mantém (nome, interesse, pendência). */
   summary: string;
+  /** Etiquetas da equipe (ex.: "Urgente", "Pago"). */
+  tags: string[];
   /** Motivo do pedido de vendedor (quando a IA passa a conversa). */
   handoffReason: string | null;
   lastMessageAt: string;
@@ -59,7 +61,13 @@ export type Conversation = {
   updatedAt: string;
 };
 
-export type AuthorKind = "cliente" | "ia" | "vendedor" | "sistema";
+export type AuthorKind = "cliente" | "ia" | "vendedor" | "sistema" | "nota";
+
+/** Avisos do sistema e notas internas: só a equipe vê; nunca vão ao cliente nem à IA. */
+export const isInternal = (author: AuthorKind) => author === "sistema" || author === "nota";
+
+/** Etiquetas sugeridas (as já usadas pela equipe também aparecem). */
+export const DEFAULT_TAGS = ["Urgente", "Revelação", "Brindes", "Pago", "Retirar", "Orçamento enviado"];
 
 export type Message = {
   /** Sequência crescente: o painel pede só o que veio depois do último número que já tem. */

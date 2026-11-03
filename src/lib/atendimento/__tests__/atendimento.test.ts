@@ -8,15 +8,17 @@ import {
   finishConversation,
   getConversation,
   listMessages,
+  knownTags,
   listContactMedia,
   listQuickReplies,
+  setConversationTags,
   markConversationRead,
   moveConversation,
   returnToAi,
   runAtendimentoMigrations,
   saveQuickReply,
 } from "@/lib/atendimento/repository";
-import { receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { addNote, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
@@ -481,6 +483,42 @@ describe("álbum de fotos na conversa", () => {
     ]);
     expect(shape(blocks)).toEqual(["album:4", "album:4", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg"]);
     expect(blocks[1].previous?.author).toBe("cliente");
+  });
+});
+
+describe("notas internas e etiquetas", () => {
+  it("nota: qualquer um da equipe escreve, não muda prévia/não lidas, não vai à IA nem ao WhatsApp e não trava a IA", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, parseInbound({ externalId: "N1", chatId: "5511944443333@s.whatsapp.net", phone: "5511944443333", text: "quanto custa?" }));
+    const before = getConversation(db, id);
+    const note = addNote(db, id, bruno, "Cliente antigo, dar desconto");
+    expect(note).toMatchObject({ author: "nota", authorName: "Bruno Lima", deliveredText: "" });
+    const after = getConversation(db, id);
+    expect([after.lastMessagePreview, after.unread]).toEqual([before.lastMessagePreview, before.unread]);
+    let seen: string[] = [];
+    const created = await runAi(db, id, async ({ messages }) => {
+      seen = messages.map((message) => message.author);
+      return { reply: "Qual o tamanho?" };
+    });
+    expect(created).toHaveLength(1); // a nota (última) não impede a IA de responder o cliente
+    const sent: string[] = [];
+    await deliverToWhatsApp(db, [note], { url: "http://p", token: "t" }, (async (_url: string, init: RequestInit) => {
+      sent.push(String(init.body));
+      return new Response("{}");
+    }) as unknown as typeof fetch);
+    expect(sent).toHaveLength(0);
+    expect(seen).toContain("nota"); // a IA recebe a lista, mas o conector real tira notas (ver hermesBrain)
+    expect(() => addNote(db, id, ana, "  ")).toThrow(AtendimentoError);
+  });
+
+  it("etiquetas: sem repetir, até 8, 24 letras; sugestões trazem as usadas primeiro", () => {
+    const { id } = newConversation();
+    const conversation = setConversationTags(db, id, ["Urgente", "urgente", "  Pago  ", "x".repeat(40), 7, "", "a", "b", "c", "d", "e", "f"]);
+    expect(conversation.tags).toEqual(["Urgente", "Pago", "x".repeat(24), "7", "a", "b", "c", "d"]);
+    const other = newConversation();
+    setConversationTags(db, other.id, ["Casamento", "Pago"]);
+    expect(knownTags(db).slice(0, 3)).toEqual(["Pago", "Urgente", "x".repeat(24)]);
+    expect(knownTags(db)).toContain("Revelação");
+    expect(knownTags(db).filter((tag) => tag.toLowerCase() === "urgente")).toHaveLength(1);
   });
 });
 

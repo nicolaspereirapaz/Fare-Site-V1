@@ -13,7 +13,7 @@ import {
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isSellerStatus, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isInternal, isSellerStatus, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"). Não chama a IA. */
 export function recordCustomerMessage(
@@ -52,7 +52,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
       const conversation = getConversation(db, conversationId);
       if (conversation.status !== "ia") return created;
       const messages = listMessages(db, conversationId);
-      if (messages.filter((message) => message.author !== "sistema").at(-1)?.author !== "cliente") return created;
+      if (messages.filter((message) => !isInternal(message.author)).at(-1)?.author !== "cliente") return created;
       const lastSeq = messages.at(-1)?.seq ?? 0;
 
       const result = await brain({ conversation, messages });
@@ -91,6 +91,14 @@ export async function receiveCustomerMessage(
 /** "*Ana:*\nTexto" — negrito do WhatsApp com o primeiro nome do vendedor. */
 export function signedText(staffName: string, text: string) {
   return `*${firstName(staffName)}:*\n${text}`;
+}
+
+/** Nota interna: qualquer pessoa da equipe escreve (não precisa assumir); o cliente e a IA nunca veem. */
+export function addNote(db: DatabaseSync, conversationId: string, staff: StaffActor, text: string): Message {
+  const body = text.trim();
+  if (!body) throw new AtendimentoError("INVALID_REQUEST", "Nota vazia.");
+  getConversation(db, conversationId);
+  return addMessage(db, { conversationId, author: "nota", authorName: staff.name, body });
 }
 
 /** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). Mesma regra: só quem assumiu. */

@@ -1,5 +1,5 @@
 import type { Brain, BrainResult } from "@/lib/atendimento/simulatedBrain";
-import type { Message } from "@/lib/atendimento/types";
+import { isInternal, type Message } from "@/lib/atendimento/types";
 
 /**
  * IA REAL: o mesmo "cérebro" do bot do WhatsApp (regras, FAQ, horário e modelo da Fare Foto),
@@ -54,7 +54,7 @@ export function toWhatsAppFormat(text: string) {
 
 const toServiceMessages = (messages: Message[]) =>
   messages
-    .filter((message) => message.author !== "sistema")
+    .filter((message) => !isInternal(message.author))
     .map((message) => ({
       author: message.author,
       text: message.media ? `${MEDIA_NOTE[message.media.kind]}${message.body ? ` ${message.body}` : ""}` : message.body,

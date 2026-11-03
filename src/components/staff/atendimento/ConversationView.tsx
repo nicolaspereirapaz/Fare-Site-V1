@@ -14,6 +14,7 @@ import {
   MessageSquareText,
   Send,
   Smartphone,
+  StickyNote,
   Undo2,
   UserPlus,
   UserRound,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
 import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
+import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
@@ -73,7 +75,7 @@ const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g,
 export function matchesQuery(conversation: Conversation, query: string) {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const haystack = fold(`${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.assignedStaffName ?? ""}`);
+  const haystack = fold(`${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.assignedStaffName ?? ""} ${conversation.tags.join(" ")}`);
   return words.every((word) => haystack.includes(word));
 }
 
@@ -167,6 +169,7 @@ export function ConversationView({
                     <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
                     {conversation.status === "aguardando_vendedor" && conversation.waitingSince ? <span className="at-wait">{waitingFor(conversation.waitingSince, now)}</span> : null}
                     {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
+                    <TagChips small tags={conversation.tags} />
                     {conversation.unread ? <span className="at-unread" aria-label={`${conversation.unread} não lidas`}>{conversation.unread}</span> : null}
                   </span>
                 </span>
@@ -325,6 +328,7 @@ function ChatPanel({
               {formatPhone(conversation.phone)}
               {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
             </p>
+            <TagEditor conversation={conversation} onChanged={onChanged} />
           </div>
           <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
           <div className="at-chat-actions">
@@ -545,6 +549,19 @@ function AlbumBubble({ messages, previous, onOpenPhoto, onResend }: { messages: 
 function MessageBubble({ message, previous, onResend, onOpenPhoto }: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void }) {
   const dayLabel = dayLabelFor(message, previous);
   const showDay = Boolean(dayLabel);
+  if (message.author === "nota") {
+    return (
+      <>
+        {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
+        <div className="at-note">
+          <span className="at-note-head">
+            <StickyNote aria-hidden="true" size={12} /> Nota interna · {message.authorName} · {clockTime(message.createdAt)}
+          </span>
+          <WhatsAppText text={message.body} />
+        </div>
+      </>
+    );
+  }
   if (message.author === "sistema") {
     return (
       <>
@@ -605,6 +622,8 @@ function Composer({
   const [files, setFiles] = useState<File[]>([]);
   const [original, setOriginal] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  // Nota interna: só a equipe vê (não vai ao cliente nem à IA). Quem não assumiu a conversa também pode anotar.
+  const [noteMode, setNoteMode] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
 
@@ -661,7 +680,7 @@ function Composer({
   }
 
   async function send() {
-    if (files.length) return sendFiles();
+    if (files.length && !noteMode) return sendFiles();
     const body = text.trim();
     if (!body || sending) return;
     setSending(true);
@@ -669,7 +688,7 @@ function Composer({
     try {
       const data = await api<{ message: Message; conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}/mensagens`, {
         method: "POST",
-        body: { text: body, sign },
+        body: noteMode ? { text: body, note: true } : { text: body, sign },
       });
       setText("");
       onSent(data.message, data.conversation);
@@ -706,7 +725,7 @@ function Composer({
     }
   }
 
-  if (!mine) {
+  if (!mine && !noteMode) {
     return (
       <div className="at-composer at-composer-locked">
         <p>
@@ -716,9 +735,14 @@ function Composer({
               ? `${conversation.assignedStaffName ?? "Outro vendedor"} está com esta conversa (${CONVERSATION_STATUS_LABELS[conversation.status]}).`
               : "Assuma a conversa para responder o cliente."}
         </p>
-        <button className="at-btn at-btn-primary" onClick={onAssume} type="button">
-          <Hand aria-hidden="true" size={16} /> Assumir conversa
-        </button>
+        <span className="at-order-actions">
+          <button className="at-btn" onClick={() => setNoteMode(true)} title="Anotação só para a equipe" type="button">
+            <StickyNote aria-hidden="true" size={16} /> Nota interna
+          </button>
+          <button className="at-btn at-btn-primary" onClick={onAssume} type="button">
+            <Hand aria-hidden="true" size={16} /> Assumir conversa
+          </button>
+        </span>
       </div>
     );
   }
@@ -735,7 +759,7 @@ function Composer({
         addFiles(event.dataTransfer.files);
       }}
     >
-      {files.length ? (
+      {files.length && !noteMode ? (
         <div className="at-attach-tray">
           <div className="at-attach-head">
             <strong>{files.length} arquivo(s) para enviar</strong>
@@ -795,9 +819,21 @@ function Composer({
         <button aria-label="Mensagens rápidas" className="at-icon-btn" onClick={() => setPickerOpen((open) => !open)} title="Mensagens rápidas (ou digite /)" type="button">
           <Zap aria-hidden="true" size={18} />
         </button>
-        <button aria-label="Enviar foto ou arquivo" className="at-icon-btn" onClick={() => filePicker.current?.click()} title="Enviar fotos ou arquivos (ou arraste/cole aqui)" type="button">
-          <Paperclip aria-hidden="true" size={18} />
+        <button
+          aria-label="Nota interna"
+          aria-pressed={noteMode}
+          className={`at-icon-btn${noteMode ? " is-note" : ""}`}
+          onClick={() => setNoteMode((on) => !on)}
+          title={noteMode ? "Voltar a responder o cliente" : "Nota interna (só a equipe vê)"}
+          type="button"
+        >
+          <StickyNote aria-hidden="true" size={18} />
         </button>
+        {!noteMode ? (
+          <button aria-label="Enviar foto ou arquivo" className="at-icon-btn" onClick={() => filePicker.current?.click()} title="Enviar fotos ou arquivos (ou arraste/cole aqui)" type="button">
+            <Paperclip aria-hidden="true" size={18} />
+          </button>
+        ) : null}
         <input
           accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
           hidden
@@ -823,15 +859,22 @@ function Composer({
               addFiles(event.clipboardData.files);
             }
           }}
-          placeholder={files.length ? "Legenda (opcional)…" : "Digite a mensagem… ( / para mensagens rápidas)"}
+          className={noteMode ? "at-note-mode" : undefined}
+          placeholder={noteMode ? "Nota interna — só a equipe vê…" : files.length ? "Legenda (opcional)…" : "Digite a mensagem… ( / para mensagens rápidas)"}
           ref={input}
           rows={Math.min(6, Math.max(1, text.split("\n").length))}
           value={text}
         />
-        <button aria-label="Enviar" className="at-send" disabled={(!text.trim() && !files.length) || sending} onClick={() => void send()} type="button">
+        <button aria-label={noteMode ? "Salvar nota" : "Enviar"} className={`at-send${noteMode ? " is-note" : ""}`} disabled={(!text.trim() && (!files.length || noteMode)) || sending} onClick={() => void send()} type="button">
           <Send aria-hidden="true" size={18} />
         </button>
       </div>
+      {noteMode ? (
+        <p className="at-sign at-note-hint">
+          <StickyNote aria-hidden="true" size={13} /> Nota interna: fica só no painel. O cliente e a IA não veem.
+          {!mine ? " Para responder o cliente, assuma a conversa." : null}
+        </p>
+      ) : (
       <label className="at-sign">
         <input
           checked={sign}
@@ -844,6 +887,7 @@ function Composer({
         Assinar como <strong>{me.name.split(" ")[0]}</strong>
         <span className="at-muted"> — o cliente vê “*{me.name.split(" ")[0]}:*” antes do texto</span>
       </label>
+      )}
     </div>
   );
 }

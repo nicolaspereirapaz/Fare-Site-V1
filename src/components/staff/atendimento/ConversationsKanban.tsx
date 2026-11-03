@@ -6,6 +6,7 @@ import { Bot, UserRound } from "lucide-react";
 import { KanbanBoard, KanbanColumn } from "@/components/backofficeShared";
 import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, isSellerStatus, type ConversationStatus } from "@/lib/atendimento/types";
 import { displayName, formatPhone, initials, shortTime, waitingFor, type Conversation } from "@/components/staff/atendimento/shared";
+import { TagChips } from "@/components/staff/atendimento/tags";
 
 const EMPTY: Record<ConversationStatus, string> = {
   ia: "Nenhum cliente com a IA agora.",
@@ -102,6 +103,7 @@ function CardBody({ conversation }: { conversation: Conversation }) {
         {conversation.lastMessagePreview || "Sem mensagens"}
       </p>
       {conversation.status === "aguardando_vendedor" && conversation.handoffReason ? <p className="at-kb-reason">{conversation.handoffReason}</p> : null}
+      <TagChips small tags={conversation.tags} />
       <div className="kb-card-meta">
         {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
         {isSellerStatus(conversation.status) && conversation.assignedStaffName ? <span className="at-kb-seller"><UserRound aria-hidden="true" size={12} /> {conversation.assignedStaffName.split(" ")[0]}</span> : null}

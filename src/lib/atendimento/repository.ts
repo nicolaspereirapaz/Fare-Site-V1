@@ -8,6 +8,8 @@ import {
   type Channel,
   type Conversation,
   type ConversationStatus,
+  DEFAULT_TAGS,
+  isInternal,
   type MediaKind,
   type Message,
   type QuickReply,
@@ -87,6 +89,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "media_name", "TEXT");
   addColumn(db, "atd_messages", "media_size", "INTEGER");
   addColumn(db, "atd_messages", "media_thumb", "INTEGER NOT NULL DEFAULT 0");
+  // v4: etiquetas da conversa (lista JSON).
+  addColumn(db, "atd_conversations", "tags", "TEXT NOT NULL DEFAULT '[]'");
   seedQuickReplies(db);
 }
 
@@ -116,6 +120,46 @@ function addColumn(db: DatabaseSync, table: string, column: string, definition: 
 
 type ConversationRow = Record<string, string | number | null>;
 
+function parseTags(value: unknown): string[] {
+  try {
+    const list: unknown = JSON.parse(String(value ?? "[]"));
+    return Array.isArray(list) ? list.filter((tag): tag is string => typeof tag === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Etiquetas: sem repetir (maiúsculas não contam), até 8 por conversa, 24 letras cada. */
+export function normalizeTags(tags: unknown): string[] {
+  const list = Array.isArray(tags) ? tags : [];
+  const result: string[] = [];
+  for (const raw of list) {
+    const tag = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 24);
+    if (tag && !result.some((existing) => existing.toLowerCase() === tag.toLowerCase())) result.push(tag);
+  }
+  return result.slice(0, 8);
+}
+
+export function setConversationTags(db: DatabaseSync, id: string, tags: unknown): Conversation {
+  getConversation(db, id);
+  db.prepare("UPDATE atd_conversations SET tags = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(normalizeTags(tags)), nowIso(), id);
+  return getConversation(db, id);
+}
+
+/** Etiquetas para sugerir: as padrão e todas já usadas (mais usadas primeiro). */
+export function knownTags(db: DatabaseSync): string[] {
+  const counts = new Map<string, { tag: string; count: number }>();
+  for (const row of db.prepare("SELECT tags FROM atd_conversations WHERE tags <> '[]'").all() as ConversationRow[]) {
+    for (const tag of parseTags(row.tags)) {
+      const key = tag.toLowerCase();
+      counts.set(key, { tag: counts.get(key)?.tag ?? tag, count: (counts.get(key)?.count ?? 0) + 1 });
+    }
+  }
+  const used = [...counts.values()].sort((a, b) => b.count - a.count).map((entry) => entry.tag);
+  const all = [...used, ...DEFAULT_TAGS];
+  return all.filter((tag, index) => all.findIndex((other) => other.toLowerCase() === tag.toLowerCase()) === index).slice(0, 40);
+}
+
 function toConversation(row: ConversationRow): Conversation {
   const status = String(row.status);
   return {
@@ -128,6 +172,7 @@ function toConversation(row: ConversationRow): Conversation {
     assignedStaffId: row.assigned_staff_id === null ? null : String(row.assigned_staff_id),
     assignedStaffName: row.assigned_staff_name === null ? null : String(row.assigned_staff_name),
     summary: String(row.summary ?? ""),
+    tags: parseTags(row.tags),
     handoffReason: row.handoff_reason === null ? null : String(row.handoff_reason),
     lastMessageAt: String(row.last_message_at),
     lastMessagePreview: String(row.last_message_preview ?? ""),
@@ -264,7 +309,7 @@ export function addMessage(
   if (!body && !input.media) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
   const at = nowIso();
   const id = randomUUID();
-  const delivered = input.author === "sistema" ? "" : (input.deliveredText ?? body);
+  const delivered = isInternal(input.author) ? "" : (input.deliveredText ?? body);
   db.prepare(
     "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, external_id, delivery, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), input.externalId ?? null, input.delivery ?? "", at);
@@ -279,7 +324,7 @@ export function addMessage(
       id,
     );
   }
-  if (input.author !== "sistema") {
+  if (!isInternal(input.author)) {
     // "Não lidas" só conta o que a equipe precisa ler: enquanto a IA atende, ela mesma responde.
     db.prepare(
       `UPDATE atd_conversations SET last_message_at = ?, last_message_preview = ?, last_message_author = ?, updated_at = ?,

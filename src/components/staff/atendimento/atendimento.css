@@ -292,6 +292,26 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-album-tile:hover img { filter: brightness(.92); }
 .at-album-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 18, 38, .55); color: #fff; font-size: 1.6rem; font-weight: 700; }
 
+/* Notas internas */
+.at-note { align-self: center; width: min(78%, 560px); margin: 8px 0; padding: 7px 12px 8px; border: 1px dashed #d9b44a; border-radius: 10px; background: #fff8dc; color: #4a3a0a; font-size: 0.86rem; line-height: 1.42; overflow-wrap: anywhere; }
+.at-note-head { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; color: #8a6a10; font-size: 0.72rem; font-weight: 700; }
+.at-composer textarea.at-note-mode { border-color: #d9b44a; background: #fff8dc; }
+.at-icon-btn.is-note { background: #fff1c2; color: #8a6a10; }
+.at-send.is-note { background: #b7791f; }
+.at-note-hint { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; color: #8a6a10; }
+
+/* Etiquetas */
+.at-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.at-tag { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; line-height: 1.6; white-space: nowrap; }
+.at-tags.is-small .at-tag { padding: 0 6px; font-size: 0.66rem; }
+.at-tag button { display: grid; place-items: center; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; opacity: .65; }
+.at-tag button:hover { opacity: 1; }
+.at-tag-editor { margin-top: 4px; }
+.at-tag-add { display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border: 1px dashed #c3c8d8; border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.at-tag-add:hover { border-color: var(--navy); color: var(--navy); }
+.at-tag-input { width: 130px; padding: 2px 8px; border: 1px solid var(--navy); border-radius: 999px; font: inherit; font-size: 0.75rem; }
+.at-card-kb .at-tags { margin: 2px 0 4px; }
+
 /* Pedido de fotos a partir da conversa */
 .at-order-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .at-order-form { display: grid; gap: 10px; margin: 12px 22px 0; padding: 14px 16px; border: 1px solid #d5d9e6; border-radius: 12px; background: #fafbfd; font-size: 0.88rem; }

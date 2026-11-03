@@ -1,6 +1,7 @@
 import { AtendimentoError, getConversation, listMessages } from "@/lib/atendimento/repository";
 import { activeBrain, atendimentoDb, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
 import { isAiThinking, recordCustomerMessage } from "@/lib/atendimento/service";
+import { isInternal } from "@/lib/atendimento/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   const since = Number(new URL(request.url).searchParams.get("depois") ?? 0) || 0;
   const all = listMessages(atendimentoDb(), id, since);
   const messages = all
-    .filter((message) => message.author !== "sistema")
+    .filter((message) => !isInternal(message.author))
     .map(({ seq, id: messageId, author, deliveredText, media, createdAt }) => ({ seq, id: messageId, fromCustomer: author === "cliente", text: deliveredText, media, createdAt }));
   return json({
     conversation: { id: conversation.id, phone: conversation.phone, contactName: conversation.contactName },

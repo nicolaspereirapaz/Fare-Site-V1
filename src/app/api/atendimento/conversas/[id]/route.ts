@@ -7,6 +7,7 @@ import {
   getMessage,
   listMessages,
   recentDeliveries,
+  setConversationTags,
   markConversationRead,
   moveConversation,
   returnToAi,
@@ -47,6 +48,8 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
   // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
   if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) respondInBackground(db, id);
   switch (body.action) {
+    case "etiquetas":
+      return json({ conversation: setConversationTags(db, id, body.tags) });
     case "reenviar": {
       // Mensagem que falhou no WhatsApp: tenta de novo.
       const message = getMessage(db, text(body.messageId, 80));
