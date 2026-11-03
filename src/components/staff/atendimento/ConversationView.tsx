@@ -22,7 +22,9 @@ import {
   Zap,
 } from "lucide-react";
 import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
-import { formatBytes, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
+import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
+import { groupMessages } from "@/lib/atendimento/albums";
+import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
   CONVERSATION_STATUSES,
   CONVERSATION_STATUS_COLORS,
@@ -225,6 +227,11 @@ function ChatPanel({
   const [returning, setReturning] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const blocks = useMemo(() => groupMessages(messages), [messages]);
+  const photos = useMemo(() => messages.filter((message) => message.media?.mime.startsWith("image/")), [messages]);
+  const openPhoto = (id: string) => setViewerIndex(Math.max(0, photos.findIndex((photo) => photo.id === id)));
+  const resend = (id: string) => void act("reenviar", { messageId: id });
   const lastSeq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -355,6 +362,9 @@ function ChatPanel({
         </header>
 
         {mediaOpen ? <MediaDialog conversation={conversation} onClose={() => setMediaOpen(false)} /> : null}
+        {viewerIndex !== null && photos.length ? (
+          <PhotoViewer index={Math.min(viewerIndex, photos.length - 1)} onClose={() => setViewerIndex(null)} onIndex={setViewerIndex} photos={photos} />
+        ) : null}
         {returning ? (
           <ReturnToAiForm busy={busy} onCancel={() => setReturning(false)} onConfirm={(note) => void act("devolver", { note })} />
         ) : null}
@@ -386,9 +396,13 @@ function ChatPanel({
         >
           {loading ? <p className="at-muted at-center">Carregando…</p> : null}
           {!loading && !messages.length ? <p className="at-muted at-center">Nenhuma mensagem ainda.</p> : null}
-          {messages.map((message, index) => (
-            <MessageBubble key={message.id} message={message} previous={messages[index - 1]} onResend={(id) => void act("reenviar", { messageId: id })} />
-          ))}
+          {blocks.map((block) =>
+            block.kind === "album" ? (
+              <AlbumBubble key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} />
+            ) : (
+              <MessageBubble key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} />
+            ),
+          )}
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
         </div>
 
@@ -454,10 +468,83 @@ function DeliveryMark({ message, onResend }: { message: Message; onResend: (id: 
   return null;
 }
 
-function MessageBubble({ message, previous, onResend }: { message: Message; previous?: Message; onResend: (id: string) => void }) {
+function dayLabelFor(message: Message, previous?: Message) {
   const day = new Date(message.createdAt).toDateString();
   const showDay = !previous || new Date(previous.createdAt).toDateString() !== day;
-  const dayLabel = showDay ? new Date(message.createdAt).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : null;
+  return showDay ? new Date(message.createdAt).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : null;
+}
+
+function AuthorLabel({ message }: { message: Message }) {
+  const fromPhone = message.author === "vendedor" && message.authorName === "Celular";
+  const label = message.author === "ia" ? "IA" : fromPhone ? "Celular (WhatsApp)" : message.author === "vendedor" ? message.authorName : null;
+  if (!label) return null;
+  return (
+    <span className="at-bubble-author">
+      {message.author === "ia" ? <Bot aria-hidden="true" size={12} /> : fromPhone ? <Smartphone aria-hidden="true" size={12} /> : <UserRound aria-hidden="true" size={12} />} {label}
+    </span>
+  );
+}
+
+/** Lote de fotos seguidas: mosaico 2×2; a 4ª mostra "+N"; clicar abre o visualizador. */
+function AlbumBubble({ messages, previous, onOpenPhoto, onResend }: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void }) {
+  const first = messages[0];
+  const last = messages[messages.length - 1];
+  const dayLabel = dayLabelFor(first, previous);
+  const sameAuthor = previous && !dayLabel && previous.author === first.author && previous.authorName === first.authorName;
+  const failed = messages.filter((message) => message.delivery === "falhou");
+  const pending = messages.some((message) => message.delivery === "pendente");
+  const allSent = messages.every((message) => message.delivery === "enviada");
+  const extra = messages.length - 4;
+  return (
+    <>
+      {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
+      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`}>
+        {!sameAuthor ? <AuthorLabel message={first} /> : null}
+        <div className="at-album-grid">
+          {messages.slice(0, 4).map((message, index) => (
+            <button
+              aria-label={index === 3 && extra > 0 ? `Ver as ${messages.length} fotos` : `Ver foto ${index + 1} de ${messages.length}`}
+              className="at-album-tile"
+              key={message.id}
+              onClick={() => onOpenPhoto(message.id)}
+              type="button"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- miniatura privada servida pela API */}
+              <img alt="" loading="lazy" src={mediaUrl(message.id, { mini: Boolean(message.media?.hasThumb) })} />
+              {index === 3 && extra > 0 ? <span className="at-album-more">+{extra}</span> : null}
+            </button>
+          ))}
+        </div>
+        {first.body ? (
+          <div className="at-bubble-text">
+            <WhatsAppText text={first.body} />
+          </div>
+        ) : null}
+        <span className="at-bubble-time">
+          {messages.length} fotos ·{" "}
+          {failed.length ? (
+            <span className="at-delivery is-failed" title={failed[0].deliveryError ?? "Falha no envio"}>
+              {failed.length} não enviada{failed.length > 1 ? "s" : ""} ·{" "}
+              <button className="at-resend" onClick={() => failed.forEach((message) => onResend(message.id))} type="button">
+                reenviar
+              </button>{" "}
+              ·{" "}
+            </span>
+          ) : pending ? (
+            <span className="at-delivery">enviando… · </span>
+          ) : allSent ? (
+            <span className="at-delivery is-sent" title="Enviadas no WhatsApp">✓ </span>
+          ) : null}
+          {clockTime(last.createdAt)}
+        </span>
+      </div>
+    </>
+  );
+}
+
+function MessageBubble({ message, previous, onResend, onOpenPhoto }: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void }) {
+  const dayLabel = dayLabelFor(message, previous);
+  const showDay = Boolean(dayLabel);
   if (message.author === "sistema") {
     return (
       <>
@@ -467,18 +554,12 @@ function MessageBubble({ message, previous, onResend }: { message: Message; prev
     );
   }
   const sameAuthor = previous && previous.author === message.author && previous.authorName === message.authorName && !showDay;
-  const fromPhone = message.author === "vendedor" && message.authorName === "Celular";
-  const label = message.author === "ia" ? "IA" : fromPhone ? "Celular (WhatsApp)" : message.author === "vendedor" ? message.authorName : null;
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
       <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`}>
-        {label && !sameAuthor ? (
-          <span className="at-bubble-author">
-            {message.author === "ia" ? <Bot aria-hidden="true" size={12} /> : fromPhone ? <Smartphone aria-hidden="true" size={12} /> : <UserRound aria-hidden="true" size={12} />} {label}
-          </span>
-        ) : null}
-        <MessageMediaView message={message} />
+        {!sameAuthor ? <AuthorLabel message={message} /> : null}
+        <MessageMediaView message={message} onOpen={onOpenPhoto} />
         {message.body ? (
           <div className="at-bubble-text">
             <WhatsAppText text={message.body} />

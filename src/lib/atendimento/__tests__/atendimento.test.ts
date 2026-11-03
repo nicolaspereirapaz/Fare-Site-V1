@@ -22,6 +22,7 @@ import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/ate
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 import { crc32, safeFileName } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
+import { groupMessages } from "@/lib/atendimento/albums";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -444,6 +445,42 @@ describe("mídias", () => {
     expect(safeFileName("..\\..\\etc/pass:wd", "text/plain")).toBe("pass_wd");
     expect(safeFileName("", "image/jpeg")).toBe("arquivo.jpg");
     expect(safeFileName("Foto Final.JPG", "image/jpeg")).toBe("Foto Final.jpg");
+  });
+});
+
+describe("álbum de fotos na conversa", () => {
+  let n = 0;
+  const msg = (author: "cliente" | "vendedor", minute: number, extra: { body?: string; mime?: string } = {}) =>
+    ({
+      seq: ++n,
+      id: `m${n}`,
+      conversationId: "c",
+      author,
+      authorName: author === "vendedor" ? "Ana" : "",
+      body: extra.body ?? "",
+      deliveredText: extra.body ?? "",
+      delivery: "",
+      deliveryError: null,
+      media: extra.mime === "" ? null : { kind: "imagem", mime: extra.mime ?? "image/jpeg", name: "foto.jpg", size: 1, hasThumb: true },
+      createdAt: new Date(2026, 10, 3, 10, minute).toISOString(),
+    }) as Parameters<typeof groupMessages>[0][number];
+  const shape = (blocks: ReturnType<typeof groupMessages>) => blocks.map((block) => (block.kind === "album" ? `album:${block.messages.length}` : "msg"));
+
+  it("4+ fotos seguidas do mesmo autor viram um álbum; 3 continuam soltas", () => {
+    expect(shape(groupMessages([msg("cliente", 0, { body: "oi", mime: "" }), msg("cliente", 1, { body: "essas" }), msg("cliente", 1), msg("cliente", 1), msg("cliente", 2), msg("cliente", 2)]))).toEqual(["msg", "album:5"]);
+    expect(shape(groupMessages([msg("cliente", 0), msg("cliente", 0), msg("cliente", 0)]))).toEqual(["msg", "msg", "msg"]);
+  });
+
+  it("separa por autor, por legenda no meio, por PDF e por intervalo longo", () => {
+    const blocks = groupMessages([
+      ...[0, 0, 0, 0].map((m) => msg("cliente", m)),
+      ...[1, 1, 1, 1].map((m) => msg("vendedor", m)),
+      msg("cliente", 2), msg("cliente", 2), msg("cliente", 2, { body: "e essa" }), msg("cliente", 2), msg("cliente", 2),
+      msg("cliente", 3, { mime: "application/pdf" }),
+      msg("cliente", 4), msg("cliente", 4), msg("cliente", 20), msg("cliente", 20),
+    ]);
+    expect(shape(blocks)).toEqual(["album:4", "album:4", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg", "msg"]);
+    expect(blocks[1].previous?.author).toBe("cliente");
   });
 });
 

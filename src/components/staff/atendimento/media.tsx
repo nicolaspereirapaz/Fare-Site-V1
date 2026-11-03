@@ -28,10 +28,19 @@ export async function uploadFile<T>(url: string, file: File, headers: Record<str
 }
 
 /** Foto, vídeo, áudio ou documento dentro do balão da conversa. */
-export function MessageMediaView({ message }: { message: Pick<Message, "id" | "media"> }) {
+export function MessageMediaView({ message, onOpen }: { message: Pick<Message, "id" | "media">; onOpen?: (messageId: string) => void }) {
   const media = message.media;
   if (!media) return null;
   const isImage = media.mime.startsWith("image/");
+  if (isImage && onOpen) {
+    return (
+      <button className="at-media-image" onClick={() => onOpen(message.id)} title={`${media.name} — ver em tamanho real`} type="button">
+        {/* eslint-disable-next-line @next/next/no-img-element -- arquivo privado servido pela API */}
+        <img alt={media.name || "Foto"} loading="lazy" src={mediaUrl(message.id, { mini: media.hasThumb })} />
+        {media.kind === "documento" ? <span className="at-media-badge">qualidade original</span> : null}
+      </button>
+    );
+  }
   if (isImage) {
     return (
       <a className="at-media-image" href={mediaUrl(message.id)} rel="noopener" target="_blank" title={`${media.name} — abrir em tamanho real`}>
