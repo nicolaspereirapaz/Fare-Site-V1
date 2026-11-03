@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import {
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardList,
   FileText,
   Hand,
@@ -14,6 +16,7 @@ import {
   MessageSquareText,
   Send,
   Reply,
+  Search,
   Smartphone,
   StickyNote,
   Undo2,
@@ -27,6 +30,7 @@ import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
 import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
 import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { groupMessages } from "@/lib/atendimento/albums";
+import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
   CONVERSATION_STATUSES,
@@ -113,6 +117,20 @@ export function ConversationView({
 }) {
   const [filter, setFilter] = useState<ListFilter>("todas");
   const now = useNow();
+  // Busca dentro das mensagens (a partir de 3 letras), com pausa para não buscar a cada tecla.
+  const query = search.trim();
+  const [found, setFound] = useState<{ query: string; hits: MessageHit[] }>({ query: "", hits: [] });
+  const [focus, setFocus] = useState<{ conversationId: string; messageId: string; at: number } | null>(null);
+  useEffect(() => {
+    if (query.length < 3) return;
+    const timer = window.setTimeout(() => {
+      api<{ hits: MessageHit[] }>(`/api/atendimento/busca?q=${encodeURIComponent(query)}`)
+        .then((data) => setFound({ query, hits: data.hits }))
+        .catch(() => setFound({ query, hits: [] }));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const hits = query.length >= 3 && found.query === query ? found.hits : [];
   // Quem espera vendedor fica no topo (o mais antigo primeiro); o resto, pela última mensagem.
   const visible = conversations
     .filter((conversation) => matchesFilter(conversation, filter, me) && matchesQuery(conversation, search))
@@ -142,7 +160,7 @@ export function ConversationView({
           ))}
         </div>
         <div className="at-list-body">
-          {visible.length === 0 ? (
+          {visible.length === 0 && !hits.length ? (
             <div className="at-list-empty">
               <Inbox aria-hidden="true" size={22} />
               <p>{search ? "Nenhuma conversa encontrada." : "Nenhuma conversa aqui."}</p>
@@ -177,12 +195,38 @@ export function ConversationView({
               </button>
             ))
           )}
+          {hits.length ? (
+            <div className="at-hits">
+              <p className="at-hits-title">Nas mensagens ({hits.length}{hits.length >= 30 ? "+" : ""})</p>
+              {hits.map((hit) => (
+                <button
+                  className={`at-hit${focus?.messageId === hit.messageId ? " is-active" : ""}`}
+                  key={hit.messageId}
+                  onClick={() => {
+                    onSelect(hit.conversationId);
+                    setFocus({ conversationId: hit.conversationId, messageId: hit.messageId, at: Date.now() });
+                  }}
+                  type="button"
+                >
+                  <span className="at-item-top">
+                    <strong>{hit.contactName || formatPhone(hit.phone)}</strong>
+                    <span className="at-item-time">{shortTime(hit.createdAt, now)}</span>
+                  </span>
+                  <span className="at-hit-snippet">
+                    {hit.author === "nota" ? <StickyNote aria-label="Nota interna" size={12} /> : null}
+                    <Highlighted query={query} text={hit.snippet} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </aside>
 
       {selected ? (
         <ChatPanel
           conversation={selected}
+          focus={focus && focus.conversationId === selected.id ? focus : null}
           key={selected.id}
           me={me}
           onChanged={onConversationChanged}
@@ -210,14 +254,43 @@ function useNow(interval = 30_000) {
 }
 
 /** Conversa aberta: cabeçalho com ações, mensagens, campo de resposta e painel do cliente. */
+/** Rola até a mensagem e faz ela piscar (citação, busca). */
+function jumpToMessage(id: string) {
+  const element = document.getElementById(`msg-${id}`);
+  if (!element) return;
+  element.scrollIntoView({ behavior: "smooth", block: "center" });
+  element.classList.add("is-flash");
+  window.setTimeout(() => element.classList.remove("is-flash"), 1600);
+}
+
+/** Texto com as palavras procuradas marcadas. */
+function Highlighted({ text, query }: { text: string; query: string }) {
+  const words = foldText(query).split(/\s+/).filter((word) => word.length >= 2);
+  if (!words.length) return <>{text}</>;
+  const folded = foldText(text);
+  const marks = new Array<boolean>(text.length).fill(false);
+  for (const word of words) {
+    for (let index = folded.indexOf(word); index >= 0; index = folded.indexOf(word, index + 1)) marks.fill(true, index, index + word.length);
+  }
+  const parts: Array<{ text: string; mark: boolean }> = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const last = parts[parts.length - 1];
+    if (last && last.mark === marks[index]) last.text += text[index];
+    else parts.push({ text: text[index], mark: marks[index] });
+  }
+  return <>{parts.map((part, index) => (part.mark ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>))}</>;
+}
+
 function ChatPanel({
   conversation,
+  focus,
   me,
   quickReplies,
   onOpenQuickReplies,
   onChanged,
 }: {
   conversation: Conversation;
+  focus: { messageId: string; at: number } | null;
   me: StaffUser;
   quickReplies: QuickReply[];
   onOpenQuickReplies: () => void;
@@ -239,13 +312,27 @@ function ChatPanel({
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const lookup = (id: string) => byId.get(id);
-  /** Clicar na citação leva até a mensagem original (e pisca). */
-  const jumpTo = (id: string) => {
-    const element = document.getElementById(`msg-${id}`);
-    if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
-    element.classList.add("is-flash");
-    window.setTimeout(() => element.classList.remove("is-flash"), 1600);
+  const jumpTo = jumpToMessage;
+  // Veio da busca da lista: depois de carregar, vai até a mensagem encontrada.
+  useEffect(() => {
+    if (loading || !focus) return;
+    const timer = window.setTimeout(() => jumpToMessage(focus.messageId), 80);
+    return () => window.clearTimeout(timer);
+  }, [loading, focus]);
+  // Busca dentro desta conversa.
+  const [finding, setFinding] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [findIndex, setFindIndex] = useState(0);
+  const findMatches = useMemo(() => {
+    const words = foldText(findText).split(/\s+/).filter((word) => word.length >= 2);
+    if (!words.length) return [] as Message[];
+    return messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(message.body).includes(word))).reverse();
+  }, [findText, messages]);
+  const goToMatch = (index: number, list = findMatches) => {
+    if (!list.length) return;
+    const next = (index + list.length) % list.length;
+    setFindIndex(next);
+    jumpToMessage(list[next].id);
   };
 
   const lastSeq = useRef(0);
@@ -348,6 +435,9 @@ function ChatPanel({
           </div>
           <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
           <div className="at-chat-actions">
+            <button aria-label="Procurar nesta conversa" aria-pressed={finding} className="at-btn at-btn-quiet" onClick={() => setFinding((open) => !open)} title="Procurar nesta conversa" type="button">
+              <Search aria-hidden="true" size={16} />
+            </button>
             <button className="at-btn at-btn-quiet" onClick={() => setMediaOpen(true)} title="Fotos e arquivos do contato (baixar em lote)" type="button">
               <Images aria-hidden="true" size={16} /> Mídias
             </button>
@@ -381,6 +471,45 @@ function ChatPanel({
           </div>
         </header>
 
+        {finding ? (
+          <div className="at-find" role="search">
+            <Search aria-hidden="true" size={15} />
+            <input
+              aria-label="Procurar nesta conversa"
+              autoFocus
+              onChange={(event) => {
+                const value = event.target.value;
+                setFindText(value);
+                const words = foldText(value).split(/\s+/).filter((word) => word.length >= 2);
+                const list = words.length ? messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(message.body).includes(word))).reverse() : [];
+                goToMatch(0, list);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  goToMatch(findIndex + (event.shiftKey ? -1 : 1));
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  goToMatch(findIndex - 1);
+                }
+                if (event.key === "Escape") setFinding(false);
+              }}
+              placeholder="Procurar nesta conversa…"
+              value={findText}
+            />
+            <span className="at-muted">{findText.trim().length >= 2 ? (findMatches.length ? `${Math.min(findIndex + 1, findMatches.length)} de ${findMatches.length}` : "nada encontrado") : ""}</span>
+            <button aria-label="Anterior (mais nova)" className="at-icon-btn" disabled={!findMatches.length} onClick={() => goToMatch(findIndex - 1)} type="button">
+              <ChevronUp aria-hidden="true" size={16} />
+            </button>
+            <button aria-label="Próxima (mais antiga)" className="at-icon-btn" disabled={!findMatches.length} onClick={() => goToMatch(findIndex + 1)} type="button">
+              <ChevronDown aria-hidden="true" size={16} />
+            </button>
+            <button aria-label="Fechar a busca" className="at-icon-btn" onClick={() => setFinding(false)} type="button">
+              <X aria-hidden="true" size={16} />
+            </button>
+          </div>
+        ) : null}
         {mediaOpen ? <MediaDialog conversation={conversation} customers={customers} onClose={() => setMediaOpen(false)} /> : null}
         {viewerIndex !== null && photos.length ? (
           <PhotoViewer index={Math.min(viewerIndex, photos.length - 1)} onClose={() => setViewerIndex(null)} onIndex={setViewerIndex} photos={photos} />

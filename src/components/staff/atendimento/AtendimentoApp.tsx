@@ -4,7 +4,7 @@ import "@/components/staff/quoteEditor.css";
 import "@/components/staff/atendimento/atendimento.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bell, BellOff, FlaskConical, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
-import { ConversationView, isMine } from "@/components/staff/atendimento/ConversationView";
+import { ConversationView, isMine, matchesQuery } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
 import { ApiError, api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
@@ -183,7 +183,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
         <div className="kb-new-actions">
           <label className="kb-search">
             <Search aria-hidden="true" size={16} />
-            <input aria-label="Pesquisar conversas" onChange={(event) => setSearch(event.target.value)} placeholder="Nome, telefone ou mensagem" type="search" value={search} />
+            <input aria-label="Pesquisar conversas" onChange={(event) => setSearch(event.target.value)} placeholder="Nome, telefone, etiqueta ou texto das mensagens" type="search" value={search} />
           </label>
           {alerts !== "granted" && alerts !== "unsupported" ? (
             <button className="at-btn at-toolbar-btn" onClick={() => void enableAlerts()} title="Avisar no computador quando um cliente pedir vendedor" type="button">
@@ -223,7 +223,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
       ) : (
         <ConversationsKanban
           busyIds={busyIds}
-          conversations={conversations.filter((conversation) => !search || `${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview}`.toLowerCase().includes(search.toLowerCase()))}
+          conversations={conversations.filter((conversation) => matchesQuery(conversation, search))}
           onMove={(conversation, target) => void move(conversation, target)}
           onOpen={open}
         />

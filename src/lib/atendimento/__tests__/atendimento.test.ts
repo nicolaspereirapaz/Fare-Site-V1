@@ -25,6 +25,7 @@ import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches }
 import { crc32, safeFileName } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { groupMessages } from "@/lib/atendimento/albums";
+import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -516,6 +517,26 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("busca nas mensagens", () => {
+  it("acha sem acento e sem maiúscula, todas as palavras na mesma mensagem, ignora avisos do sistema", async () => {
+    const a = createConversation(db, { channel: "simulador", phone: "11933334444", contactName: "Maria" });
+    assumeConversation(db, a.id, ana);
+    returnToAi(db, a.id, ana, "");
+    recordCustomerMessage(db, a.id, "Quero REVELAÇÃO de 40 fotos para sábado");
+    const b = createConversation(db, { channel: "simulador", phone: "11911112222", contactName: "João" });
+    recordCustomerMessage(db, b.id, "revelacao urgente");
+    addNote(db, b.id, ana, "Revelação paga no Pix");
+    expect(searchMessages(db, "revelacao").map((hit) => hit.contactName).sort()).toEqual(["João", "João", "Maria"]);
+    expect(searchMessages(db, "revelação sabado").map((hit) => hit.conversationId)).toEqual([a.id]);
+    expect(searchMessages(db, "devolveu")).toEqual([]);
+    expect(searchMessages(db, "a")).toEqual([]);
+  });
+
+  it("trecho em volta da palavra", () => {
+    expect(snippetAround("x".repeat(100) + " Revelação " + "y".repeat(100), "revelacao", 10)).toBe("…xxxxxxxxx Revelação yyyyyyyyy…");
   });
 });
 
