@@ -96,6 +96,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   // v6: transcrição dos áudios.
   addColumn(db, "atd_messages", "transcript", "TEXT NOT NULL DEFAULT ''");
   addColumn(db, "atd_messages", "transcript_status", "TEXT NOT NULL DEFAULT ''");
+  // v8: evento dos avisos do sistema (relatório da equipe).
+  addColumn(db, "atd_messages", "event", "TEXT");
   // v7: anexo nas mensagens rápidas.
   for (const [column, definition] of [["media_file", "TEXT"], ["media_kind", "TEXT"], ["media_mime", "TEXT"], ["media_name", "TEXT"], ["media_size", "INTEGER"], ["media_thumb", "INTEGER NOT NULL DEFAULT 0"]]) {
     addColumn(db, "atd_quick_replies", column, definition);
@@ -416,7 +418,13 @@ function setStatus(
   );
 }
 
-const system = (db: DatabaseSync, conversationId: string, body: string) => addMessage(db, { conversationId, author: "sistema", body });
+/** Evento do aviso do sistema (para o relatório da equipe). */
+export type SystemEvent = "fila" | "assumiu" | "finalizou" | "devolveu" | "moveu" | "cliente_respondeu" | "celular" | "reabriu";
+const system = (db: DatabaseSync, conversationId: string, body: string, event: SystemEvent, staff?: StaffActor | null) => {
+  const message = addMessage(db, { conversationId, author: "sistema", body, authorName: staff?.name });
+  db.prepare("UPDATE atd_messages SET event = ? WHERE id = ?").run(event, message.id);
+  return message;
+};
 
 /**
  * Vendedor assume: a IA para de responder nesta conversa.
@@ -438,6 +446,8 @@ export function assumeConversation(db: DatabaseSync, id: string, staff: StaffAct
       : owned && current.assignedStaffName
         ? `${staff.name} assumiu a conversa no lugar de ${current.assignedStaffName}.`
         : `${staff.name} assumiu a conversa. A IA parou de responder.`,
+    "assumiu",
+    staff,
   );
   return getConversation(db, id);
 }
@@ -460,7 +470,7 @@ export function setSellerStage(
     throw new AtendimentoError("ASSIGNED_TO_OTHER", `${owner.name || "Outro vendedor"} já está atendendo.`, owner.name);
   }
   setStatus(db, id, stage, { staff: owner && owner.id === staff.id ? owner : staff, handoffReason: current.handoffReason });
-  system(db, id, `${staff.name} moveu para ${CONVERSATION_STATUS_LABELS[stage]}.`);
+  system(db, id, `${staff.name} moveu para ${CONVERSATION_STATUS_LABELS[stage]}.`, "moveu", staff);
   return getConversation(db, id);
 }
 
@@ -469,7 +479,7 @@ export function customerReplied(db: DatabaseSync, id: string) {
   const current = getConversation(db, id);
   if (current.status !== "aguardando_cliente") return;
   db.prepare("UPDATE atd_conversations SET status = 'em_atendimento', updated_at = ? WHERE id = ?").run(nowIso(), id);
-  system(db, id, "O cliente respondeu. A conversa voltou para Em atendimento.");
+  system(db, id, "O cliente respondeu. A conversa voltou para Em atendimento.", "cliente_respondeu");
 }
 
 /** Devolve para a IA (com um recado opcional que entra no resumo para a IA continuar do ponto certo). */
@@ -478,7 +488,7 @@ export function returnToAi(db: DatabaseSync, id: string, staff: StaffActor, note
   const cleanNote = note.trim().slice(0, 400);
   setStatus(db, id, "ia", { staff: null });
   if (cleanNote) updateConversationProfile(db, id, { summary: `${current.summary}${current.summary ? "\n" : ""}Vendedor: ${cleanNote}` });
-  system(db, id, `${staff.name} devolveu a conversa para a IA.${cleanNote ? ` Recado: ${cleanNote}` : ""}`);
+  system(db, id, `${staff.name} devolveu a conversa para a IA.${cleanNote ? ` Recado: ${cleanNote}` : ""}`, "devolveu", staff);
   return getConversation(db, id);
 }
 
@@ -488,7 +498,7 @@ export function sendToQueue(db: DatabaseSync, id: string, actor: StaffActor | nu
   if (current.status === "aguardando_vendedor") return current;
   setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: reason, waiting: true });
   if (!actor) db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
-  system(db, id, actor ? `${actor.name} colocou a conversa na fila de vendedores.` : `A IA pediu um vendedor: ${reason}`);
+  system(db, id, actor ? `${actor.name} colocou a conversa na fila de vendedores.` : `A IA pediu um vendedor: ${reason}`, "fila", actor);
   return getConversation(db, id);
 }
 
@@ -496,7 +506,7 @@ export function finishConversation(db: DatabaseSync, id: string, staff: StaffAct
   const current = getConversation(db, id);
   if (current.status === "finalizada") return current;
   setStatus(db, id, "finalizada", { staff: null });
-  system(db, id, `${staff.name} finalizou o atendimento.`);
+  system(db, id, `${staff.name} finalizou o atendimento.`, "finalizou", staff);
   return getConversation(db, id);
 }
 
@@ -508,14 +518,14 @@ export function phoneReplied(db: DatabaseSync, id: string): Conversation {
   const current = getConversation(db, id);
   if (current.status !== "ia" && current.status !== "finalizada") return current;
   setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: "Respondido pelo celular", waiting: true });
-  system(db, id, "Alguém respondeu pelo celular. A IA parou; assuma a conversa para continuar pelo painel.");
+  system(db, id, "Alguém respondeu pelo celular. A IA parou; assuma a conversa para continuar pelo painel.", "celular");
   return getConversation(db, id);
 }
 
 /** Cliente voltou a escrever numa conversa finalizada: reabre com a IA. */
 export function reopenConversation(db: DatabaseSync, id: string) {
   setStatus(db, id, "ia", { staff: null });
-  system(db, id, "O cliente voltou a escrever. Conversa reaberta com a IA.");
+  system(db, id, "O cliente voltou a escrever. Conversa reaberta com a IA.", "reabriu");
 }
 
 /** Arrastar no quadro: cada coluna de destino vira a ação correspondente. */

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AtendimentoError,
   assumeConversation,
@@ -28,6 +28,7 @@ import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
+import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -519,6 +520,57 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("relatório da equipe", () => {
+  afterEach(() => vi.useRealTimers());
+  const at = (minutes: number) => vi.setSystemTime(new Date(Date.UTC(2026, 10, 3, 13, 0) + minutes * 60_000));
+
+  it("volume, resolvidas pela IA, espera até o vendedor, por vendedor, esperas longas e horários", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    at(0);
+    // 1) Resolvida só pela IA.
+    const a = createConversation(db, { channel: "simulador", phone: "11900000001", contactName: "Ana Cliente" });
+    await say(a.id, "oi");
+    // 2) IA pede vendedor; Ana (equipe) responde em 4 min e finaliza.
+    at(1);
+    const b = createConversation(db, { channel: "simulador", phone: "11900000002", contactName: "Bia" });
+    await say(b.id, "quero falar com vendedor");
+    expect(getConversation(db, b.id).status).toBe("aguardando_vendedor");
+    at(5);
+    assumeConversation(db, b.id, ana);
+    sendStaffMessage(db, b.id, ana, "Oi Bia!", { sign: true });
+    finishConversation(db, b.id, ana);
+    // 3) Pede vendedor e Bruno só responde 25 min depois.
+    at(10);
+    const c = createConversation(db, { channel: "simulador", phone: "11900000003", contactName: "Caio" });
+    await say(c.id, "quero falar com atendente");
+    at(35);
+    assumeConversation(db, c.id, bruno);
+    sendStaffMessage(db, c.id, bruno, "Desculpe a demora", { sign: true });
+    // 4) Ainda esperando há 15 min.
+    at(40);
+    const d = createConversation(db, { channel: "simulador", phone: "11900000004", contactName: "Duda" });
+    await say(d.id, "preciso de um vendedor");
+    at(55);
+
+    const report = teamReport(db, { from: new Date(Date.UTC(2026, 10, 3, 12, 0)) });
+    expect(report.totals).toMatchObject({ conversations: 4, resolvedByAi: 1, resolvedByAiPercent: 25, handoffs: 3, waitAverageMinutes: 14.5, waitMedianMinutes: 14.5, waitMaxMinutes: 25, waitingNow: 1, staffMessages: 2 });
+    expect(report.sellers).toEqual([
+      { name: "Ana Souza", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 4, finished: 1 },
+      { name: "Bruno Lima", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 25, finished: 0 },
+    ]);
+    expect(report.longWaits.map((item) => [item.contact, item.minutes, item.answeredBy, item.waiting])).toEqual([
+      ["Caio", 25, "Bruno Lima", false],
+      ["Duda", 15, null, true],
+    ]);
+    expect(report.hours[10]).toBe(4); // 13h UTC = 10h em São Paulo
+  });
+
+  it("início do dia em São Paulo", () => {
+    expect(startOfTodaySp(new Date("2026-11-03T02:30:00Z")).toISOString()).toBe("2026-11-02T03:00:00.000Z");
+    expect(startOfTodaySp(new Date("2026-11-03T15:45:10Z")).toISOString()).toBe("2026-11-03T03:00:00.000Z");
   });
 });
 

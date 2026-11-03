@@ -303,7 +303,7 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-bubble.is-flash { animation: at-flash 1.6s ease-out; }
 @keyframes at-flash { 0%, 40% { box-shadow: 0 0 0 3px #b7791f; } 100% { box-shadow: 0 1px 0 rgba(9, 30, 66, .08); } }
 .at-replying { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px 10px; border-left: 3px solid var(--navy); border-radius: 8px; background: var(--navy-soft); color: var(--navy-dark); }
-.at-replying span { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.at-replying > span { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; text-align: left; }
 .at-replying strong { font-size: 0.75rem; }
 .at-replying small { overflow: hidden; font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
 .at-replying button { display: grid; place-items: center; border: 0; background: none; color: var(--muted); cursor: pointer; }
@@ -339,6 +339,34 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-qr-has-media { display: flex; align-items: center; gap: 4px; color: var(--navy) !important; font-size: 0.76rem !important; }
 .at-picker-clip { margin-left: 4px; vertical-align: -1px; color: var(--navy); }
 .at-quick-attach { border-left-color: #b7791f; background: #fbf0dc; }
+
+/* Relatório da equipe */
+.at-report { max-width: 1180px; margin: 0 auto; padding: 18px 24px 40px; }
+.at-report-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 16px; }
+.at-report-head > div:first-child { margin-right: auto; }
+.at-report-head .at-title { margin: 4px 0 0; }
+.at-report-back { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 0.82rem; text-decoration: none; }
+.at-report-back:hover { color: var(--navy); }
+.at-report-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.at-report-card { display: grid; align-content: start; gap: 4px; padding: 14px 16px; border: 1px solid #e6e8f0; border-radius: 14px; background: #fff; }
+.at-report-card.is-alert { border-color: #f1c4b2; background: #fdf3ee; }
+.at-report-card-label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.at-report-card strong { color: var(--navy-dark); font-family: var(--font-outfit), sans-serif; font-size: 1.7rem; line-height: 1.1; }
+.at-report-card.is-alert strong { color: #8f3416; }
+.at-report-card small { color: var(--muted); font-size: 0.76rem; }
+.at-report-block { margin-bottom: 18px; padding: 16px 18px; border: 1px solid #e6e8f0; border-radius: 14px; background: #fff; }
+.at-report-block h2 { margin: 0 0 10px; color: var(--navy-dark); font-family: var(--font-outfit), sans-serif; font-size: 1.05rem; }
+.at-report-block > .at-muted { margin-top: 8px; }
+.at-report-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.at-report-table th { padding: 6px 8px; border-bottom: 1px solid #e6e8f0; color: var(--muted); font-size: 0.74rem; font-weight: 700; text-align: left; }
+.at-report-table td { padding: 8px; border-bottom: 1px solid #f3f4f7; }
+.at-report-table td:not(:first-child), .at-report-table th:not(:first-child) { text-align: right; }
+.at-report-table tr.is-waiting td { background: #fdf3ee; color: #8f3416; }
+.at-report-table a { color: var(--navy); font-weight: 600; }
+.at-hours { display: grid; grid-template-columns: repeat(24, 1fr); align-items: end; gap: 4px; height: 160px; }
+.at-hour { display: flex; height: 100%; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.at-hour-bar { display: block; width: 100%; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--navy); }
+.at-hour small { color: var(--muted); font-size: 0.66rem; }
 
 /* Notas internas */
 .at-note { align-self: center; width: min(78%, 560px); margin: 8px 0; padding: 7px 12px 8px; border: 1px dashed #d9b44a; border-radius: 10px; background: #fff8dc; color: #4a3a0a; font-size: 0.86rem; line-height: 1.42; overflow-wrap: anywhere; }
