@@ -33,6 +33,7 @@ import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
 import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
+import { parseWhatsApp, stripWhatsApp } from "@/lib/atendimento/waFormat";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -524,6 +525,24 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("formatação do WhatsApp", () => {
+  it("aninha negrito e itálico (assinatura do celular) e respeita bordas de palavra", () => {
+    expect(parseWhatsApp("*_Michelle:_* ")).toEqual([
+      { type: "bold", children: [{ type: "italic", children: [{ type: "text", text: "Michelle:" }] }] },
+      { type: "text", text: " " },
+    ]);
+    expect(parseWhatsApp("_Ana:_")).toEqual([{ type: "italic", children: [{ type: "text", text: "Ana:" }] }]);
+    expect(parseWhatsApp("arquivo_final_2.jpg e 2*3*4")).toEqual([{ type: "text", text: "arquivo_final_2.jpg e 2*3*4" }]);
+    expect(parseWhatsApp("~R$ 5~ agora *R$ 3*")).toEqual([
+      { type: "strike", children: [{ type: "text", text: "R$ 5" }] },
+      { type: "text", text: " agora " },
+      { type: "bold", children: [{ type: "text", text: "R$ 3" }] },
+    ]);
+    expect(parseWhatsApp("veja https://farefoto.com.br/_x_ ok")[1]).toEqual({ type: "link", href: "https://farefoto.com.br/_x_" });
+    expect(stripWhatsApp("*_Michelle:_* \nessa vai dar margem")).toBe("Michelle: \nessa vai dar margem");
   });
 });
 

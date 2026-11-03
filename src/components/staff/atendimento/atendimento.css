@@ -70,6 +70,8 @@
   background: var(--navy-soft); color: var(--navy-dark); font-family: var(--font-outfit), sans-serif; font-size: 0.86rem; font-weight: 700;
 }
 .at-avatar-lg { width: 44px; height: 44px; font-size: 0.95rem; }
+.at-avatar.has-photo { overflow: hidden; background: var(--navy-soft); }
+.at-avatar.has-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .at-avatar-sm { width: 30px; height: 30px; font-size: 0.72rem; }
 
 /* ===== Conversas: lista | conversa | cliente ===== */
@@ -104,7 +106,14 @@
 .at-item-time { margin-left: auto; color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
 .at-item-preview { display: flex; align-items: center; gap: 4px; overflow: hidden; color: #5b6170; font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
 .at-item-preview svg { flex: none; color: var(--muted); }
-.at-item-bottom { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+/* Uma linha só: etapa encolhe com "…", tempo de espera e não lidas nunca quebram. */
+.at-item-bottom { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 6px; margin-top: 2px; }
+.at-item-bottom > * { flex: none; }
+.at-item-bottom > .at-chip { display: block; flex: 0 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-item-bottom > .at-chip .at-chip-dot { display: inline-block; margin-right: 5px; vertical-align: 1px; }
+/* Etiquetas são as primeiras a encolher (somem aos poucos, com esmaecido). */
+.at-item-bottom > .at-tags { flex: 0 20 auto; min-width: 0; flex-wrap: nowrap; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+.at-wait, .at-unread { white-space: nowrap; }
 .at-item-bottom .at-sim-tag { margin-left: 0; }
 
 /* Conversa aberta */
@@ -142,6 +151,7 @@
 .at-bubble-ia .at-bubble-author { color: var(--navy); }
 .at-bubble-vendedor .at-bubble-author { color: #af3c1a; }
 .at-bubble-text a { color: inherit; }
+.at-mono { padding: 0 3px; border-radius: 4px; background: rgba(0, 0, 0, .06); font-family: ui-monospace, Consolas, monospace; font-size: 0.85em; }
 .at-bubble-time { display: block; margin-top: 2px; color: rgba(25, 26, 29, .5); font-size: 0.66rem; text-align: right; }
 
 /* Campo de resposta */

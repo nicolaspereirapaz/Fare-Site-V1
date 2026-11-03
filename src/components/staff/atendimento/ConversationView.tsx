@@ -33,6 +33,7 @@ import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
 import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recorder";
 import { useAiEnabled } from "@/components/staff/atendimento/aiStatus";
+import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
@@ -43,13 +44,12 @@ import {
   isSellerStatus,
   type ConversationStatus,
 } from "@/lib/atendimento/types";
-import {
+import { stripWhatsApp,
   ApiError,
   api,
   clockTime,
   displayName,
   formatPhone,
-  initials,
   shortTime,
   waitingFor,
   WhatsAppText,
@@ -178,7 +178,7 @@ export function ConversationView({
                 onClick={() => onSelect(conversation.id)}
                 type="button"
               >
-                <span aria-hidden="true" className="at-avatar">{initials(displayName(conversation))}</span>
+                <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} />
                 <span className="at-item-main">
                   <span className="at-item-top">
                     <strong>{displayName(conversation)}</strong>
@@ -186,7 +186,7 @@ export function ConversationView({
                   </span>
                   <span className="at-item-preview">
                     {conversation.lastMessageAuthor === "ia" ? <Bot aria-label="IA" size={13} /> : conversation.lastMessageAuthor === "vendedor" ? <UserRound aria-label="Vendedor" size={13} /> : null}
-                    {conversation.lastMessagePreview || "Sem mensagens"}
+                    {stripWhatsApp(conversation.lastMessagePreview) || "Sem mensagens"}
                   </span>
                   <span className="at-item-bottom">
                     <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
@@ -218,7 +218,7 @@ export function ConversationView({
                   </span>
                   <span className="at-hit-snippet">
                     {hit.author === "nota" ? <StickyNote aria-label="Nota interna" size={12} /> : null}
-                    <Highlighted query={query} text={hit.snippet} />
+                    <Highlighted query={query} text={stripWhatsApp(hit.snippet)} />
                   </span>
                 </button>
               ))}
@@ -439,7 +439,7 @@ function ChatPanel({
     <>
       <section className="at-chat" aria-label={`Conversa com ${displayName(conversation)}`}>
         <header className="at-chat-head">
-          <span aria-hidden="true" className="at-avatar at-avatar-lg">{initials(displayName(conversation))}</span>
+          <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} size="lg" />
           <div className="at-chat-title">
             <h2>{displayName(conversation)}</h2>
             <p>
@@ -658,7 +658,7 @@ function AuthorLabel({ message }: { message: Message }) {
 type QuoteProps = { lookup: (id: string) => Message | undefined; onJump: (id: string) => void; onReply?: (message: Message) => void };
 
 const MEDIA_SNIPPET: Record<string, string> = { imagem: "📷 Foto", video: "🎥 Vídeo", audio: "🎤 Áudio", documento: "📄 Documento", figurinha: "Figurinha" };
-export const snippetOf = (message: Message) => message.body || (message.media ? MEDIA_SNIPPET[message.media.kind] : "") || "Mensagem";
+export const snippetOf = (message: Message) => stripWhatsApp(message.body) || (message.media ? MEDIA_SNIPPET[message.media.kind] : "") || "Mensagem";
 const whoOf = (message: Message) => (message.author === "cliente" ? "Cliente" : message.author === "ia" ? "IA" : message.authorName || "Equipe");
 
 /** Trecho da mensagem citada, dentro do balão (clicar leva até a original). */

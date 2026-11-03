@@ -3,6 +3,9 @@
 import { Fragment, type ReactNode } from "react";
 import type { Conversation, Message, QuickReply } from "@/lib/atendimento/types";
 import type { LinkedCustomer } from "@/lib/atendimento/customer";
+import { parseWhatsApp, stripWhatsApp, type WaNode } from "@/lib/atendimento/waFormat";
+
+export { stripWhatsApp };
 
 export type { Conversation, Message, QuickReply, LinkedCustomer };
 
@@ -90,23 +93,20 @@ export function WhatsAppText({ text }: { text: string }) {
 }
 
 function formatLine(line: string): ReactNode[] {
-  const pattern = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|https?:\/\/[^\s]+)/g;
-  const parts: ReactNode[] = [];
-  let last = 0;
-  for (const match of line.matchAll(pattern)) {
-    const index = match.index ?? 0;
-    if (index > last) parts.push(line.slice(last, index));
-    const token = match[0];
-    if (token.startsWith("http")) {
-      parts.push(<a href={token} key={index} rel="noreferrer" target="_blank">{token}</a>);
-    } else {
-      const inner = token.slice(1, -1);
-      parts.push(token[0] === "*" ? <strong key={index}>{inner}</strong> : token[0] === "_" ? <em key={index}>{inner}</em> : <s key={index}>{inner}</s>);
-    }
-    last = index + token.length;
-  }
-  if (last < line.length) parts.push(line.slice(last));
-  return parts;
+  return renderNodes(parseWhatsApp(line));
+}
+
+/** *negrito*, _itálico_, ~riscado~, ```mono``` (aninhados, como no WhatsApp) e links. */
+function renderNodes(nodes: WaNode[]): ReactNode[] {
+  return nodes.map((node, index) => {
+    if (node.type === "text") return <Fragment key={index}>{node.text}</Fragment>;
+    if (node.type === "link") return <a href={node.href} key={index} rel="noreferrer" target="_blank">{node.href}</a>;
+    const children = renderNodes(node.children);
+    if (node.type === "bold") return <strong key={index}>{children}</strong>;
+    if (node.type === "italic") return <em key={index}>{children}</em>;
+    if (node.type === "strike") return <s key={index}>{children}</s>;
+    return <code className="at-mono" key={index}>{children}</code>;
+  });
 }
 
 /** Bipe curto (sem arquivo de áudio) para avisar que um cliente pediu vendedor. */

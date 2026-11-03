@@ -5,7 +5,8 @@ import { useDraggable } from "@dnd-kit/core";
 import { Bot, UserRound } from "lucide-react";
 import { KanbanBoard, KanbanColumn } from "@/components/backofficeShared";
 import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, isSellerStatus, type ConversationStatus } from "@/lib/atendimento/types";
-import { displayName, formatPhone, initials, shortTime, waitingFor, type Conversation } from "@/components/staff/atendimento/shared";
+import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
+import { stripWhatsApp, displayName, formatPhone, shortTime, waitingFor, type Conversation } from "@/components/staff/atendimento/shared";
 import { TagChips } from "@/components/staff/atendimento/tags";
 
 const EMPTY: Record<ConversationStatus, string> = {
@@ -91,7 +92,7 @@ function CardBody({ conversation }: { conversation: Conversation }) {
   return (
     <>
       <div className="at-kb-head">
-        <span aria-hidden="true" className="at-avatar at-avatar-sm">{initials(name)}</span>
+        <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={name} size="sm" />
         <div className="at-kb-name">
           <strong>{name}</strong>
           <span>{formatPhone(conversation.phone)}</span>
@@ -100,7 +101,7 @@ function CardBody({ conversation }: { conversation: Conversation }) {
       </div>
       <p className="at-kb-preview">
         {conversation.lastMessageAuthor === "ia" ? <Bot aria-label="IA" size={12} /> : conversation.lastMessageAuthor === "vendedor" ? <UserRound aria-label="Vendedor" size={12} /> : null}
-        {conversation.lastMessagePreview || "Sem mensagens"}
+        {stripWhatsApp(conversation.lastMessagePreview) || "Sem mensagens"}
       </p>
       {conversation.status === "aguardando_vendedor" && conversation.handoffReason ? <p className="at-kb-reason">{conversation.handoffReason}</p> : null}
       <TagChips small tags={conversation.tags} />
