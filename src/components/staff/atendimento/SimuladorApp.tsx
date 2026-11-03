@@ -229,7 +229,6 @@ function Phone({ conversation }: { conversation: Conversation }) {
           <label aria-label="Mandar foto ou arquivo" className="sim-attach" title="Mandar fotos/arquivos como o cliente">
             <Paperclip aria-hidden="true" size={18} />
             <input
-              accept="image/*,video/*,audio/*,application/pdf"
               disabled={sending}
               hidden
               multiple

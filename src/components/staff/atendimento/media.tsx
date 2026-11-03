@@ -37,7 +37,8 @@ export function MessageMediaView({
 }) {
   const media = message.media;
   if (!media) return null;
-  const isImage = media.mime.startsWith("image/");
+  // Foto que o navegador mostra (ou com miniatura); HEIC/TIFF/PSD sem miniatura aparecem como arquivo.
+  const isImage = media.mime.startsWith("image/") && (media.hasThumb || /^image\/(jpeg|png|webp|gif|avif|bmp)$/.test(media.mime));
   if (media.pruned) {
     // Limpeza automática: o original foi apagado; fica a miniatura (fotos) ou só o nome.
     return media.hasThumb ? (

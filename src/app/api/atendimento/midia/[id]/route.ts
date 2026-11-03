@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { AtendimentoError, getMessage, mediaFileOf } from "@/lib/atendimento/repository";
-import { mediaPath, mediaRetentionDays } from "@/lib/atendimento/media";
+import { downloadOnlyMime, mediaPath, mediaRetentionDays } from "@/lib/atendimento/media";
 import { atendimentoDb, withStaff } from "@/lib/atendimento/server";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,9 @@ export const GET = withStaff(async (_staff, request, context: RouteContext<"/api
     info = await stat(file).catch(() => null);
   }
   if (!info) throw new AtendimentoError("CONVERSATION_NOT_FOUND", "Arquivo não está mais no disco.");
-  const type = thumb ? "image/jpeg" : message.media.mime || "application/octet-stream";
+  // Página/SVG/script enviados por alguém: só baixa (como arquivo comum), nunca abre no site.
+  const risky = !thumb && downloadOnlyMime(message.media.mime);
+  const type = thumb ? "image/jpeg" : risky ? "application/octet-stream" : message.media.mime || "application/octet-stream";
   const name = encodeURIComponent(message.media.name || "arquivo");
   return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
     headers: {
@@ -37,7 +39,7 @@ export const GET = withStaff(async (_staff, request, context: RouteContext<"/api
       "x-content-type-options": "nosniff",
       // Nunca abre HTML/SVG enviados por clientes como página do site.
       "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox",
-      "content-disposition": `${params.get("baixar") === "1" ? "attachment" : "inline"}; filename*=UTF-8''${name}`,
+      "content-disposition": `${params.get("baixar") === "1" || risky ? "attachment" : "inline"}; filename*=UTF-8''${name}`,
     },
   });
 });

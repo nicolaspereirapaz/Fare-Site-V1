@@ -124,7 +124,6 @@ export function QuickRepliesDialog({ quickReplies, onClose, onChanged }: { quick
                   <label className="at-btn at-qr-pick">
                     <Paperclip aria-hidden="true" size={15} /> Escolher imagem ou arquivo
                     <input
-                      accept="image/*,application/pdf,video/*,audio/*"
                       hidden
                       onChange={(event) => {
                         const file = event.target.files?.[0];

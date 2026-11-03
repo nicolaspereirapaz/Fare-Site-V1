@@ -1,5 +1,6 @@
 import { AtendimentoError } from "@/lib/atendimento/repository";
-import { acceptedMime, saveMedia, toVoiceNote, type StoredMedia } from "@/lib/atendimento/media";
+import { existsSync } from "node:fs";
+import { acceptedMime, mediaPath, saveMedia, toVoiceNote, type StoredMedia } from "@/lib/atendimento/media";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
 
 /**
@@ -35,5 +36,6 @@ export async function readBrowserUpload(request: Request, conversationId: string
   } catch (error) {
     throw new AtendimentoError("INVALID_REQUEST", error instanceof Error ? error.message : "Não foi possível converter o áudio.");
   }
-  return { media: { ...stored, hasThumb: stored.mime.startsWith("image/") }, caption: decode(request.headers.get("x-caption")).slice(0, 2000) };
+  // Miniatura só existe se a foto abriu (HEIC/TIFF etc. ficam com ícone de arquivo).
+  return { media: { ...stored, hasThumb: existsSync(mediaPath(stored.file, true)) }, caption: decode(request.headers.get("x-caption")).slice(0, 2000) };
 }

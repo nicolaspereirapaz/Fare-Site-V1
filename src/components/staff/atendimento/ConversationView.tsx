@@ -1123,7 +1123,6 @@ function Composer({
           </button>
         ) : null}
         <input
-          accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
           hidden
           multiple
           onChange={(event) => {

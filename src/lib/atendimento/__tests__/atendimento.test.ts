@@ -27,7 +27,7 @@ import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
-import { crc32, mediaPath, mediaRetentionDays, pruneOldMedia, safeFileName, saveMedia } from "@/lib/atendimento/media";
+import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
@@ -525,6 +525,27 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("qualquer tipo de arquivo", () => {
+  it("aceita todo tipo; só o que o WhatsApp mostra vai como foto/vídeo/áudio, o resto como documento", () => {
+    for (const mime of ["application/x-msdownload", "application/vnd.rar", "image/vnd.adobe.photoshop", "application/octet-stream", "text/csv", "model/stl"]) expect(acceptedMime(mime)).toBe(true);
+    expect(acceptedMime("")).toBe(false);
+    expect(acceptedMime("nada")).toBe(false);
+    expect(kindFromMime("image/jpeg")).toBe("imagem");
+    expect(kindFromMime("image/heic")).toBe("documento");
+    expect(kindFromMime("image/tiff")).toBe("documento");
+    expect(kindFromMime("video/mp4")).toBe("video");
+    expect(kindFromMime("video/x-matroska")).toBe("documento");
+    expect(kindFromMime("audio/mpeg")).toBe("audio");
+    expect(kindFromMime("audio/wav")).toBe("documento");
+    expect(kindFromMime("application/zip")).toBe("documento");
+  });
+
+  it("página, SVG e script nunca abrem no site (só baixam)", () => {
+    for (const mime of ["text/html", "image/svg+xml", "application/javascript", "application/xml"]) expect(downloadOnlyMime(mime)).toBe(true);
+    for (const mime of ["image/jpeg", "application/pdf", "text/plain"]) expect(downloadOnlyMime(mime)).toBe(false);
   });
 });
 

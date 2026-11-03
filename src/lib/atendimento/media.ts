@@ -34,10 +34,14 @@ const MIME_EXT: Record<string, string> = {
   "application/pdf": ".pdf",
 };
 
+/**
+ * Como o arquivo vai pelo WhatsApp: só os formatos que o app mostra como foto/vídeo/áudio vão assim;
+ * qualquer outro (HEIC, TIFF, MKV, WAV, EXE, RAR, PSD...) vai como documento, com o nome e o arquivo intactos.
+ */
 export function kindFromMime(mime: string): MediaKind {
-  if (mime.startsWith("image/")) return "imagem";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("audio/")) return "audio";
+  if (/^image\/(jpeg|png|webp|gif)$/.test(mime)) return "imagem";
+  if (/^video\/(mp4|3gpp|quicktime)$/.test(mime)) return "video";
+  if (/^audio\/(ogg|mpeg|mp4|aac|amr|x-m4a|webm)$/.test(mime)) return "audio";
   return "documento";
 }
 
@@ -58,9 +62,13 @@ export function safeFileName(name: string, mime: string) {
 }
 
 /** Tipos aceitos para enviar pelo painel/simulador. */
+/** Qualquer tipo de arquivo (o navegador manda "application/octet-stream" quando não reconhece). */
 export function acceptedMime(mime: string) {
-  return /^(image|video|audio)\//.test(mime) || /^application\/(pdf|zip|x-zip-compressed|msword|vnd\.|octet-stream)/.test(mime) || mime === "text/plain";
+  return /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(mime);
 }
+
+/** Tipos que o navegador executaria (página, SVG, script): sempre baixados, nunca abertos no site. */
+export const downloadOnlyMime = (mime: string) => /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|text\/javascript|application\/javascript|application\/x-javascript)$/.test(mime);
 
 function sizeLimit(max: number) {
   let total = 0;

@@ -1,5 +1,6 @@
 import { AtendimentoError, messageByExternalId } from "@/lib/atendimento/repository";
-import { saveMedia } from "@/lib/atendimento/media";
+import { existsSync } from "node:fs";
+import { mediaPath, saveMedia } from "@/lib/atendimento/media";
 import { atendimentoDb, json, respondInBackground, transcribeInBackground } from "@/lib/atendimento/server";
 import { ensureWhatsAppConversation, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 import type { MediaKind } from "@/lib/atendimento/types";
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
       mime: typeof meta.mime === "string" ? meta.mime : "application/octet-stream",
       kind,
     });
-    const media = { ...stored, hasThumb: stored.mime.startsWith("image/") };
+    const media = { ...stored, hasThumb: existsSync(mediaPath(stored.file, true)) };
     const inbound = parseInbound(meta, media);
     const result = receiveWhatsAppMessage(db, inbound);
     const audioId = !result.duplicate && media.kind === "audio" ? messageByExternalId(db, inbound.externalId)?.id : undefined;
