@@ -2,10 +2,12 @@
 
 import "@/components/staff/atendimento/atendimento.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, FlaskConical, Plus, Send, Smartphone } from "lucide-react";
+import { ArrowLeft, FlaskConical, Paperclip, Plus, Send, Smartphone } from "lucide-react";
+import { MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
+import type { MessageMedia } from "@/lib/atendimento/types";
 import { api, clockTime, displayName, formatPhone, initials, WhatsAppText, type Conversation } from "@/components/staff/atendimento/shared";
 
-type SimMessage = { seq: number; id: string; fromCustomer: boolean; text: string; createdAt: string };
+type SimMessage = { seq: number; id: string; fromCustomer: boolean; text: string; media: MessageMedia | null; createdAt: string };
 
 const SUGGESTIONS = ["Oi, boa tarde!", "Quanto custa a foto 3x4?", "Qual o horário de vocês?", "Quero orçamento de 100 canecas", "Quero falar com um vendedor"];
 
@@ -153,6 +155,25 @@ function Phone({ conversation }: { conversation: Conversation }) {
     if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [messages, typing]);
 
+  /** Cliente simulado manda fotos/arquivos (um por um; o texto digitado vai como legenda da 1ª). */
+  async function sendFiles(list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (!files.length || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      for (const [index, file] of files.entries()) {
+        await uploadFile(`/api/atendimento/upload/simulador/${conversation.id}`, file, { "x-caption": encodeURIComponent(index === 0 ? text.trim() : "") });
+      }
+      setText("");
+      await poll();
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function send(value = text) {
     const body = value.trim();
     if (!body || sending) return;
@@ -184,7 +205,8 @@ function Phone({ conversation }: { conversation: Conversation }) {
           <div className="sim-phone-note">Você é: {displayName(conversation)} · {formatPhone(conversation.phone)}</div>
           {messages.map((message) => (
             <div className={`sim-msg${message.fromCustomer ? " is-mine" : ""}`} key={message.id}>
-              <WhatsAppText text={message.text} />
+              <MessageMediaView message={message} />
+              {message.text ? <WhatsAppText text={message.text} /> : null}
               <span className="sim-msg-time">{clockTime(message.createdAt)}</span>
             </div>
           ))}
@@ -203,6 +225,20 @@ function Phone({ conversation }: { conversation: Conversation }) {
             void send();
           }}
         >
+          <label aria-label="Mandar foto ou arquivo" className="sim-attach" title="Mandar fotos/arquivos como o cliente">
+            <Paperclip aria-hidden="true" size={18} />
+            <input
+              accept="image/*,video/*,audio/*,application/pdf"
+              disabled={sending}
+              hidden
+              multiple
+              onChange={(event) => {
+                void sendFiles(event.target.files);
+                event.target.value = "";
+              }}
+              type="file"
+            />
+          </label>
           <input aria-label="Mensagem do cliente" onChange={(event) => setText(event.target.value)} placeholder="Mensagem" value={text} />
           <button aria-label="Enviar" disabled={!text.trim() || sending} type="submit">
             <Send aria-hidden="true" size={18} />

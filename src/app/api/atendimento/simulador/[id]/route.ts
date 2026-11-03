@@ -20,7 +20,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   const all = listMessages(atendimentoDb(), id, since);
   const messages = all
     .filter((message) => message.author !== "sistema")
-    .map(({ seq, id: messageId, author, deliveredText, createdAt }) => ({ seq, id: messageId, fromCustomer: author === "cliente", text: deliveredText, createdAt }));
+    .map(({ seq, id: messageId, author, deliveredText, media, createdAt }) => ({ seq, id: messageId, fromCustomer: author === "cliente", text: deliveredText, media, createdAt }));
   return json({
     conversation: { id: conversation.id, phone: conversation.phone, contactName: conversation.contactName },
     messages,

@@ -55,7 +55,19 @@ export function toWhatsAppFormat(text: string) {
 const toServiceMessages = (messages: Message[]) =>
   messages
     .filter((message) => message.author !== "sistema")
-    .map((message) => ({ author: message.author, text: message.body, name: message.author === "vendedor" ? message.authorName : undefined }));
+    .map((message) => ({
+      author: message.author,
+      text: message.media ? `${MEDIA_NOTE[message.media.kind]}${message.body ? ` ${message.body}` : ""}` : message.body,
+      name: message.author === "vendedor" ? message.authorName : undefined,
+    }));
+
+const MEDIA_NOTE: Record<NonNullable<Message["media"]>["kind"], string> = {
+  imagem: "[enviou uma foto]",
+  video: "[enviou um vídeo]",
+  audio: "[enviou um áudio — você não consegue ouvir; peça para escrever ou chame um vendedor]",
+  documento: "[enviou um arquivo]",
+  figurinha: "[enviou uma figurinha]",
+};
 
 export function createRealBrain(config: { url: string; token: string }, fetcher: typeof fetch = fetch): Brain {
   return async ({ conversation, messages }): Promise<BrainResult> => {

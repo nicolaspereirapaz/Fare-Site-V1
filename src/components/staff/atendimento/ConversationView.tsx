@@ -8,7 +8,9 @@ import {
   ClipboardList,
   FileText,
   Hand,
+  Images,
   Inbox,
+  Paperclip,
   MessageSquareText,
   Send,
   Smartphone,
@@ -16,8 +18,11 @@ import {
   UserPlus,
   UserRound,
   Users,
+  X,
   Zap,
 } from "lucide-react";
+import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
+import { formatBytes, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
   CONVERSATION_STATUSES,
   CONVERSATION_STATUS_COLORS,
@@ -219,6 +224,7 @@ function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [returning, setReturning] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const lastSeq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -315,6 +321,9 @@ function ChatPanel({
           </div>
           <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
           <div className="at-chat-actions">
+            <button className="at-btn at-btn-quiet" onClick={() => setMediaOpen(true)} title="Fotos e arquivos do contato (baixar em lote)" type="button">
+              <Images aria-hidden="true" size={16} /> Mídias
+            </button>
             <label className="at-stage">
               <span>Etapa</span>
               <select
@@ -345,6 +354,7 @@ function ChatPanel({
           </div>
         </header>
 
+        {mediaOpen ? <MediaDialog conversation={conversation} onClose={() => setMediaOpen(false)} /> : null}
         {returning ? (
           <ReturnToAiForm busy={busy} onCancel={() => setReturning(false)} onConfirm={(note) => void act("devolver", { note })} />
         ) : null}
@@ -468,9 +478,12 @@ function MessageBubble({ message, previous, onResend }: { message: Message; prev
             {message.author === "ia" ? <Bot aria-hidden="true" size={12} /> : fromPhone ? <Smartphone aria-hidden="true" size={12} /> : <UserRound aria-hidden="true" size={12} />} {label}
           </span>
         ) : null}
-        <div className="at-bubble-text">
-          <WhatsAppText text={message.author === "vendedor" ? message.body : message.body} />
-        </div>
+        <MessageMediaView message={message} />
+        {message.body ? (
+          <div className="at-bubble-text">
+            <WhatsAppText text={message.body} />
+          </div>
+        ) : null}
         <span className="at-bubble-time">
           {message.author === "vendedor" && message.deliveredText !== message.body ? "assinada · " : ""}
           <DeliveryMark message={message} onResend={onResend} />
@@ -508,7 +521,46 @@ function Composer({
   const [error, setError] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [original, setOriginal] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
+
+  const addFiles = (list: FileList | File[] | null) => {
+    const picked = Array.from(list ?? []).filter((file) => file.size > 0);
+    if (picked.length) setFiles((current) => [...current, ...picked].slice(0, 50));
+  };
+
+  /** Fotos/arquivos um por um, na ordem; o texto digitado vai como legenda da primeira. */
+  async function sendFiles() {
+    if (!files.length || sending) return;
+    setSending(true);
+    setError(null);
+    const caption = text.trim();
+    let sent = 0;
+    try {
+      for (const file of files) {
+        setProgress(`Enviando ${sent + 1} de ${files.length}…`);
+        const data = await uploadFile<{ message: Message; conversation: Conversation }>(`/api/atendimento/upload/conversas/${conversation.id}`, file, {
+          "x-caption": encodeURIComponent(sent === 0 ? caption : ""),
+          "x-sign": sign ? "1" : "0",
+          "x-original": original && file.type.startsWith("image/") ? "1" : "0",
+        });
+        sent += 1;
+        onSent(data.message, data.conversation);
+      }
+      setFiles([]);
+      setText("");
+    } catch (sendError) {
+      setFiles((current) => current.slice(sent));
+      setError(`${sent ? `${sent} enviado(s). ` : ""}${sendError instanceof Error ? sendError.message : "Não foi possível enviar."}`);
+    } finally {
+      setProgress(null);
+      setSending(false);
+      input.current?.focus();
+    }
+  }
 
   const slash = text.match(/^\/(\S*)$/);
   const query = pickerOpen ? "" : slash?.[1]?.toLowerCase() ?? null;
@@ -528,6 +580,7 @@ function Composer({
   }
 
   async function send() {
+    if (files.length) return sendFiles();
     const body = text.trim();
     if (!body || sending) return;
     setSending(true);
@@ -590,7 +643,45 @@ function Composer({
   }
 
   return (
-    <div className="at-composer">
+    <div
+      className="at-composer"
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault();
+        addFiles(event.dataTransfer.files);
+      }}
+    >
+      {files.length ? (
+        <div className="at-attach-tray">
+          <div className="at-attach-head">
+            <strong>{files.length} arquivo(s) para enviar</strong>
+            <span className="at-muted">{formatBytes(files.reduce((sum, file) => sum + file.size, 0))} · o texto digitado vai como legenda da 1ª</span>
+            <button className="at-btn at-btn-quiet" disabled={sending} onClick={() => setFiles([])} type="button">
+              Cancelar
+            </button>
+          </div>
+          <ul>
+            {files.map((file, index) => (
+              <li key={`${file.name}-${index}`}>
+                <span>{file.name}</span>
+                <small>{formatBytes(file.size)}</small>
+                <button aria-label={`Tirar ${file.name}`} disabled={sending} onClick={() => setFiles((current) => current.filter((_, i) => i !== index))} type="button">
+                  <X aria-hidden="true" size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          {files.some((file) => file.type.startsWith("image/")) ? (
+            <label className="at-check">
+              <input checked={original} onChange={(event) => setOriginal(event.target.checked)} type="checkbox" /> Fotos em qualidade original (vão como documento, sem a compressão do WhatsApp)
+            </label>
+          ) : null}
+          {progress ? <p className="at-muted" aria-live="polite">{progress}</p> : null}
+        </div>
+      ) : null}
       {showPicker ? (
         <div className="at-picker" role="listbox" aria-label="Mensagens rápidas">
           <div className="at-picker-head">
@@ -623,6 +714,20 @@ function Composer({
         <button aria-label="Mensagens rápidas" className="at-icon-btn" onClick={() => setPickerOpen((open) => !open)} title="Mensagens rápidas (ou digite /)" type="button">
           <Zap aria-hidden="true" size={18} />
         </button>
+        <button aria-label="Enviar foto ou arquivo" className="at-icon-btn" onClick={() => filePicker.current?.click()} title="Enviar fotos ou arquivos (ou arraste/cole aqui)" type="button">
+          <Paperclip aria-hidden="true" size={18} />
+        </button>
+        <input
+          accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+          hidden
+          multiple
+          onChange={(event) => {
+            addFiles(event.target.files);
+            event.target.value = "";
+          }}
+          ref={filePicker}
+          type="file"
+        />
         <textarea
           aria-label="Mensagem"
           onChange={(event) => {
@@ -631,12 +736,18 @@ function Composer({
             if (pickerOpen && event.target.value) setPickerOpen(false);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Digite a mensagem… ( / para mensagens rápidas)"
+          onPaste={(event) => {
+            if (event.clipboardData.files.length) {
+              event.preventDefault();
+              addFiles(event.clipboardData.files);
+            }
+          }}
+          placeholder={files.length ? "Legenda (opcional)…" : "Digite a mensagem… ( / para mensagens rápidas)"}
           ref={input}
           rows={Math.min(6, Math.max(1, text.split("\n").length))}
           value={text}
         />
-        <button aria-label="Enviar" className="at-send" disabled={!text.trim() || sending} onClick={() => void send()} type="button">
+        <button aria-label="Enviar" className="at-send" disabled={(!text.trim() && !files.length) || sending} onClick={() => void send()} type="button">
           <Send aria-hidden="true" size={18} />
         </button>
       </div>

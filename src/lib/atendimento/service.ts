@@ -13,14 +13,19 @@ import {
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isSellerStatus, type Conversation, type Message } from "@/lib/atendimento/types";
+import { isSellerStatus, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"). Não chama a IA. */
-export function recordCustomerMessage(db: DatabaseSync, conversationId: string, text: string): Message {
+export function recordCustomerMessage(
+  db: DatabaseSync,
+  conversationId: string,
+  text: string,
+  media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
+): Message {
   const before = getConversation(db, conversationId);
   if (before.status === "finalizada") reopenConversation(db, conversationId);
   if (before.status === "aguardando_cliente") customerReplied(db, conversationId);
-  return addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text });
+  return addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
 }
 
 /** Conversas em que a IA está pensando agora (o painel mostra "digitando…"). */
@@ -86,6 +91,30 @@ export async function receiveCustomerMessage(
 /** "*Ana:*\nTexto" — negrito do WhatsApp com o primeiro nome do vendedor. */
 export function signedText(staffName: string, text: string) {
   return `*${firstName(staffName)}:*\n${text}`;
+}
+
+/** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). Mesma regra: só quem assumiu. */
+export function sendStaffMedia(
+  db: DatabaseSync,
+  conversationId: string,
+  staff: StaffActor,
+  media: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
+  caption: string,
+  options: { sign: boolean },
+): Message {
+  const conversation = getConversation(db, conversationId);
+  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
+    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
+  }
+  const body = caption.trim();
+  return addMessage(db, {
+    conversationId,
+    author: "vendedor",
+    authorName: staff.name,
+    body,
+    deliveredText: body && options.sign ? signedText(staff.name, body) : body,
+    media,
+  });
 }
 
 /** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */

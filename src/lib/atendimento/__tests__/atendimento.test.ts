@@ -8,6 +8,7 @@ import {
   finishConversation,
   getConversation,
   listMessages,
+  listContactMedia,
   listQuickReplies,
   markConversationRead,
   moveConversation,
@@ -19,6 +20,8 @@ import { receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage,
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { crc32, safeFileName } from "@/lib/atendimento/media";
+import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -393,6 +396,54 @@ describe("WhatsApp pela ponte", () => {
     const ok = fakeBridge();
     await deliverToWhatsApp(db, listMessages(db, id), bridge, ok.fetcher);
     expect(ok.sent).toHaveLength(0);
+  });
+});
+
+describe("mídias", () => {
+  const photo = (name: string, extra: Partial<{ mime: string; kind: "imagem" | "documento" | "audio" }> = {}) => ({
+    file: `x/${name}`,
+    kind: extra.kind ?? ("imagem" as const),
+    mime: extra.mime ?? "image/jpeg",
+    name,
+    size: 1000,
+    hasThumb: true,
+  });
+
+  it("foto sem legenda vira mensagem, prévia \"📷 Foto\" e entra na lista do contato, numerada", () => {
+    const first = receiveWhatsAppMessage(db, parseInbound({ externalId: "M1", chatId: "5511955554444@s.whatsapp.net", phone: "5511955554444", text: "" }, photo("a.jpg")));
+    receiveWhatsAppMessage(db, parseInbound({ externalId: "M2", chatId: "5511955554444@s.whatsapp.net", phone: "5511955554444", text: "segue" }, photo("b.pdf", { mime: "application/pdf", kind: "documento" })));
+    expect(() => parseInbound({ externalId: "M3", chatId: "5511955554444@s.whatsapp.net", phone: "5511955554444", text: "" })).toThrow(AtendimentoError);
+    const conversation = getConversation(db, first.conversationId);
+    expect(conversation.lastMessagePreview).toBe("segue");
+    const media = listContactMedia(db, first.conversationId);
+    expect(media.map((message) => [message.media?.name, message.body, message.mediaFile])).toEqual([
+      ["a.jpg", "", "x/a.jpg"],
+      ["b.pdf", "segue", "x/b.pdf"],
+    ]);
+    expect(listMessages(db, first.conversationId)[0].media).toEqual({ kind: "imagem", mime: "image/jpeg", name: "a.jpg", size: 1000, hasThumb: true });
+  });
+
+  it("plano do ZIP: intervalo De/Até, só fotos, só do cliente, nomes numerados sem repetir", () => {
+    const at = (minute: number) => new Date(2026, 10, 2, 14, minute).toISOString();
+    const item = (n: number, author: "cliente" | "vendedor", name: string, mime = "image/jpeg") =>
+      ({ id: `m${n}`, author, createdAt: at(n), mediaFile: `c/${n}`, media: { kind: "imagem", mime, name, size: 1, hasThumb: false } }) as unknown as Parameters<typeof mediaZipPlan>[0][number];
+    const all = [item(1, "cliente", "IMG.jpg"), item(2, "cliente", "IMG.jpg"), item(3, "vendedor", "orcamento.pdf", "application/pdf"), item(4, "cliente", "x.jpg"), item(5, "cliente", "y.jpg")];
+    const plan = mediaZipPlan(all, { contactName: "Maria Souza", phone: "5511955554444" }, { from: 4, to: 1, onlyPhotos: false, onlyCustomer: false });
+    expect(plan.entries.map((entry) => entry.name)).toEqual([
+      "001 - 2026-11-02 14-01 - IMG.jpg",
+      "002 - 2026-11-02 14-02 - IMG.jpg",
+      "003 - 2026-11-02 14-03 - orcamento.pdf",
+      "004 - 2026-11-02 14-04 - x.jpg",
+    ]);
+    expect(plan.zipName).toBe("midias-Maria-Souza-4444-1-a-4.zip");
+    expect(mediaZipPlan(all, { contactName: "", phone: "5511955554444" }, { from: 1, to: 99, onlyPhotos: true, onlyCustomer: true }).entries.map((entry) => entry.file)).toEqual(["c/1", "c/2", "c/4", "c/5"]);
+  });
+
+  it("CRC32 do ZIP e nomes de arquivo seguros", () => {
+    expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+    expect(safeFileName("..\\..\\etc/pass:wd", "text/plain")).toBe("pass_wd");
+    expect(safeFileName("", "image/jpeg")).toBe("arquivo.jpg");
+    expect(safeFileName("Foto Final.JPG", "image/jpeg")).toBe("Foto Final.jpg");
   });
 });
 

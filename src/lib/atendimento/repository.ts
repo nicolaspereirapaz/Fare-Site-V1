@@ -8,6 +8,7 @@ import {
   type Channel,
   type Conversation,
   type ConversationStatus,
+  type MediaKind,
   type Message,
   type QuickReply,
 } from "@/lib/atendimento/types";
@@ -79,7 +80,33 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "delivery", "TEXT NOT NULL DEFAULT ''");
   addColumn(db, "atd_messages", "delivery_error", "TEXT");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS atd_messages_external ON atd_messages (external_id) WHERE external_id IS NOT NULL");
+  // v3 (mídias): arquivo no disco + tipo, nome original, tamanho e se tem miniatura.
+  addColumn(db, "atd_messages", "media_file", "TEXT");
+  addColumn(db, "atd_messages", "media_kind", "TEXT");
+  addColumn(db, "atd_messages", "media_mime", "TEXT");
+  addColumn(db, "atd_messages", "media_name", "TEXT");
+  addColumn(db, "atd_messages", "media_size", "INTEGER");
+  addColumn(db, "atd_messages", "media_thumb", "INTEGER NOT NULL DEFAULT 0");
   seedQuickReplies(db);
+}
+
+const MEDIA_PREVIEW: Record<MediaKind, string> = { imagem: "📷 Foto", video: "🎥 Vídeo", audio: "🎤 Áudio", documento: "📄 Documento", figurinha: "Figurinha" };
+
+/** Mídias do contato (todas as conversas do mesmo número), da mais antiga para a mais nova. */
+export function listContactMedia(db: DatabaseSync, conversationId: string): Array<Message & { mediaFile: string }> {
+  const conversation = getConversation(db, conversationId);
+  return (db
+    .prepare(
+      `SELECT m.* FROM atd_messages m JOIN atd_conversations c ON c.id = m.conversation_id
+       WHERE c.channel = ? AND c.phone = ? AND m.media_file IS NOT NULL ORDER BY m.created_at, m.seq`,
+    )
+    .all(conversation.channel, conversation.phone) as ConversationRow[]).map((row) => ({ ...toMessage(row), mediaFile: String(row.media_file) }));
+}
+
+/** Arquivo da mensagem no disco (relativo à pasta de mídias). */
+export function mediaFileOf(db: DatabaseSync, messageId: string): { file: string; conversationId: string } | null {
+  const row = db.prepare("SELECT media_file, conversation_id FROM atd_messages WHERE id = ? AND media_file IS NOT NULL").get(messageId) as ConversationRow | undefined;
+  return row ? { file: String(row.media_file), conversationId: String(row.conversation_id) } : null;
 }
 
 function addColumn(db: DatabaseSync, table: string, column: string, definition: string) {
@@ -123,6 +150,15 @@ function toMessage(row: ConversationRow): Message {
     deliveredText: String(row.delivered_text ?? ""),
     delivery: (String(row.delivery ?? "") as Message["delivery"]) || "",
     deliveryError: row.delivery_error === null || row.delivery_error === undefined ? null : String(row.delivery_error),
+    media: row.media_file
+      ? {
+          kind: String(row.media_kind) as MediaKind,
+          mime: String(row.media_mime ?? ""),
+          name: String(row.media_name ?? ""),
+          size: Number(row.media_size ?? 0),
+          hasThumb: Number(row.media_thumb ?? 0) === 1,
+        }
+      : null,
     createdAt: String(row.created_at),
   };
 }
@@ -213,22 +249,42 @@ export function listMessages(db: DatabaseSync, conversationId: string, afterSeq 
 
 export function addMessage(
   db: DatabaseSync,
-  input: { conversationId: string; author: AuthorKind; authorName?: string; body: string; deliveredText?: string; externalId?: string; delivery?: Message["delivery"] },
+  input: {
+    conversationId: string;
+    author: AuthorKind;
+    authorName?: string;
+    body: string;
+    deliveredText?: string;
+    externalId?: string;
+    delivery?: Message["delivery"];
+    media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
+  },
 ): Message {
   const body = input.body.trim();
-  if (!body) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
+  if (!body && !input.media) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
   const at = nowIso();
   const id = randomUUID();
   const delivered = input.author === "sistema" ? "" : (input.deliveredText ?? body);
   db.prepare(
     "INSERT INTO atd_messages (id, conversation_id, author, author_name, body, delivered_text, external_id, delivery, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(id, input.conversationId, input.author, input.authorName ?? "", body.slice(0, 4000), delivered.slice(0, 4200), input.externalId ?? null, input.delivery ?? "", at);
+  if (input.media) {
+    db.prepare("UPDATE atd_messages SET media_file = ?, media_kind = ?, media_mime = ?, media_name = ?, media_size = ?, media_thumb = ? WHERE id = ?").run(
+      input.media.file,
+      input.media.kind,
+      input.media.mime,
+      input.media.name.slice(0, 160),
+      input.media.size,
+      input.media.hasThumb ? 1 : 0,
+      id,
+    );
+  }
   if (input.author !== "sistema") {
     // "Não lidas" só conta o que a equipe precisa ler: enquanto a IA atende, ela mesma responde.
     db.prepare(
       `UPDATE atd_conversations SET last_message_at = ?, last_message_preview = ?, last_message_author = ?, updated_at = ?,
          unread = unread + (CASE WHEN ? = 1 AND status <> 'ia' THEN 1 ELSE 0 END) WHERE id = ?`,
-    ).run(at, body.replace(/\s+/g, " ").slice(0, 140), input.author, at, input.author === "cliente" ? 1 : 0, input.conversationId);
+    ).run(at, (body || MEDIA_PREVIEW[input.media!.kind]).replace(/\s+/g, " ").slice(0, 140), input.author, at, input.author === "cliente" ? 1 : 0, input.conversationId);
   } else {
     db.prepare("UPDATE atd_conversations SET updated_at = ? WHERE id = ?").run(at, input.conversationId);
   }

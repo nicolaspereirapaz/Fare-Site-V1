@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
+import { mediaPath } from "@/lib/atendimento/media";
 import {
   AtendimentoError,
   addMessage,
@@ -6,6 +8,7 @@ import {
   findWhatsAppConversation,
   getConversation,
   getMessage,
+  mediaFileOf,
   messageByExternalId,
   phoneDigits,
   phoneReplied,
@@ -13,7 +16,7 @@ import {
   updateConversationProfile,
 } from "@/lib/atendimento/repository";
 import { recordCustomerMessage } from "@/lib/atendimento/service";
-import type { Message } from "@/lib/atendimento/types";
+import type { MediaKind, Message } from "@/lib/atendimento/types";
 
 /**
  * Ligação com o WhatsApp pela ponte Baileys (modo painel).
@@ -49,12 +52,16 @@ export type InboundWhatsApp = {
   text: string;
   /** Mensagem digitada no celular da loja (app do WhatsApp Business), não pelo cliente. */
   fromPhone: boolean;
+  /** Foto/arquivo já gravado no disco (ver media.ts). Com mídia, o texto (legenda) pode ser vazio. */
+  media?: StoredMediaRef;
 };
+
+export type StoredMediaRef = { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
 
 /** Nome mostrado no painel para respostas digitadas no celular (o WhatsApp não diz quem digitou). */
 export const PHONE_AUTHOR = "Celular";
 
-export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
+export function parseInbound(body: Record<string, unknown>, media?: StoredMediaRef): InboundWhatsApp {
   const str = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
   const inbound = {
     externalId: str(body.externalId, 200),
@@ -63,11 +70,17 @@ export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
     pushName: str(body.pushName, 80),
     text: str(body.text, 4000),
     fromPhone: body.fromPhone === true,
+    media,
   };
-  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || !inbound.text) {
+  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || (!inbound.text && !media)) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
   }
   return inbound;
+}
+
+/** Conversa do contato no WhatsApp (cria se for a primeira mensagem). */
+export function ensureWhatsAppConversation(db: DatabaseSync, chatId: string, phone: string) {
+  return findWhatsAppConversation(db, chatId, phone) ?? createConversation(db, { channel: "whatsapp", phone, waChatId: chatId });
 }
 
 /**
@@ -77,16 +90,23 @@ export function parseInbound(body: Record<string, unknown>): InboundWhatsApp {
 export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsApp): { conversationId: string; duplicate: boolean; fromPhone: boolean } {
   const existing = messageByExternalId(db, inbound.externalId);
   if (existing) return { conversationId: existing.conversationId, duplicate: true, fromPhone: inbound.fromPhone };
-  let conversation = findWhatsAppConversation(db, inbound.chatId, inbound.phone);
-  if (!conversation) conversation = createConversation(db, { channel: "whatsapp", phone: inbound.phone, waChatId: inbound.chatId });
+  const conversation = ensureWhatsAppConversation(db, inbound.chatId, inbound.phone);
   if (inbound.fromPhone) {
-    addMessage(db, { conversationId: conversation.id, author: "vendedor", authorName: PHONE_AUTHOR, body: inbound.text, externalId: inbound.externalId, delivery: "enviada" });
+    addMessage(db, {
+      conversationId: conversation.id,
+      author: "vendedor",
+      authorName: PHONE_AUTHOR,
+      body: inbound.text,
+      externalId: inbound.externalId,
+      delivery: "enviada",
+      media: inbound.media,
+    });
     phoneReplied(db, conversation.id);
     return { conversationId: conversation.id, duplicate: false, fromPhone: true };
   }
   // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
   if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
-  const message = recordCustomerMessage(db, conversation.id, inbound.text);
+  const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media);
   db.prepare("UPDATE atd_messages SET external_id = ? WHERE id = ?").run(inbound.externalId, message.id);
   return { conversationId: conversation.id, duplicate: false, fromPhone: false };
 }
@@ -112,12 +132,29 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
     }
     setDelivery(db, message.id, "pendente");
     try {
-      const response = await fetcher(`${config.url}/fare/painel/enviar`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-fare-token": config.token },
-        body: JSON.stringify({ chatId: conversation.waChatId, text: current.deliveredText, ref: message.id }),
-        signal: AbortSignal.timeout(30_000),
-      });
+      const stored = current.media ? mediaFileOf(db, current.id) : null;
+      const response = stored
+        ? // Foto/arquivo: corpo bruto + dados nos cabeçalhos (codificados: cabeçalho HTTP só aceita ASCII).
+          await fetcher(`${config.url}/fare/painel/enviar-midia`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/octet-stream",
+              "x-fare-token": config.token,
+              "x-chat-id": conversation.waChatId,
+              "x-kind": current.media!.kind,
+              "x-mime": current.media!.mime,
+              "x-file-name": encodeURIComponent(current.media!.name),
+              "x-caption": encodeURIComponent(current.deliveredText),
+            },
+            body: new Uint8Array(await readFile(mediaPath(stored.file))),
+            signal: AbortSignal.timeout(180_000),
+          })
+        : await fetcher(`${config.url}/fare/painel/enviar`, {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-fare-token": config.token },
+            body: JSON.stringify({ chatId: conversation.waChatId, text: current.deliveredText, ref: message.id }),
+            signal: AbortSignal.timeout(30_000),
+          });
       const data = (await response.json().catch(() => ({}))) as { messageId?: string; error?: string };
       if (!response.ok) throw new Error(data.error || `Ponte respondeu ${response.status}`);
       setDelivery(db, message.id, "enviada", { externalId: data.messageId ?? null });

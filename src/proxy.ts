@@ -46,6 +46,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Ignora os arquivos internos do Next e o envio de fotos; o resto passa pelo filtro acima.
   // O envio de fotos fica de fora porque o proxy guardaria o arquivo inteiro na memória (e corta acima de 10 MB);
-  // a própria rota (/api/fotos/envios) se bloqueia no modo campanha.
-  matcher: ["/((?!_next/static|_next/image|api/fotos/envios$).*)"],
+  // a própria rota (/api/fotos/envios) se bloqueia no modo campanha. O mesmo vale para os envios de arquivo
+  // do atendimento (/api/atendimento/upload/...), que também se bloqueiam sozinhos no modo campanha.
+  matcher: ["/((?!_next/static|_next/image|api/fotos/envios$|api/atendimento/upload/).*)"],
 };

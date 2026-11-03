@@ -75,10 +75,22 @@ export type Message = {
   /** Só WhatsApp: "" (não se aplica), pendente, enviada ou falhou. */
   delivery: Delivery;
   deliveryError: string | null;
+  media: MessageMedia | null;
   createdAt: string;
 };
 
 export type Delivery = "" | "pendente" | "enviada" | "falhou";
+
+export type MediaKind = "imagem" | "video" | "audio" | "documento" | "figurinha";
+
+/** Arquivo anexado à mensagem (o arquivo fica no disco; o painel abre por /api/atendimento/midia/<id da mensagem>). */
+export type MessageMedia = {
+  kind: MediaKind;
+  mime: string;
+  name: string;
+  size: number;
+  hasThumb: boolean;
+};
 
 export type QuickReply = {
   id: string;
