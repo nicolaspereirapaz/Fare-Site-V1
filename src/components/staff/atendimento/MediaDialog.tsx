@@ -126,14 +126,14 @@ export function MediaDialog({ conversation, onClose }: { conversation: Conversat
           </span>
           <span className="at-media-actions">
             <a aria-disabled={!selected.length} className={`at-btn at-btn-primary${selected.length ? "" : " is-disabled"}`} download href={selected.length ? zipUrl(false) : undefined}>
-              <Download aria-hidden="true" size={16} /> {hasRange ? `Baixar nº ${low} a ${high} (${selected.length})` : `Baixar todas (${selected.length})`}
+              <Download aria-hidden="true" size={16} /> {hasRange ? `Baixar nº ${low} a ${high}` : "Baixar todas"} · {selected.length} {selected.length === 1 ? "arquivo" : "arquivos"}
             </a>
           </span>
         </div>
 
         {error ? <div className="at-banner at-banner-error" role="alert">{error}</div> : null}
-        {!items && !error ? <p className="at-muted at-center">Carregando…</p> : null}
-        {items && !visible.length ? <p className="at-muted at-center">Nenhuma mídia {items.length ? "com esse filtro" : "nesta conversa"}.</p> : null}
+        {!items && !error ? <p className="at-muted at-center at-media-status">Carregando…</p> : null}
+        {items && !visible.length ? <p className="at-muted at-center at-media-status">Nenhuma mídia {items.length ? "com esse filtro" : "nesta conversa"}.</p> : null}
 
         <ul className="at-media-grid">
           {visible.map((item) => {
