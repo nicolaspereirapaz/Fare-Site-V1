@@ -22,6 +22,13 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
       ],
+    }, {
+      // Atendimento da equipe: o vendedor grava áudio pelo microfone (só nesta área; o resto do site continua sem).
+      source: "/equipe/atendimento/:path*",
+      headers: [{ key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=()" }],
+    }, {
+      source: "/equipe/atendimento",
+      headers: [{ key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=()" }],
     }];
   },
   // Permite testar o site a partir de outros dispositivos da rede local.
