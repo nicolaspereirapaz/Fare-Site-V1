@@ -57,7 +57,11 @@ const toServiceMessages = (messages: Message[]) =>
     .filter((message) => !isInternal(message.author))
     .map((message) => ({
       author: message.author,
-      text: message.media ? `${MEDIA_NOTE[message.media.kind]}${message.body ? ` ${message.body}` : ""}` : message.body,
+      text: message.media
+        ? message.media.kind === "audio" && message.transcript
+          ? `[mandou um áudio; transcrição automática:] ${message.transcript}`
+          : `${MEDIA_NOTE[message.media.kind]}${message.body ? ` ${message.body}` : ""}`
+        : message.body,
       name: message.author === "vendedor" ? message.authorName : undefined,
     }));
 

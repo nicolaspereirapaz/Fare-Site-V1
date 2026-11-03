@@ -93,6 +93,9 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_conversations", "tags", "TEXT NOT NULL DEFAULT '[]'");
   // v5: resposta citando outra mensagem.
   addColumn(db, "atd_messages", "reply_to_id", "TEXT");
+  // v6: transcrição dos áudios.
+  addColumn(db, "atd_messages", "transcript", "TEXT NOT NULL DEFAULT ''");
+  addColumn(db, "atd_messages", "transcript_status", "TEXT NOT NULL DEFAULT ''");
   seedQuickReplies(db);
 }
 
@@ -207,6 +210,8 @@ function toMessage(row: ConversationRow): Message {
         }
       : null,
     replyToId: row.reply_to_id === null || row.reply_to_id === undefined ? null : String(row.reply_to_id),
+    transcript: String(row.transcript ?? ""),
+    transcriptStatus: (String(row.transcript_status ?? "") as Message["transcriptStatus"]) || "",
     createdAt: String(row.created_at),
   };
 }
@@ -236,6 +241,21 @@ export function findWhatsAppConversation(db: DatabaseSync, waChatId: string, pho
 export function messageByExternalId(db: DatabaseSync, externalId: string): Message | null {
   const row = db.prepare("SELECT * FROM atd_messages WHERE external_id = ?").get(externalId) as ConversationRow | undefined;
   return row ? toMessage(row) : null;
+}
+
+export function setTranscript(db: DatabaseSync, messageId: string, status: Message["transcriptStatus"], text = "") {
+  db.prepare("UPDATE atd_messages SET transcript = ?, transcript_status = ? WHERE id = ?").run(text.slice(0, 4000), status, messageId);
+}
+
+/** Transcrições recentes (mudam depois que o áudio já apareceu na conversa). */
+export function recentTranscripts(db: DatabaseSync, conversationId: string): Array<Pick<Message, "id" | "transcript" | "transcriptStatus">> {
+  return (db
+    .prepare("SELECT id, transcript, transcript_status FROM atd_messages WHERE conversation_id = ? AND transcript_status <> '' ORDER BY seq DESC LIMIT 30")
+    .all(conversationId) as ConversationRow[]).map((row) => ({
+    id: String(row.id),
+    transcript: String(row.transcript ?? ""),
+    transcriptStatus: String(row.transcript_status) as Message["transcriptStatus"],
+  }));
 }
 
 export function recentDeliveries(db: DatabaseSync, conversationId: string): Array<Pick<Message, "id" | "delivery" | "deliveryError">> {

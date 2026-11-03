@@ -1,5 +1,5 @@
 import { AtendimentoError, getConversation } from "@/lib/atendimento/repository";
-import { atendimentoDb, deliverInBackground, json, withStaff } from "@/lib/atendimento/server";
+import { atendimentoDb, deliverInBackground, json, transcribeInBackground, withStaff } from "@/lib/atendimento/server";
 import { sendStaffMedia } from "@/lib/atendimento/service";
 import { readBrowserUpload } from "@/lib/atendimento/upload";
 import { isSellerStatus } from "@/lib/atendimento/types";
@@ -21,5 +21,6 @@ export const POST = withStaff(async (staff, request, context: RouteContext<"/api
   const { media, caption } = await readBrowserUpload(request, id, { asDocument: request.headers.get("x-original") === "1" });
   const message = sendStaffMedia(db, id, staff, media, caption, { sign: request.headers.get("x-sign") !== "0", replyToId: request.headers.get("x-reply-to")?.slice(0, 80) || null });
   deliverInBackground(db, [message]);
+  if (media.kind === "audio") transcribeInBackground(db, message.id);
   return json({ message, conversation: getConversation(db, id) }, 201);
 });

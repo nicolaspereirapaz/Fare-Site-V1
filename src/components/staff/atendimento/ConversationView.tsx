@@ -12,6 +12,7 @@ import {
   Hand,
   Images,
   Inbox,
+  Mic,
   Paperclip,
   MessageSquareText,
   Send,
@@ -19,6 +20,7 @@ import {
   Search,
   Smartphone,
   StickyNote,
+  Trash2,
   Undo2,
   UserPlus,
   UserRound,
@@ -29,6 +31,7 @@ import {
 import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
 import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
 import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
+import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recorder";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
@@ -326,7 +329,7 @@ function ChatPanel({
   const findMatches = useMemo(() => {
     const words = foldText(findText).split(/\s+/).filter((word) => word.length >= 2);
     if (!words.length) return [] as Message[];
-    return messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(message.body).includes(word))).reverse();
+    return messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(`${message.body} ${message.transcript}`).includes(word))).reverse();
   }, [findText, messages]);
   const goToMatch = (index: number, list = findMatches) => {
     if (!list.length) return;
@@ -352,6 +355,7 @@ function ChatPanel({
           customers?: LinkedCustomer[];
           aiThinking?: boolean;
           deliveries?: Array<Pick<Message, "id" | "delivery" | "deliveryError">>;
+          transcripts?: Array<Pick<Message, "id" | "transcript" | "transcriptStatus">>;
         }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
         );
@@ -367,6 +371,15 @@ function ChatPanel({
           setMessages((list) =>
             list.some((message) => deliveries.has(message.id) && deliveries.get(message.id)!.delivery !== message.delivery)
               ? list.map((message) => (deliveries.has(message.id) ? { ...message, ...deliveries.get(message.id)! } : message))
+              : list,
+          );
+        }
+        // Transcrição chega depois do áudio: atualiza o balão.
+        const transcripts = new Map((data.transcripts ?? []).map((entry) => [entry.id, entry]));
+        if (transcripts.size) {
+          setMessages((list) =>
+            list.some((message) => transcripts.has(message.id) && transcripts.get(message.id)!.transcriptStatus !== message.transcriptStatus)
+              ? list.map((message) => (transcripts.has(message.id) ? { ...message, ...transcripts.get(message.id)! } : message))
               : list,
           );
         }
@@ -481,7 +494,7 @@ function ChatPanel({
                 const value = event.target.value;
                 setFindText(value);
                 const words = foldText(value).split(/\s+/).filter((word) => word.length >= 2);
-                const list = words.length ? messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(message.body).includes(word))).reverse() : [];
+                const list = words.length ? messages.filter((message) => message.author !== "sistema" && words.every((word) => foldText(`${message.body} ${message.transcript}`).includes(word))).reverse() : [];
                 goToMatch(0, list);
               }}
               onKeyDown={(event) => {
@@ -825,6 +838,26 @@ function Composer({
   const [noteMode, setNoteMode] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
+  const recorder = useRecorder();
+
+  /** Para a gravação e manda como mensagem de voz. */
+  async function sendRecording() {
+    const file = await recorder.stop(true);
+    if (!file) return;
+    setSending(true);
+    setError(null);
+    try {
+      const data = await uploadFile<{ message: Message; conversation: Conversation }>(`/api/atendimento/upload/conversas/${conversation.id}`, file, {
+        "x-sign": "0",
+        ...(replyTo ? { "x-reply-to": replyTo.id } : {}),
+      });
+      onSent(data.message, data.conversation);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar o áudio.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   const addFiles = (list: FileList | File[] | null) => {
     const picked = Array.from(list ?? []).filter((file) => file.size > 0);
@@ -1026,7 +1059,21 @@ function Composer({
           )}
         </div>
       ) : null}
-      {error ? <p className="at-composer-error" role="alert">{error}</p> : null}
+      {error || recorder.error ? <p className="at-composer-error" role="alert">{error ?? recorder.error}</p> : null}
+      {recorder.recording ? (
+        <div className="at-composer-row at-recording" aria-live="polite">
+          <span className="at-rec-dot" aria-hidden="true" />
+          <span>
+            Gravando <strong>{formatSeconds(recorder.seconds)}</strong> <small className="at-muted">(até 5 min)</small>
+          </span>
+          <button className="at-btn at-btn-quiet" onClick={() => void recorder.stop(false)} type="button">
+            <Trash2 aria-hidden="true" size={16} /> Cancelar
+          </button>
+          <button aria-label="Enviar áudio" className="at-send" onClick={() => void sendRecording()} type="button">
+            <Send aria-hidden="true" size={18} />
+          </button>
+        </div>
+      ) : (
       <div className="at-composer-row">
         <button aria-label="Mensagens rápidas" className="at-icon-btn" onClick={() => setPickerOpen((open) => !open)} title="Mensagens rápidas (ou digite /)" type="button">
           <Zap aria-hidden="true" size={18} />
@@ -1077,10 +1124,17 @@ function Composer({
           rows={Math.min(6, Math.max(1, text.split("\n").length))}
           value={text}
         />
-        <button aria-label={noteMode ? "Salvar nota" : "Enviar"} className={`at-send${noteMode ? " is-note" : ""}`} disabled={(!text.trim() && (!files.length || noteMode)) || sending} onClick={() => void send()} type="button">
-          <Send aria-hidden="true" size={18} />
-        </button>
+        {!noteMode && !text.trim() && !files.length ? (
+          <button aria-label="Gravar áudio" className="at-send at-mic" disabled={sending} onClick={() => void recorder.start()} title="Gravar áudio (vai como mensagem de voz)" type="button">
+            <Mic aria-hidden="true" size={18} />
+          </button>
+        ) : (
+          <button aria-label={noteMode ? "Salvar nota" : "Enviar"} className={`at-send${noteMode ? " is-note" : ""}`} disabled={(!text.trim() && (!files.length || noteMode)) || sending} onClick={() => void send()} type="button">
+            <Send aria-hidden="true" size={18} />
+          </button>
+        )}
       </div>
+      )}
       {noteMode ? (
         <p className="at-sign at-note-hint">
           <StickyNote aria-hidden="true" size={13} /> Nota interna: fica só no painel. O cliente e a IA não veem.

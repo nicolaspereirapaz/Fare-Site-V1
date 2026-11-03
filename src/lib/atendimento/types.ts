@@ -86,6 +86,9 @@ export type Message = {
   media: MessageMedia | null;
   /** Mensagem citada (resposta a uma mensagem específica, como no WhatsApp). */
   replyToId: string | null;
+  /** Áudio: texto transcrito e situação ("" = não se aplica). */
+  transcript: string;
+  transcriptStatus: "" | "pendente" | "ok" | "falhou";
   createdAt: string;
 };
 

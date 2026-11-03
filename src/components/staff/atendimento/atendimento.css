@@ -320,6 +320,16 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-find input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #d5d9e6; border-radius: 8px; font: inherit; font-size: 0.86rem; }
 .at-find .at-muted { white-space: nowrap; }
 
+/* Áudio: transcrição e gravação */
+.at-transcript { max-width: 300px; margin: 2px 0 4px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, .045); font-size: 0.8rem; line-height: 1.4; }
+.at-transcript span { color: var(--muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+.at-transcript.is-pending { color: var(--muted); font-style: italic; animation: at-pulse 1.2s ease-in-out infinite; }
+.at-transcript.is-failed { color: #8f3416; }
+.at-recording { align-items: center; padding: 6px 4px; }
+.at-recording > span:nth-child(2) { flex: 1; }
+.at-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #d4532a; animation: at-pulse 1s ease-in-out infinite; }
+.at-send.at-mic { background: var(--navy); }
+
 /* Notas internas */
 .at-note { align-self: center; width: min(78%, 560px); margin: 8px 0; padding: 7px 12px 8px; border: 1px dashed #d9b44a; border-radius: 10px; background: #fff8dc; color: #4a3a0a; font-size: 0.86rem; line-height: 1.42; overflow-wrap: anywhere; }
 .at-note-head { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; color: #8a6a10; font-size: 0.72rem; font-weight: 700; }

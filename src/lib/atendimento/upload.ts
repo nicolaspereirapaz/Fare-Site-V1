@@ -1,5 +1,5 @@
 import { AtendimentoError } from "@/lib/atendimento/repository";
-import { acceptedMime, saveMedia, type StoredMedia } from "@/lib/atendimento/media";
+import { acceptedMime, saveMedia, toVoiceNote, type StoredMedia } from "@/lib/atendimento/media";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
 
 /**
@@ -28,6 +28,12 @@ export async function readBrowserUpload(request: Request, conversationId: string
     });
   } catch (error) {
     throw new AtendimentoError("INVALID_REQUEST", error instanceof Error ? error.message : "Falha ao gravar o arquivo.");
+  }
+  // Gravação do painel (webm do navegador) vira mensagem de voz do WhatsApp (ogg/opus).
+  try {
+    stored = await toVoiceNote(stored);
+  } catch (error) {
+    throw new AtendimentoError("INVALID_REQUEST", error instanceof Error ? error.message : "Não foi possível converter o áudio.");
   }
   return { media: { ...stored, hasThumb: stored.mime.startsWith("image/") }, caption: decode(request.headers.get("x-caption")).slice(0, 2000) };
 }

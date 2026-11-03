@@ -9,6 +9,7 @@ import {
   getConversation,
   listMessages,
   knownTags,
+  setTranscript,
   listContactMedia,
   listQuickReplies,
   setConversationTags,
@@ -26,6 +27,7 @@ import { crc32, safeFileName } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
+import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -517,6 +519,33 @@ describe("responder citando", () => {
       return new Response("{}");
     }) as unknown as typeof fetch);
     expect(bodies[0].quote).toEqual({ id: "R1", fromMe: false, text: "quero 20 fotos" });
+  });
+});
+
+describe("áudio", () => {
+  const audio = { file: "x/a.ogg", kind: "audio" as const, mime: "audio/ogg", name: "audio.ogg", size: 10, hasThumb: false };
+
+  it("IA real recebe a transcrição do áudio; a busca também acha pelo que foi falado", async () => {
+    const { id } = newConversation();
+    const message = recordCustomerMessage(db, id, "", audio);
+    setTranscript(db, message.id, "ok", "quero revelar quarenta fotos dez por quinze");
+    let sent: Array<{ text: string }> = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      sent = JSON.parse(String(init.body)).messages;
+      return new Response(JSON.stringify({ reply: "Qual o seu nome?", handoff: false, subject: "", name: "", profile: {} }));
+    }) as unknown as typeof fetch;
+    await runAi(db, id, createRealBrain({ url: "http://ia", token: "t" }, fetcher));
+    expect(sent.at(-1)?.text).toBe("[mandou um áudio; transcrição automática:] quero revelar quarenta fotos dez por quinze");
+    expect(searchMessages(db, "quarenta fotos").map((hit) => hit.messageId)).toEqual([message.id]);
+  });
+
+  it("sem serviço configurado a transcrição fica \"falhou\" (o painel mostra para ouvir o áudio)", async () => {
+    const { id } = newConversation();
+    const message = recordCustomerMessage(db, id, "", audio);
+    expect(voiceConfig({})).toBeNull();
+    expect(voiceConfig({ FARE_IA_TOKEN: "t" })).toEqual({ url: "http://127.0.0.1:8652", token: "t" });
+    expect(await transcribeMessage(db, message.id, null)).toBeNull();
+    expect(listMessages(db, id).at(-1)).toMatchObject({ transcriptStatus: "falhou", transcript: "" });
   });
 });
 

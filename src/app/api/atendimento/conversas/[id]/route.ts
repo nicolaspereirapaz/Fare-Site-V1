@@ -7,6 +7,7 @@ import {
   getMessage,
   listMessages,
   recentDeliveries,
+  recentTranscripts,
   setConversationTags,
   markConversationRead,
   moveConversation,
@@ -36,6 +37,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     aiMode: activeBrain().mode,
     // Status de envio ao WhatsApp das últimas mensagens (muda depois que a mensagem já apareceu).
     deliveries: conversation.channel === "whatsapp" ? recentDeliveries(db, id) : [],
+    transcripts: recentTranscripts(db, id),
   });
 });
 

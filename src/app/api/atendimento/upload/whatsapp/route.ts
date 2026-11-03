@@ -1,6 +1,6 @@
 import { AtendimentoError, messageByExternalId } from "@/lib/atendimento/repository";
 import { saveMedia } from "@/lib/atendimento/media";
-import { atendimentoDb, json, respondInBackground } from "@/lib/atendimento/server";
+import { atendimentoDb, json, respondInBackground, transcribeInBackground } from "@/lib/atendimento/server";
 import { ensureWhatsAppConversation, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 import type { MediaKind } from "@/lib/atendimento/types";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
@@ -37,8 +37,11 @@ export async function POST(request: Request) {
       kind,
     });
     const media = { ...stored, hasThumb: stored.mime.startsWith("image/") };
-    const result = receiveWhatsAppMessage(db, parseInbound(meta, media));
-    if (!result.duplicate && !result.fromPhone) respondInBackground(db, result.conversationId);
+    const inbound = parseInbound(meta, media);
+    const result = receiveWhatsAppMessage(db, inbound);
+    const audioId = !result.duplicate && media.kind === "audio" ? messageByExternalId(db, inbound.externalId)?.id : undefined;
+    if (!result.duplicate && !result.fromPhone) respondInBackground(db, result.conversationId, { transcribeFirst: audioId });
+    else if (audioId) transcribeInBackground(db, audioId);
     return json({ ok: true, ...result }, 201);
   } catch (error) {
     if (error instanceof AtendimentoError) return json({ error: error.code, message: error.message }, 400);

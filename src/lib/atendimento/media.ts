@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
@@ -7,6 +8,7 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import sharp from "sharp";
 import type { MediaKind } from "@/lib/atendimento/types";
+import { FFMPEG } from "@/lib/photoOrders/config";
 
 /**
  * Fotos, vídeos, áudios e documentos das conversas do atendimento.
@@ -97,6 +99,27 @@ export async function saveMedia(
     await sharp(target, { failOn: "none" }).rotate().resize(320, 320, { fit: "cover" }).jpeg({ quality: 72 }).toFile(target + THUMB_SUFFIX).catch(() => undefined);
   }
   return { file: relative.split(path.sep).join("/"), size, name, mime, kind: input.kind ?? kindFromMime(mime) };
+}
+
+/**
+ * Áudio gravado no navegador (webm) -> ogg/opus, o formato de "mensagem de voz" do WhatsApp.
+ * Usa o ffmpeg do PC (o mesmo do pedido de fotos).
+ */
+export async function toVoiceNote(stored: StoredMedia): Promise<StoredMedia> {
+  if (stored.mime !== "audio/webm") return stored;
+  const input = mediaPath(stored.file);
+  const relative = stored.file.replace(/\.[^./]+$/, "") + ".ogg";
+  const output = mediaPath(relative);
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(FFMPEG, ["-v", "error", "-y", "-i", input, "-vn", "-c:a", "libopus", "-b:a", "32k", "-ar", "48000", "-ac", "1", output], { windowsHide: true });
+    let errors = "";
+    child.stderr.on("data", (chunk) => (errors += String(chunk)));
+    child.on("error", reject);
+    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg não converteu o áudio (${code}): ${errors.slice(0, 200)}`))));
+  });
+  await rm(input, { force: true });
+  const { size } = await stat(output);
+  return { ...stored, file: relative, mime: "audio/ogg", name: "audio.ogg", size, kind: "audio" };
 }
 
 /** Caminho absoluto, sem sair da pasta de mídias. */

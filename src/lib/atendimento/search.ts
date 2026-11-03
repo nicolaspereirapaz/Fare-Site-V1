@@ -32,9 +32,9 @@ export function searchMessages(db: DatabaseSync, query: string, limit = 30): Mes
   if (!words.length) return [];
   const rows = db
     .prepare(
-      `SELECT m.id, m.conversation_id, m.body, m.author, m.created_at, c.contact_name, c.phone
+      `SELECT m.id, m.conversation_id, TRIM(m.body || ' ' || m.transcript) AS body, m.author, m.created_at, c.contact_name, c.phone
        FROM atd_messages m JOIN atd_conversations c ON c.id = m.conversation_id
-       WHERE m.author <> 'sistema' AND m.body <> '' ORDER BY m.created_at DESC LIMIT 20000`,
+       WHERE m.author <> 'sistema' AND (m.body <> '' OR m.transcript <> '') ORDER BY m.created_at DESC LIMIT 20000`,
     )
     .all() as Array<Record<string, string>>;
   const hits: MessageHit[] = [];

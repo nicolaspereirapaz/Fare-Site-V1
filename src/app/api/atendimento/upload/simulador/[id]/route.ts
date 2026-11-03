@@ -11,7 +11,7 @@ export const POST = withStaff(async (_staff, request, context: RouteContext<"/ap
   const db = atendimentoDb();
   if (getConversation(db, id).channel !== "simulador") throw new AtendimentoError("CONVERSATION_NOT_FOUND", "Conversa de simulação não encontrada.");
   const { media, caption } = await readBrowserUpload(request, id);
-  recordCustomerMessage(db, id, caption, media);
-  respondInBackground(db, id);
+  const message = recordCustomerMessage(db, id, caption, media);
+  respondInBackground(db, id, { transcribeFirst: media.kind === "audio" ? message.id : undefined });
   return json({ status: getConversation(db, id).status }, 201);
 });

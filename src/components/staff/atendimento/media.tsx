@@ -28,7 +28,13 @@ export async function uploadFile<T>(url: string, file: File, headers: Record<str
 }
 
 /** Foto, vídeo, áudio ou documento dentro do balão da conversa. */
-export function MessageMediaView({ message, onOpen }: { message: Pick<Message, "id" | "media">; onOpen?: (messageId: string) => void }) {
+export function MessageMediaView({
+  message,
+  onOpen,
+}: {
+  message: Pick<Message, "id" | "media"> & Partial<Pick<Message, "transcript" | "transcriptStatus">>;
+  onOpen?: (messageId: string) => void;
+}) {
   const media = message.media;
   if (!media) return null;
   const isImage = media.mime.startsWith("image/");
@@ -54,7 +60,18 @@ export function MessageMediaView({ message, onOpen }: { message: Pick<Message, "
     return <video className="at-media-video" controls preload="metadata" src={mediaUrl(message.id)} />;
   }
   if (media.kind === "audio") {
-    return <audio className="at-media-audio" controls preload="none" src={mediaUrl(message.id)} />;
+    return (
+      <>
+        <audio className="at-media-audio" controls preload="none" src={mediaUrl(message.id)} />
+        {message.transcriptStatus === "pendente" ? <p className="at-transcript is-pending">transcrevendo o áudio…</p> : null}
+        {message.transcriptStatus === "ok" ? (
+          <p className="at-transcript" title="Transcrição automática (pode ter erros)">
+            <span>Transcrição:</span> {message.transcript || "(sem fala)"}
+          </p>
+        ) : null}
+        {message.transcriptStatus === "falhou" ? <p className="at-transcript is-failed">Não foi possível transcrever. Ouça o áudio.</p> : null}
+      </>
+    );
   }
   const Icon = media.mime.startsWith("video/") ? Video : media.mime.startsWith("audio/") ? Mic : FileText;
   return (
