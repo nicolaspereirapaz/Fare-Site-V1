@@ -28,7 +28,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   const { id } = await context.params;
   const db = atendimentoDb();
   const withCustomers = new URL(request.url).searchParams.get("clientes") !== "0";
-  // Conversas antigas (de antes do cadastro automático) ganham o cadastro ao abrir.
+  // Ao abrir, liga ao cadastro que já existe com esse WhatsApp (não cria).
   const conversation = withCustomers ? linkConversationCustomer(db, id) : getConversation(db, id);
   const after = Number(new URL(request.url).searchParams.get("depois") ?? 0) || 0;
   return json({

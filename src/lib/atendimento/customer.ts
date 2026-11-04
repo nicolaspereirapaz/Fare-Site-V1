@@ -24,10 +24,11 @@ const AUTO_ACTOR = { id: "atendimento-whatsapp", name: "Atendimento (WhatsApp)" 
 /**
  * Liga a conversa do WhatsApp a um cadastro do site:
  *   - já existe cadastro com esse WhatsApp: usa ele (conta do site primeiro) e passa a mostrar o nome do cadastro;
- *   - não existe: cria um cadastro do painel com o nome do WhatsApp (ou o informado) e o telefone.
+ *   - não existe e `create`: cria um cadastro do painel com o nome informado e o telefone.
+ *     Só quando a equipe abre a conversa pelo número; mensagem recebida não cria (pré-cadastro pelo bot desligado a pedido em 04/11/2026).
  * Nunca impede a mensagem de chegar: qualquer falha só deixa a conversa sem cadastro.
  */
-export function linkConversationCustomer(db: DatabaseSync, conversationId: string, nameHint = ""): Conversation {
+export function linkConversationCustomer(db: DatabaseSync, conversationId: string, nameHint = "", create = false): Conversation {
   const conversation = getConversation(db, conversationId);
   if (conversation.channel !== "whatsapp" || conversation.customerRef) return conversation;
   try {
@@ -38,6 +39,7 @@ export function linkConversationCustomer(db: DatabaseSync, conversationId: strin
       updateConversationProfile(db, conversationId, { contactName: existing.name });
       return getConversation(db, conversationId);
     }
+    if (!create) return conversation;
     const name = (nameHint || conversation.contactName).replace(/[~*_]/g, "").trim();
     const phone = normalizePhone(conversation.phone);
     if (name.length < 2 || !isBrazilianPhone(phone)) return conversation;

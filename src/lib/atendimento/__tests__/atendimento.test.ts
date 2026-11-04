@@ -555,20 +555,17 @@ describe("cadastro do site na conversa", () => {
     expect(conversation.contactName).toBe("Maria Souza");
   });
 
-  it("sem cadastro: cria um com o nome do WhatsApp e o telefone (uma vez só)", () => {
+  it("sem cadastro: mensagem recebida não cria pré-cadastro (nem ao abrir a conversa)", () => {
     const { conversationId } = inbound("W2", "5511977776666", "euamobrecho");
-    const first = getConversation(db, conversationId);
-    expect(first.customerRef).toMatch(/^painel:/);
-    expect(first.customerName).toBe("Euamobrecho");
-    inbound("W3", "5511977776666", "euamobrecho");
-    expect(getConversation(db, conversationId).customerRef).toBe(first.customerRef);
-    expect(db.prepare("SELECT COUNT(*) AS n FROM fare_panel_customers").get()).toEqual({ n: 1 });
+    expect(getConversation(db, conversationId).customerRef).toBeNull();
+    expect(linkConversationCustomer(db, conversationId).customerRef).toBeNull();
+    expect(db.prepare("SELECT COUNT(*) AS n FROM fare_panel_customers").get()).toEqual({ n: 0 });
   });
 
-  it("sem nome e sem cadastro: fica sem cadastro (não inventa)", () => {
+  it("equipe abrindo pelo número com nome: cria o cadastro; sem nome, não inventa", () => {
     const { conversationId } = inbound("W4", "5511966665555", "");
-    expect(getConversation(db, conversationId).customerRef).toBeNull();
-    expect(linkConversationCustomer(db, conversationId, "Joana").customerName).toBe("Joana");
+    expect(linkConversationCustomer(db, conversationId, "", true).customerRef).toBeNull();
+    expect(linkConversationCustomer(db, conversationId, "Joana", true).customerName).toBe("Joana");
   });
 });
 

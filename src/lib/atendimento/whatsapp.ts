@@ -115,7 +115,7 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   }
   // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
   if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
-  // Cadastro do site: usa o que já existe com esse WhatsApp ou cria um com o nome do WhatsApp.
+  // Cadastro do site: liga ao que já existe com esse WhatsApp (não cria).
   linkConversationCustomer(db, conversation.id, inbound.pushName);
   const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media);
   db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
@@ -162,7 +162,7 @@ export async function startWhatsAppConversation(
   const name = (input.name ?? "").trim().slice(0, 80);
   if (name && !conversation.contactName) updateConversationProfile(db, conversation.id, { contactName: name });
   openForStaff(db, conversation.id, staff);
-  return linkConversationCustomer(db, conversation.id, name);
+  return linkConversationCustomer(db, conversation.id, name, true);
 }
 
 /** Citação para o WhatsApp: id da mensagem citada, se foi nossa e o texto (a ponte monta a resposta "citando"). */
