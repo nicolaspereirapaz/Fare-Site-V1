@@ -60,6 +60,10 @@
 }
 .at-filter-count.is-alert { background: #25d366; color: #fff; }
 /* Etapa na lista e no quadro: texto cinza pequeno, sem cor. */
+/* Menu do botão direito na lista de conversas */
+.at-context-menu { position: fixed; z-index: 50; min-width: 200px; padding: 6px 0; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(11, 20, 26, .2), 0 0 0 1px rgba(11, 20, 26, .06); }
+.at-context-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 16px; border: 0; background: none; color: #111b21; font: inherit; font-size: 0.88rem; text-align: left; cursor: pointer; }
+.at-context-menu button:hover, .at-context-menu button:focus-visible { background: #f0f2f5; }
 .at-stage-text { overflow: hidden; color: #667781; font-size: 0.74rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .at-avatar {
@@ -289,8 +293,10 @@ button.kb-new-quote { border: 0; font: inherit; font-weight: 600; font-size: 0.8
 .sim-phone-input button:disabled { opacity: .55; cursor: default; }
 
 /* Mídias nas mensagens */
-.at-media-image { position: relative; display: block; width: 220px; max-width: 100%; margin: -3px -6px 4px; border-radius: 8px; overflow: hidden; }
-.at-media-image img { display: block; width: 100%; height: auto; max-height: 220px; object-fit: cover; background: var(--navy-soft); }
+/* Foto no formato dela (em pé ou deitada), com 3 px de moldura do balão, como no WhatsApp. */
+.at-media-image { position: relative; display: block; width: fit-content; max-width: calc(100% + 12px); margin: -3px -6px 4px; border-radius: 6px; overflow: hidden; }
+.at-bubble-author + .at-media-image { margin-top: 4px; }
+.at-media-image img { display: block; width: auto; height: auto; min-width: 120px; min-height: 90px; max-width: min(280px, 100%); max-height: 300px; object-fit: cover; background: rgba(0, 0, 0, .06); }
 .at-media-badge { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: .7rem; padding: 1px 6px; border-radius: 6px; }
 .at-media-video { display: block; max-width: 280px; max-height: 260px; border-radius: 8px; margin-bottom: 4px; }
 .at-media-audio { display: block; width: 260px; max-width: 100%; margin-bottom: 4px; }
@@ -451,7 +457,8 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-media-dialog .at-check { color: var(--ink); white-space: nowrap; }
 .at-media-range { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 0.84rem; font-weight: 600; }
 .at-media-range label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.at-media-range input { width: 64px; padding: 6px 8px; border: 1px solid #d5d9e6; border-radius: 8px; color: var(--ink); font: inherit; font-weight: 400; }
+.at-media-grid { user-select: none; }
+.at-media-range input { width: 170px; padding: 6px 8px; border: 1px solid #d5d9e6; border-radius: 8px; color: var(--ink); font: inherit; font-weight: 400; }
 .at-media-range input:focus { border-color: var(--navy); outline: 2px solid var(--navy-soft); }
 .at-media-actions { margin-left: auto; }
 .at-btn.is-disabled { opacity: .5; pointer-events: none; }

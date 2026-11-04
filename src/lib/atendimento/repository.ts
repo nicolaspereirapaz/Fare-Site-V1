@@ -410,6 +410,12 @@ export function markConversationRead(db: DatabaseSync, id: string) {
   db.prepare("UPDATE atd_conversations SET unread = 0 WHERE id = ?").run(id);
 }
 
+/** "Marcar como não lida" (como no WhatsApp): volta a bolinha para lembrar a equipe. */
+export function markConversationUnread(db: DatabaseSync, id: string) {
+  getConversation(db, id);
+  db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
+}
+
 export function setConversationCustomer(db: DatabaseSync, id: string, ref: string, name: string) {
   db.prepare("UPDATE atd_conversations SET customer_ref = ?, customer_name = ?, updated_at = ? WHERE id = ?").run(ref, name.slice(0, 120), nowIso(), id);
 }

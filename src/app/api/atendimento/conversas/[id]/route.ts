@@ -11,6 +11,7 @@ import {
   recentTranscripts,
   setConversationTags,
   markConversationRead,
+  markConversationUnread,
   moveConversation,
   returnToAi,
 } from "@/lib/atendimento/repository";
@@ -42,7 +43,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   });
 });
 
-/** Ações: assumir (Em atendimento), devolver (para a IA), finalizar, mover (arrastar no quadro) e lida. */
+/** Ações: assumir (Em atendimento), devolver (para a IA), finalizar, mover (arrastar no quadro), lida e nao_lida. */
 export const PATCH = withStaff(async (staff, request, context: Context) => {
   const { id } = await context.params;
   const db = atendimentoDb();
@@ -73,6 +74,9 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
       return json({ conversation: moveConversation(db, id, body.status, staff) });
     case "lida":
       markConversationRead(db, id);
+      return json({ conversation: getConversation(db, id) });
+    case "nao_lida":
+      markConversationUnread(db, id);
       return json({ conversation: getConversation(db, id) });
     default:
       throw new AtendimentoError("INVALID_REQUEST", "Ação desconhecida.");

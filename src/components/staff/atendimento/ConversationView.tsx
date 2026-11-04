@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Bot,
   CheckCircle2,
@@ -14,6 +14,7 @@ import {
   Inbox,
   Mic,
   Paperclip,
+  MessageSquareDot,
   MessageSquareText,
   Send,
   Reply,
@@ -99,7 +100,7 @@ export function ConversationView({
   me: StaffUser;
   conversations: Conversation[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   quickReplies: QuickReply[];
   onOpenQuickReplies: () => void;
   onConversationChanged: (conversation: Conversation) => void;
@@ -132,6 +133,38 @@ export function ConversationView({
   }, [conversations]);
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
 
+  // Menu do botão direito na lista (como no WhatsApp Web).
+  const [menu, setMenu] = useState<{ conversation: Conversation; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (event: globalThis.KeyboardEvent) => event.key === "Escape" && close();
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+  const [unreadError, setUnreadError] = useState<string | null>(null);
+  const setUnread = useCallback(
+    async (conversation: Conversation, unread: boolean) => {
+      setMenu(null);
+      setUnreadError(null);
+      // Fecha antes: a conversa aberta marca como lida sozinha.
+      if (unread && conversation.id === selectedId) onSelect(null);
+      try {
+        const data = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: unread ? "nao_lida" : "lida" } });
+        onConversationChanged(data.conversation);
+      } catch (markError) {
+        setUnreadError(markError instanceof Error ? markError.message : "Não foi possível marcar.");
+      }
+    },
+    [onConversationChanged, onSelect, selectedId],
+  );
+
   return (
     <div className="at-inbox">
       <aside className="at-list" aria-label="Conversas">
@@ -144,6 +177,7 @@ export function ConversationView({
             </button>
           ))}
         </div>
+        {unreadError ? <div className="at-banner at-banner-error" role="alert">{unreadError}</div> : null}
         <div className="at-list-body">
           {visible.length === 0 && !hits.length ? (
             <div className="at-list-empty">
@@ -157,6 +191,10 @@ export function ConversationView({
                 className={`at-item${conversation.id === selectedId ? " is-active" : ""}${conversation.unread ? " has-unread" : ""}`}
                 key={conversation.id}
                 onClick={() => onSelect(conversation.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenu({ conversation, x: event.clientX, y: event.clientY });
+                }}
                 type="button"
               >
                 <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} />
@@ -208,6 +246,13 @@ export function ConversationView({
           ) : null}
         </div>
       </aside>
+      {menu ? (
+        <div className="at-context-menu" role="menu" style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 60) }}>
+          <button onClick={() => void setUnread(menu.conversation, !menu.conversation.unread)} role="menuitem" type="button">
+            <MessageSquareDot aria-hidden="true" size={16} /> {menu.conversation.unread ? "Marcar como lida" : "Marcar como não lida"}
+          </button>
+        </div>
+      ) : null}
 
       {selected ? (
         <ChatPanel
@@ -216,6 +261,7 @@ export function ConversationView({
           key={selected.id}
           me={me}
           onChanged={onConversationChanged}
+          onMarkUnread={() => void setUnread(selected, true)}
           onOpenQuickReplies={onOpenQuickReplies}
           quickReplies={quickReplies}
         />
@@ -274,6 +320,7 @@ function ChatPanel({
   quickReplies,
   onOpenQuickReplies,
   onChanged,
+  onMarkUnread,
 }: {
   conversation: Conversation;
   focus: { messageId: string; at: number } | null;
@@ -281,6 +328,7 @@ function ChatPanel({
   quickReplies: QuickReply[];
   onOpenQuickReplies: () => void;
   onChanged: (conversation: Conversation) => void;
+  onMarkUnread: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [customers, setCustomers] = useState<LinkedCustomer[] | null>(null);
@@ -426,6 +474,9 @@ function ChatPanel({
           <div className="at-chat-actions">
             <button aria-label="Procurar nesta conversa" aria-pressed={finding} className="at-btn at-btn-quiet" onClick={() => setFinding((open) => !open)} title="Procurar nesta conversa" type="button">
               <Search aria-hidden="true" size={16} />
+            </button>
+            <button aria-label="Marcar como não lida" className="at-btn at-btn-quiet" onClick={onMarkUnread} title="Marcar como não lida (fecha a conversa e volta a bolinha)" type="button">
+              <MessageSquareDot aria-hidden="true" size={16} />
             </button>
             <button className="at-btn at-btn-quiet" onClick={() => setMediaOpen(true)} title="Fotos e arquivos do contato (baixar em lote)" type="button">
               <Images aria-hidden="true" size={16} /> Mídias

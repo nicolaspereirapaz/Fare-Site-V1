@@ -14,6 +14,7 @@ import {
   listQuickReplies,
   setConversationTags,
   markConversationRead,
+  markConversationUnread,
   moveConversation,
   returnToAi,
   runAtendimentoMigrations,
@@ -27,8 +28,9 @@ import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
-import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, safeFileName, saveMedia } from "@/lib/atendimento/media";
+import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, redoThumbs, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
+import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
@@ -436,20 +438,31 @@ describe("mídias", () => {
     expect(listMessages(db, first.conversationId)[0].media).toEqual({ kind: "imagem", mime: "image/jpeg", name: "a.jpg", size: 1000, hasThumb: true });
   });
 
-  it("plano do ZIP: intervalo De/Até, só fotos, só do cliente, nomes numerados sem repetir", () => {
+  it("plano do ZIP: números escolhidos, só fotos, só do cliente, nomes numerados sem repetir", () => {
     const at = (minute: number) => new Date(2026, 10, 2, 14, minute).toISOString();
     const item = (n: number, author: "cliente" | "vendedor", name: string, mime = "image/jpeg") =>
       ({ id: `m${n}`, author, createdAt: at(n), mediaFile: `c/${n}`, media: { kind: "imagem", mime, name, size: 1, hasThumb: false } }) as unknown as Parameters<typeof mediaZipPlan>[0][number];
     const all = [item(1, "cliente", "IMG.jpg"), item(2, "cliente", "IMG.jpg"), item(3, "vendedor", "orcamento.pdf", "application/pdf"), item(4, "cliente", "x.jpg"), item(5, "cliente", "y.jpg")];
-    const plan = mediaZipPlan(all, { contactName: "Maria Souza", phone: "5511955554444" }, { from: 4, to: 1, onlyPhotos: false, onlyCustomer: false });
+    const plan = mediaZipPlan(all, { contactName: "Maria Souza", phone: "5511955554444" }, { numbers: parseNumberList("4-1", 5), onlyPhotos: false, onlyCustomer: false });
     expect(plan.entries.map((entry) => entry.name)).toEqual([
       "001 - 2026-11-02 14-01 - IMG.jpg",
       "002 - 2026-11-02 14-02 - IMG.jpg",
       "003 - 2026-11-02 14-03 - orcamento.pdf",
       "004 - 2026-11-02 14-04 - x.jpg",
     ]);
-    expect(plan.zipName).toBe("midias-Maria-Souza-4444-1-a-4.zip");
-    expect(mediaZipPlan(all, { contactName: "", phone: "5511955554444" }, { from: 1, to: 99, onlyPhotos: true, onlyCustomer: true }).entries.map((entry) => entry.file)).toEqual(["c/1", "c/2", "c/4", "c/5"]);
+    expect(plan.zipName).toBe("midias-Maria-Souza-4444-1-4.zip");
+    expect(mediaZipPlan(all, { contactName: "", phone: "5511955554444" }, { numbers: null, onlyPhotos: true, onlyCustomer: true }).entries.map((entry) => entry.file)).toEqual(["c/1", "c/2", "c/4", "c/5"]);
+    const some = mediaZipPlan(all, { contactName: "Ana", phone: "5511955554444" }, { numbers: parseNumberList("1, 3-4", 5), onlyPhotos: false, onlyCustomer: false });
+    expect(some.entries.map((entry) => entry.file)).toEqual(["c/1", "c/3", "c/4"]);
+    expect(some.zipName).toBe("midias-Ana-4444-1_3-4.zip");
+  });
+
+  it("lista de números como na impressora", () => {
+    expect([...parseNumberList("1-3, 8; 10 a 11 12", 20)]).toEqual([1, 2, 3, 8, 10, 11, 12]);
+    expect([...parseNumberList("5 até 3, 2–2", 20)].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+    expect([...parseNumberList("18-999999, 0, x, 7-", 20)]).toEqual([18, 19, 20]);
+    expect(formatNumberList([8, 1, 2, 3, 5, 7])).toBe("1-3, 5, 7-8");
+    expect(formatNumberList([])).toBe("");
   });
 
   it("CRC32 do ZIP e nomes de arquivo seguros", () => {
@@ -694,6 +707,22 @@ describe("limpeza das mídias", () => {
   });
 });
 
+describe("miniatura no formato da foto", () => {
+  it("foto deitada fica deitada, em pé fica em pé; miniaturas antigas quadradas são refeitas", async () => {
+    const { default: sharp } = await import("sharp");
+    const photo = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: "#888" } }).png().toBuffer();
+    const { id } = newConversation();
+    const wide = await saveMedia(await photo(800, 400), { conversationId: id, name: "deitada.png", mime: "image/png" });
+    const tall = await saveMedia(await photo(300, 900), { conversationId: id, name: "em-pe.png", mime: "image/png" });
+    const size = async (file: string) => sharp(mediaPath(file, true)).metadata().then(({ width, height }) => [width, height]);
+    expect(await size(wide.file)).toEqual([480, 240]);
+    expect(await size(tall.file)).toEqual([160, 480]);
+    await sharp(await photo(320, 320)).jpeg().toFile(mediaPath(tall.file, true)); // como as antigas
+    expect(await redoThumbs([tall.file, "nao/existe.png"])).toBe(1);
+    expect(await size(tall.file)).toEqual([160, 480]);
+  });
+});
+
 describe("relatório da equipe", () => {
   afterEach(() => vi.useRealTimers());
   const at = (minutes: number) => vi.setSystemTime(new Date(Date.UTC(2026, 10, 3, 13, 0) + minutes * 60_000));
@@ -868,5 +897,20 @@ describe("sem a etapa Aguardando vendedor", () => {
     db.prepare("UPDATE atd_conversations SET status = 'aguardando_vendedor' WHERE id = ?").run(id);
     runAtendimentoMigrations(db);
     expect(getConversation(db, id).status).toBe("em_atendimento");
+  });
+});
+
+describe("marcar como não lida", () => {
+  it("volta a bolinha sem perder a contagem que já tinha", async () => {
+    const { id } = newConversation();
+    assumeConversation(db, id, ana);
+    markConversationUnread(db, id);
+    expect(getConversation(db, id).unread).toBe(1);
+    await say(id, "a");
+    await say(id, "b");
+    markConversationUnread(db, id);
+    expect(getConversation(db, id).unread).toBe(3);
+    markConversationRead(db, id);
+    expect(getConversation(db, id).unread).toBe(0);
   });
 });

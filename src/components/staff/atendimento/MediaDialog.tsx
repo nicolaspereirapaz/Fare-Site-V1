@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatBytes, mediaUrl } from "@/components/staff/atendimento/media";
 import { PhotoOrderForm } from "@/components/staff/atendimento/PhotoOrderForm";
 import { api, displayName, type Conversation, type LinkedCustomer } from "@/components/staff/atendimento/shared";
+import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
 import type { MessageMedia } from "@/lib/atendimento/types";
 
 type MediaItem = {
@@ -21,7 +22,7 @@ type Kind = "todas" | "fotos";
 
 /**
  * Mídias do contato, numeradas (nº 1 = a mais antiga). Para baixar em lote:
- * clique na primeira e na última (ou digite "De" e "Até") e baixe o ZIP.
+ * clique nas fotos (Shift+clique marca a faixa) ou digite como na impressora ("1-5, 8") e baixe o ZIP.
  */
 export function MediaDialog({ conversation, customers, onClose }: { conversation: Conversation; customers: LinkedCustomer[] | null; onClose: () => void }) {
   const titleId = useId();
@@ -30,8 +31,8 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind>("todas");
   const [onlyCustomer, setOnlyCustomer] = useState(false);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [numbersText, setNumbersText] = useState("");
+  const [anchor, setAnchor] = useState<number | null>(null);
   const [ordering, setOrdering] = useState(false);
 
   useEffect(() => {
@@ -56,30 +57,29 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
     [items, kind, onlyCustomer],
   );
   const total = items?.length ?? 0;
-  const start = Number(from) || 1;
-  const end = Number(to) || total;
-  const low = Math.min(start, end);
-  const high = Math.max(start, end);
-  const selected = visible.filter((item) => item.number >= low && item.number <= high);
-  const hasRange = Boolean(from || to);
+  const chosen = useMemo(() => parseNumberList(numbersText, total), [numbersText, total]);
+  const typed = numbersText.trim() !== "";
+  // Nada escolhido = todas (as do filtro).
+  const selected = typed ? visible.filter((item) => chosen.has(item.number)) : visible;
   const selectedPhotos = selected.filter((item) => item.media.mime.startsWith("image/"));
 
-  /** 1º clique = "De"; 2º = "Até"; 3º recomeça. */
-  function pick(number: number) {
-    if (!from || (from && to)) {
-      setFrom(String(number));
-      setTo("");
+  /** Clique marca/desmarca uma; Shift+clique marca da última clicada até esta (como no Windows). */
+  function pick(number: number, range: boolean) {
+    const next = new Set(chosen);
+    if (range && anchor !== null) {
+      for (let n = Math.min(anchor, number); n <= Math.max(anchor, number); n += 1) next.add(n);
+    } else if (next.has(number)) {
+      next.delete(number);
     } else {
-      setTo(String(number));
+      next.add(number);
     }
+    setAnchor(number);
+    setNumbersText(formatNumberList(next));
   }
 
-  const zipUrl = (all: boolean) => {
+  const zipUrl = () => {
     const params = new URLSearchParams();
-    if (!all) {
-      params.set("de", String(low));
-      params.set("ate", String(high));
-    }
+    if (typed) params.set("nums", formatNumberList(chosen));
     if (kind === "fotos") params.set("tipo", "fotos");
     if (onlyCustomer) params.set("quem", "cliente");
     return `/api/atendimento/conversas/${conversation.id}/midias/zip?${params}`;
@@ -94,7 +94,7 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
               <Images aria-hidden="true" size={18} /> Mídias de {displayName(conversation)}
             </h2>
             <p className="at-muted">
-              Para baixar várias: clique na <strong>primeira</strong> e na <strong>última</strong> (ou digite os números) e baixe o ZIP. Os arquivos saem na qualidade em que chegaram.
+              Clique nas fotos para escolher (<strong>Shift+clique</strong> marca a faixa) ou digite os números como na impressora: <strong>1-5, 8, 10-12</strong>. Sem nada escolhido, vale todas. Os arquivos saem na qualidade em que chegaram.
             </p>
           </div>
           <button aria-label="Fechar" className="kb-dialog-close" onClick={onClose} ref={closeRef} type="button">
@@ -116,13 +116,19 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
           </label>
           <span className="at-media-range">
             <label>
-              De nº <input inputMode="numeric" max={total} min={1} onChange={(event) => setFrom(event.target.value.replace(/\D/g, ""))} placeholder="1" value={from} />
+              Números
+              <input
+                aria-describedby={`${titleId}-nums`}
+                onChange={(event) => setNumbersText(event.target.value.replace(/[^\d\s,;\-–aAtTéeÉE]/g, ""))}
+                placeholder={total ? `ex.: 1-${Math.min(total, 5)}, ${Math.min(total, 8)}` : "ex.: 1-5, 8"}
+                value={numbersText}
+              />
             </label>
-            <label>
-              até nº <input inputMode="numeric" max={total} min={1} onChange={(event) => setTo(event.target.value.replace(/\D/g, ""))} placeholder={String(total || "")} value={to} />
-            </label>
-            {hasRange ? (
-              <button className="at-btn at-btn-quiet" onClick={() => { setFrom(""); setTo(""); }} type="button">
+            <span className="at-muted" id={`${titleId}-nums`}>
+              {typed ? (chosen.size ? `${selected.length} escolhida${selected.length === 1 ? "" : "s"}` : "nenhum número válido") : `de 1 a ${total}`}
+            </span>
+            {typed ? (
+              <button className="at-btn at-btn-quiet" onClick={() => { setNumbersText(""); setAnchor(null); }} type="button">
                 Limpar
               </button>
             ) : null}
@@ -131,8 +137,8 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
             <button className="at-btn" disabled={!selectedPhotos.length || ordering} onClick={() => setOrdering(true)} title="Pedido de revelação com as fotos selecionadas" type="button">
               <Printer aria-hidden="true" size={16} /> Criar pedido de fotos ({selectedPhotos.length})
             </button>
-            <a aria-disabled={!selected.length} className={`at-btn at-btn-primary${selected.length ? "" : " is-disabled"}`} download href={selected.length ? zipUrl(false) : undefined}>
-              <Download aria-hidden="true" size={16} /> {hasRange ? `Baixar nº ${low} a ${high}` : "Baixar todas"} · {selected.length} {selected.length === 1 ? "arquivo" : "arquivos"}
+            <a aria-disabled={!selected.length} className={`at-btn at-btn-primary${selected.length ? "" : " is-disabled"}`} download href={selected.length ? zipUrl() : undefined}>
+              <Download aria-hidden="true" size={16} /> {typed ? "Baixar escolhidas" : "Baixar todas"} · {selected.length} {selected.length === 1 ? "arquivo" : "arquivos"}
             </a>
           </span>
         </div>
@@ -146,14 +152,15 @@ export function MediaDialog({ conversation, customers, onClose }: { conversation
 
         <ul className="at-media-grid">
           {visible.map((item) => {
-            const inRange = hasRange && item.number >= low && item.number <= high;
+            const inRange = typed && chosen.has(item.number);
             const Icon = item.media.mime.startsWith("video/") ? Video : item.media.mime.startsWith("audio/") ? Mic : FileText;
             return (
               <li className={inRange ? "is-selected" : undefined} key={item.id}>
                 <button
-                  aria-label={`Mídia nº ${item.number}: ${item.media.name}. Clique para marcar o início ou o fim da seleção.`}
+                  aria-label={`Mídia nº ${item.number}: ${item.media.name}. Clique para escolher; Shift+clique escolhe a faixa.`}
+                  aria-pressed={inRange}
                   className="at-media-tile"
-                  onClick={() => pick(item.number)}
+                  onClick={(event) => pick(item.number, event.shiftKey)}
                   title={`${item.media.name} · ${formatBytes(item.media.size)} · ${new Date(item.createdAt).toLocaleString("pt-BR")}`}
                   type="button"
                 >

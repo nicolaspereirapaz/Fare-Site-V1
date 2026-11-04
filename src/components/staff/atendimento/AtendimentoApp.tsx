@@ -128,6 +128,8 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   }, [unreadCount]);
 
   const onConversationChanged = useCallback((updated: Conversation) => {
+    // Mudança feita aqui (ex.: "marcar como não lida") não é mensagem nova: não toca aviso.
+    unreadById.current?.set(updated.id, updated.unread);
     setConversations((list) => list.map((conversation) => (conversation.id === updated.id ? updated : conversation)));
   }, []);
   const openReplies = useCallback(() => setEditingReplies(true), []);

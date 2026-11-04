@@ -55,6 +55,9 @@
 [data-atd-theme="dark"] .at-filter-count { background: rgba(255, 255, 255, .1); color: var(--ink); }
 [data-atd-theme="dark"] .at-filter-count.is-alert { background: #00a884; color: #111b21; }
 [data-atd-theme="dark"] .at-stage-text { color: #8696a0; }
+[data-atd-theme="dark"] .at-context-menu { background: #233138; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+[data-atd-theme="dark"] .at-context-menu button { color: #e9edef; }
+[data-atd-theme="dark"] .at-context-menu button:hover, [data-atd-theme="dark"] .at-context-menu button:focus-visible { background: #182229; }
 [data-atd-theme="dark"] .at-unread { background: #00a884; color: #111b21; }
 [data-atd-theme="dark"] .at-stage select { border-color: var(--d-border-strong); background-color: var(--d-raised); color: var(--ink); }
 
