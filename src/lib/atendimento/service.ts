@@ -13,11 +13,12 @@ import {
   listMessages,
   customerReplied,
   reopenConversation,
-  sendToQueue,
+  handOffToStaff,
+  openForStaff,
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isInternal, isSellerStatus, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isInternal, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"). Não chama a IA. */
 export function recordCustomerMessage(
@@ -61,7 +62,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
 
       const result = await brain({ conversation, messages });
 
-      // Um vendedor assumiu enquanto a IA pensava: resposta descartada.
+      // A equipe entrou na conversa enquanto a IA pensava: resposta descartada.
       if (getConversation(db, conversationId).status !== "ia") return created;
       // Chegou mensagem nova do cliente: responde de novo, vendo tudo.
       if (state.again || listMessages(db, conversationId, lastSeq).some((message) => message.author === "cliente")) continue;
@@ -70,7 +71,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
         updateConversationProfile(db, conversationId, { contactName: result.contactName, summary: result.summary });
       }
       if (result.reply) created.push(addMessage(db, { conversationId, author: "ia", authorName: aiName, body: result.reply }));
-      if (result.handoff) sendToQueue(db, conversationId, null, result.handoff.reason);
+      if (result.handoff) handOffToStaff(db, conversationId, result.handoff.reason);
       return created;
     }
     return created;
@@ -80,7 +81,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
 }
 
 /**
- * IA desligada: a conversa com mensagem nova do cliente vai para a fila de vendedores (ninguém responde sozinho).
+ * IA desligada: a conversa com mensagem nova do cliente vai para "Em atendimento" (ninguém responde sozinho).
  * Devolve true se a IA está desligada (quem chamou não deve rodar a IA).
  */
 export function queueIfAiOff(db: DatabaseSync, conversationId: string): boolean {
@@ -108,7 +109,7 @@ export function signedText(staffName: string, text: string) {
   return `*${firstName(staffName)}:*\n${text}`;
 }
 
-/** Nota interna: qualquer pessoa da equipe escreve (não precisa assumir); o cliente e a IA nunca veem. */
+/** Nota interna: qualquer pessoa da equipe escreve; o cliente e a IA nunca veem. */
 export function addNote(db: DatabaseSync, conversationId: string, staff: StaffActor, text: string): Message {
   const body = text.trim();
   if (!body) throw new AtendimentoError("INVALID_REQUEST", "Nota vazia.");
@@ -116,7 +117,7 @@ export function addNote(db: DatabaseSync, conversationId: string, staff: StaffAc
   return addMessage(db, { conversationId, author: "nota", authorName: staff.name, body });
 }
 
-/** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). Mesma regra: só quem assumiu. */
+/** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). */
 export function sendStaffMedia(
   db: DatabaseSync,
   conversationId: string,
@@ -125,10 +126,7 @@ export function sendStaffMedia(
   caption: string,
   options: { sign: boolean; replyToId?: string | null },
 ): Message {
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const body = caption.trim();
   return addMessage(db, {
     conversationId,
@@ -152,15 +150,12 @@ export async function sendQuickReplyMedia(
 ): Promise<Message> {
   const reply = getQuickReply(db, quickReplyId);
   if (!reply.mediaFile || !reply.media) throw new AtendimentoError("INVALID_REQUEST", "Esta mensagem rápida não tem anexo.");
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const file = await copyMedia(reply.mediaFile, conversationId);
   return sendStaffMedia(db, conversationId, staff, { ...reply.media, file }, caption, options);
 }
 
-/** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */
+/** Vendedor responde. Qualquer pessoa da equipe escreve; conversa com a IA ou finalizada vai para "Em atendimento". */
 export function sendStaffMessage(
   db: DatabaseSync,
   conversationId: string,
@@ -168,10 +163,7 @@ export function sendStaffMessage(
   text: string,
   options: { sign: boolean; replyToId?: string | null },
 ): Message {
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const body = text.trim();
   if (!body) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
   return addMessage(db, {

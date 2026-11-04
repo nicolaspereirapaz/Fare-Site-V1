@@ -141,7 +141,7 @@ export function QuickRepliesDialog({ quickReplies, onClose, onChanged }: { quick
               </div>
             </form>
           ) : (
-            <button className="at-btn at-btn-orange" onClick={() => setDraft(EMPTY_DRAFT)} type="button">
+            <button className="at-btn at-btn-primary" onClick={() => setDraft(EMPTY_DRAFT)} type="button">
               <Plus aria-hidden="true" size={16} /> Nova mensagem rápida
             </button>
           )}

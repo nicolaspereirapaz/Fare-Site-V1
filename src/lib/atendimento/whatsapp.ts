@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { mediaPath } from "@/lib/atendimento/media";
 import {
   AtendimentoError,
-  assumeConversation,
+  openForStaff,
   type StaffActor,
   addMessage,
   createConversation,
@@ -161,9 +161,7 @@ export async function startWhatsAppConversation(
   const conversation = ensureWhatsAppConversation(db, found.chatId, found.phone || phone);
   const name = (input.name ?? "").trim().slice(0, 80);
   if (name && !conversation.contactName) updateConversationProfile(db, conversation.id, { contactName: name });
-  if (!(conversation.status !== "ia" && conversation.status !== "finalizada" && conversation.assignedStaffId === staff.id)) {
-    assumeConversation(db, conversation.id, staff, { force: true });
-  }
+  openForStaff(db, conversation.id, staff);
   return linkConversationCustomer(db, conversation.id, name);
 }
 

@@ -21,7 +21,7 @@ export function respondInBackground(db: DatabaseSync, conversationId: string, op
     try {
       // Áudio do cliente: transcreve antes, para a IA "ouvir" o que ele disse.
       if (options.transcribeFirst) await transcribeMessage(db, options.transcribeFirst);
-      // IA desligada no painel: a conversa vai para a fila de vendedores.
+      // IA desligada no painel: a conversa vai para "Em atendimento".
       if (queueIfAiOff(db, conversationId)) return;
       const created = await runAi(db, conversationId, brain, name);
       await deliverToWhatsApp(db, created);
@@ -49,7 +49,7 @@ export function activeBrain(): { brain: Brain; name: string; mode: "real" | "tes
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
 // Versão do esquema: o servidor de desenvolvimento mantém o globalThis entre recargas; com a versão, colunas novas entram sem reiniciar.
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoSchema?: number };
 export function atendimentoDb() {
   if (globalAtendimento.fareAtendimentoSchema !== SCHEMA_VERSION) {
@@ -79,8 +79,6 @@ function scheduleMediaCleanup() {
 const STATUS_BY_CODE: Record<AtendimentoError["code"], number> = {
   CONVERSATION_NOT_FOUND: 404,
   QUICK_REPLY_NOT_FOUND: 404,
-  ASSIGNED_TO_OTHER: 409,
-  NOT_ASSIGNED: 409,
   DUPLICATE_SHORTCUT: 409,
   INVALID_REQUEST: 400,
 };

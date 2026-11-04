@@ -122,7 +122,7 @@ export function teamReport(db: DatabaseSync, period: { from: Date; to?: Date }) 
         waits.push(minutes);
         seller(answer.author_name).waits.push(minutes);
         if (minutes > LONG_WAIT_MINUTES) longWaits.push({ conversationId, contact, askedAt: row.created_at, minutes: round1(minutes)!, answeredBy: answer.author_name || "Equipe", waiting: false });
-      } else if (row.status === "aguardando_vendedor") {
+      } else if (row.status === "em_atendimento") {
         unanswered += 1;
         const minutes = minutesBetween(row.created_at, now);
         if (minutes > LONG_WAIT_MINUTES) longWaits.push({ conversationId, contact, askedAt: row.created_at, minutes: round1(minutes)!, answeredBy: null, waiting: true });
@@ -130,7 +130,6 @@ export function teamReport(db: DatabaseSync, period: { from: Date; to?: Date }) 
     }
   }
 
-  const waitingNow = db.prepare("SELECT COUNT(*) AS total FROM atd_conversations WHERE status = 'aguardando_vendedor'").get() as { total: number };
   const resolvedByAi = [...conversations].filter((id) => !withStaff.has(id) && !withHandoff.has(id)).length;
   return {
     from,
@@ -146,7 +145,6 @@ export function teamReport(db: DatabaseSync, period: { from: Date; to?: Date }) 
       waitAverageMinutes: round1(average(waits)),
       waitMedianMinutes: round1(median(waits)),
       waitMaxMinutes: round1(waits.length ? Math.max(...waits) : null),
-      waitingNow: Number(waitingNow.total),
     },
     sellers: [...sellers.values()]
       .map((entry) => ({

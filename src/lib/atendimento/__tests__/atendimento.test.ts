@@ -90,12 +90,12 @@ describe("IA simulada", () => {
     expect(listMessages(db, id).filter((message) => message.author === "ia").every((message) => !message.body.includes("•"))).toBe(true);
   });
 
-  it("pedido de vendedor manda a conversa para a fila", async () => {
+  it("pedido de vendedor manda a conversa para Em atendimento", async () => {
     const { id } = newConversation();
     await say(id, "oi");
     await say(id, "quero falar com um vendedor");
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.waitingSince).not.toBeNull();
     expect(conversation.handoffReason).toContain("vendedor");
     expect(listMessages(db, id).some((message) => message.author === "sistema" && message.body.includes("A IA pediu um vendedor"))).toBe(true);
@@ -136,20 +136,23 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
     expect(listMessages(db, id).some((message) => message.body === "atrasada")).toBe(false);
   });
 
-  it("outro vendedor só assume com transferência explícita", () => {
+  it("qualquer pessoa da equipe responde; conversa com a IA vai para Em atendimento", () => {
     const { id } = newConversation();
-    assumeConversation(db, id, ana);
-    expect(() => assumeConversation(db, id, bruno)).toThrowError(AtendimentoError);
-    const moved = assumeConversation(db, id, bruno, { force: true });
-    expect(moved.assignedStaffName).toBe("Bruno Lima");
-    expect(listMessages(db, id).at(-1)?.body).toContain("no lugar de Ana Souza");
+    sendStaffMessage(db, id, ana, "Olá", { sign: true });
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+    expect(sendStaffMessage(db, id, bruno, "Também estou aqui", { sign: true }).deliveredText).toBe("*Bruno:*\nTambém estou aqui");
+    expect(listMessages(db, id).filter((message) => message.body.includes("entrou na conversa"))).toHaveLength(1);
   });
 
-  it("só quem assumiu responde; assinatura sai em negrito com o primeiro nome", () => {
+  it("responder conversa finalizada reabre em Em atendimento", () => {
     const { id } = newConversation();
-    expect(() => sendStaffMessage(db, id, ana, "Olá", { sign: true })).toThrowError(/Assuma a conversa/);
-    assumeConversation(db, id, ana);
-    expect(() => sendStaffMessage(db, id, bruno, "Olá", { sign: true })).toThrowError(AtendimentoError);
+    finishConversation(db, id, ana);
+    sendStaffMessage(db, id, bruno, "Oi de novo", { sign: true });
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+  });
+
+  it("assinatura sai em negrito com o primeiro nome", () => {
+    const { id } = newConversation();
     const signed = sendStaffMessage(db, id, ana, "Seu pedido está pronto", { sign: true });
     expect(signed.deliveredText).toBe("*Ana:*\nSeu pedido está pronto");
     expect(signed.body).toBe("Seu pedido está pronto");
@@ -176,8 +179,8 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
 
   it("arrastar no quadro vira a ação da coluna", () => {
     const { id } = newConversation();
-    expect(moveConversation(db, id, "em_atendimento", ana).assignedStaffId).toBe(ana.id);
-    expect(moveConversation(db, id, "aguardando_vendedor", ana).assignedStaffId).toBeNull();
+    expect(moveConversation(db, id, "em_atendimento", ana).status).toBe("em_atendimento");
+    expect(moveConversation(db, id, "aguardando_cliente", bruno).status).toBe("aguardando_cliente");
     expect(moveConversation(db, id, "finalizada", ana).status).toBe("finalizada");
     expect(moveConversation(db, id, "ia", ana).status).toBe("ia");
   });
@@ -203,7 +206,7 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
 });
 
 describe("aguardando orçamento / aguardando cliente", () => {
-  it("continua com o vendedor, a IA fica calada e só ele responde", async () => {
+  it("a IA fica calada e qualquer pessoa da equipe responde", async () => {
     const { id } = newConversation();
     const moved = moveConversation(db, id, "aguardando_orcamento", ana);
     expect(moved.status).toBe("aguardando_orcamento");
@@ -217,7 +220,8 @@ describe("aguardando orçamento / aguardando cliente", () => {
     expect(getConversation(db, id).status).toBe("aguardando_orcamento");
     expect(getConversation(db, id).unread).toBe(1);
     expect(sendStaffMessage(db, id, ana, "Já estou terminando", { sign: true }).deliveredText).toContain("*Ana:*");
-    expect(() => sendStaffMessage(db, id, bruno, "Oi", { sign: true })).toThrowError(AtendimentoError);
+    expect(sendStaffMessage(db, id, bruno, "Oi", { sign: true }).deliveredText).toContain("*Bruno:*");
+    expect(getConversation(db, id).status).toBe("aguardando_orcamento");
   });
 
   it("cliente responde em Aguardando cliente: volta para Em atendimento com o mesmo vendedor", async () => {
@@ -231,19 +235,13 @@ describe("aguardando orçamento / aguardando cliente", () => {
     expect(listMessages(db, id).some((message) => message.body.includes("voltou para Em atendimento"))).toBe(true);
   });
 
-  it("outro vendedor só muda a etapa de conversa alheia com confirmação", () => {
+  it("qualquer pessoa muda a etapa, sem confirmação", () => {
     const { id } = newConversation();
     assumeConversation(db, id, ana);
-    expect(() => moveConversation(db, id, "aguardando_cliente", bruno)).toThrowError(AtendimentoError);
-    expect(moveConversation(db, id, "aguardando_cliente", bruno, { force: true }).assignedStaffName).toBe("Bruno Lima");
-  });
-
-  it("dono volta a conversa para Em atendimento sem pedir confirmação", () => {
-    const { id } = newConversation();
-    moveConversation(db, id, "aguardando_orcamento", ana);
+    expect(moveConversation(db, id, "aguardando_cliente", bruno).status).toBe("aguardando_cliente");
     const back = moveConversation(db, id, "em_atendimento", ana);
     expect(back.status).toBe("em_atendimento");
-    expect(listMessages(db, id).at(-1)?.body).toContain("voltou a conversa");
+    expect(listMessages(db, id).at(-1)?.body).toContain("moveu para Em atendimento");
   });
 });
 
@@ -270,7 +268,7 @@ describe("IA real (serviço do Hermes)", () => {
     expect(sent!.headers["x-fare-token"]).toBe("segredo");
     expect(sent!.body.messages.every((message) => message.author !== "sistema")).toBe(true);
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Quer falar com vendedor");
     expect(conversation.contactName).toBe("Maria");
     expect(conversation.summary).toContain("Nome: Maria · Interesse: revelação");
@@ -282,7 +280,7 @@ describe("IA real (serviço do Hermes)", () => {
     const { id } = newConversation();
     await say(id, "oi", createRealBrain(config, reply({ error: "MODELO" }, 502)));
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toContain("falha técnica");
     expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
   });
@@ -381,7 +379,7 @@ describe("WhatsApp pela ponte", () => {
     const last = listMessages(db, id).filter((message) => message.author !== "sistema").at(-1);
     expect(last).toMatchObject({ author: "vendedor", authorName: "Celular", body: "Abrimos sim, até 13h.", delivery: "enviada" });
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Respondido pelo celular");
     // IA não responde mais; e a mensagem do celular nunca volta para a ponte.
     expect(await runAi(db, id, async () => ({ reply: "não deveria" }))).toEqual([]);
@@ -632,17 +630,17 @@ describe("formatação do WhatsApp", () => {
 });
 
 describe("IA ligada/desligada", () => {
-  it("começa desligada; cliente escreve -> fila de vendedores, sem resposta automática", () => {
+  it("começa desligada; cliente escreve -> Em atendimento, sem resposta automática", () => {
     expect(aiEnabled(db)).toBe(false);
     const { id } = newConversation();
     recordCustomerMessage(db, id, "oi, tem foto 3x4?");
     expect(queueIfAiOff(db, id)).toBe(true);
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Cliente escreveu (IA desligada)");
     expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
-    expect(listMessages(db, id).at(-1)?.body).toBe("IA desligada: a conversa foi direto para a fila de vendedores.");
-    // Outra mensagem: continua na fila, sem aviso repetido.
+    expect(listMessages(db, id).at(-1)?.body).toBe("IA desligada: a conversa foi para Em atendimento.");
+    // Outra mensagem: continua em Em atendimento, sem aviso repetido.
     recordCustomerMessage(db, id, "alô?");
     queueIfAiOff(db, id);
     expect(listMessages(db, id).filter((message) => message.author === "sistema")).toHaveLength(1);
@@ -710,7 +708,7 @@ describe("relatório da equipe", () => {
     at(1);
     const b = createConversation(db, { channel: "simulador", phone: "11900000002", contactName: "Bia" });
     await say(b.id, "quero falar com vendedor");
-    expect(getConversation(db, b.id).status).toBe("aguardando_vendedor");
+    expect(getConversation(db, b.id).status).toBe("em_atendimento");
     at(5);
     assumeConversation(db, b.id, ana);
     sendStaffMessage(db, b.id, ana, "Oi Bia!", { sign: true });
@@ -729,7 +727,7 @@ describe("relatório da equipe", () => {
     at(55);
 
     const report = teamReport(db, { from: new Date(Date.UTC(2026, 10, 3, 12, 0)) });
-    expect(report.totals).toMatchObject({ conversations: 4, resolvedByAi: 1, resolvedByAiPercent: 25, handoffs: 3, waitAverageMinutes: 14.5, waitMedianMinutes: 14.5, waitMaxMinutes: 25, waitingNow: 1, staffMessages: 2 });
+    expect(report.totals).toMatchObject({ conversations: 4, resolvedByAi: 1, resolvedByAiPercent: 25, handoffs: 3, waitAverageMinutes: 14.5, waitMedianMinutes: 14.5, waitMaxMinutes: 25, staffMessages: 2 });
     expect(report.sellers).toEqual([
       { name: "Ana Souza", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 4, finished: 1 },
       { name: "Bruno Lima", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 25, finished: 0 },
@@ -861,5 +859,14 @@ describe("mensagens rápidas", () => {
     expect(edited.title).toBe("Frete e entrega");
     deleteQuickReply(db, created.id);
     expect(listQuickReplies(db).some((reply) => reply.shortcut === "frete")).toBe(false);
+  });
+});
+
+describe("sem a etapa Aguardando vendedor", () => {
+  it("conversas antigas nessa etapa passam para Em atendimento", () => {
+    const { id } = newConversation();
+    db.prepare("UPDATE atd_conversations SET status = 'aguardando_vendedor' WHERE id = ?").run(id);
+    runAtendimentoMigrations(db);
+    expect(getConversation(db, id).status).toBe("em_atendimento");
   });
 });

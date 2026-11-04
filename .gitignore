@@ -45,3 +45,5 @@ next-env.d.ts
 # ferramentas locais (não vão para o repositório)
 /dev-profile/
 /graphify-out/
+
+.superpowers/

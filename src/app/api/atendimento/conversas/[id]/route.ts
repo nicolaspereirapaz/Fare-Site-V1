@@ -13,7 +13,6 @@ import {
   markConversationRead,
   moveConversation,
   returnToAi,
-  sendToQueue,
 } from "@/lib/atendimento/repository";
 import { activeBrain, atendimentoDb, deliverInBackground, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
 import { isAiThinking } from "@/lib/atendimento/service";
@@ -43,12 +42,11 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   });
 });
 
-/** Ações: assumir, devolver (para a IA), fila, finalizar, mover (arrastar no quadro) e lida. */
+/** Ações: assumir (Em atendimento), devolver (para a IA), finalizar, mover (arrastar no quadro) e lida. */
 export const PATCH = withStaff(async (staff, request, context: Context) => {
   const { id } = await context.params;
   const db = atendimentoDb();
   const body = await readJson(request);
-  const force = body.force === true;
   // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
   if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) {
     if (!aiEnabled(db)) throw new AtendimentoError("INVALID_REQUEST", "A IA está desligada. Ligue a IA no topo do Atendimento para devolver conversas para ela.");
@@ -65,16 +63,14 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
       return json({ conversation: getConversation(db, id) });
     }
     case "assumir":
-      return json({ conversation: assumeConversation(db, id, staff, { force }) });
+      return json({ conversation: assumeConversation(db, id, staff) });
     case "devolver":
       return json({ conversation: returnToAi(db, id, staff, text(body.note, 400)) });
-    case "fila":
-      return json({ conversation: sendToQueue(db, id, staff, "Colocada na fila pela equipe.") });
     case "finalizar":
       return json({ conversation: finishConversation(db, id, staff) });
     case "mover":
       if (!isConversationStatus(body.status)) throw new AtendimentoError("INVALID_REQUEST", "Etapa inválida.");
-      return json({ conversation: moveConversation(db, id, body.status, staff, { force }) });
+      return json({ conversation: moveConversation(db, id, body.status, staff) });
     case "lida":
       markConversationRead(db, id);
       return json({ conversation: getConversation(db, id) });

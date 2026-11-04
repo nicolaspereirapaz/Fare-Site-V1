@@ -8,7 +8,7 @@ import type { Conversation, Message } from "@/lib/atendimento/types";
 export type BrainInput = { conversation: Conversation; messages: Message[]; now?: Date };
 export type BrainResult = {
   reply: string | null;
-  /** Pedir vendedor: a conversa vai para "Aguardando vendedor". */
+  /** Pedir vendedor: a conversa vai para "Em atendimento" (não lida). */
   handoff?: { reason: string } | null;
   contactName?: string;
   summary?: string;
