@@ -8,7 +8,7 @@ import {
   FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
 } from "@/components/fotos/catalog";
 import { buildWhatsAppUrl } from "@/lib/commerce";
-import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
+import { FARE_FOTO_WHATSAPP, FARE_FOTO_WHATSAPP_PRO } from "@/lib/constants";
 import { orderCode } from "@/lib/orders/orderCode";
 import { createOrder } from "@/lib/orders/repository";
 import { renderOrderHtml } from "@/lib/proposals/html";
@@ -103,7 +103,8 @@ const thumbnail = async (file: string) =>
 export async function createPhotoOrder(database: DatabaseSync, user: { id: string }, input: PhotoOrderInput) {
   const data = validate(input);
   // Cliente profissional (cadastro pelo convite): tabela profissional.
-  const { uploads, summary } = await readPhotos(data.photos, isProfessional(database, user.id));
+  const pro = isProfessional(database, user.id);
+  const { uploads, summary } = await readPhotos(data.photos, pro);
 
   const id = randomUUID();
   const deliveryText = data.delivery === "retirada" ? "Retirar na loja." : "Receber em casa (taxa combinada no WhatsApp).";
@@ -139,7 +140,7 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
     const result = await assemblePhotoFolder(database, {
       id, orderId: boardOrder.id, code, userId: user.id, customer: data.customer, delivery: data.delivery, photos: data.photos, uploads, summary,
     });
-    return { ...result, whatsappUrl: buildWhatsAppUrl(FARE_FOTO_WHATSAPP, photoOrderMessage(result.order, result.prazo)) };
+    return { ...result, whatsappUrl: buildWhatsAppUrl(pro ? FARE_FOTO_WHATSAPP_PRO : FARE_FOTO_WHATSAPP, photoOrderMessage(result.order, result.prazo)) };
   } catch (error) {
     dropBoardOrder();
     throw error;
