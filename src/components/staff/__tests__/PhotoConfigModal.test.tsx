@@ -19,6 +19,12 @@ describe("foto no orçamento da equipe", () => {
     expect(photoTablePrice("20x30", 11)).toBe(10);
   });
 
+  it("abre em Ampliações (lista inclui os tamanhos com ímã, de preço fixo)", () => {
+    render(<PhotoConfigModal onClose={vi.fn()} onSave={vi.fn()} start={{ sizeId: "20x20" }} />);
+    expect(screen.getByRole("radio", { name: "Ampliações" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /20 × 25 com ímã/ })).toHaveTextContent("11,60");
+  });
+
   it("quantidade e tamanho; custo zero e preço da tabela; a equipe pode trocar o preço; papel a definir por padrão", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();

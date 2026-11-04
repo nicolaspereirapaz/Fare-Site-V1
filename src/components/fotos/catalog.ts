@@ -169,8 +169,9 @@ export const PHOTO_PRODUCT_IMAGE: Record<SizeGroup, string> = {
 export const groupOf = (id: SizeGroup) => SIZE_GROUPS.find((group) => group.id === id)!;
 /** Preço que aparece no botão do tamanho (revelação depende da quantidade, então não mostra). */
 export function sizePriceHint(size: Size) {
-  if (size.group === "ampliacao") return brl(size.prices![0]);
+  // Preço fixo primeiro: ampliação com ímã tem `price`, sem `prices`.
   if (size.price !== undefined) return brl(size.price);
+  if (size.group === "ampliacao") return brl(size.prices![0]);
   if (size.base) return `${size.base.label.replace(" cm", "")} + ${brl(size.extra!)}`;
   if (size.steps) return `${brl(size.steps[0].unit)}${pairs(size) > 1 ? " · em pares" : ""}`;
   return null;
