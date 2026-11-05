@@ -13,6 +13,7 @@ import {
   listContactMedia,
   listQuickReplies,
   setConversationTags,
+  markAllConversationsRead,
   markConversationRead,
   markConversationUnread,
   moveConversation,
@@ -909,5 +910,14 @@ describe("marcar como não lida", () => {
     expect(getConversation(db, id).unread).toBe(3);
     markConversationRead(db, id);
     expect(getConversation(db, id).unread).toBe(0);
+  });
+
+  it("marcar todas como lidas zera todas as conversas", () => {
+    const first = newConversation().id;
+    const second = newConversation().id;
+    markConversationUnread(db, first);
+    markConversationUnread(db, second);
+    markAllConversationsRead(db);
+    expect([getConversation(db, first).unread, getConversation(db, second).unread]).toEqual([0, 0]);
   });
 });

@@ -84,6 +84,12 @@
 
 .at-list { display: flex; min-height: 0; flex-direction: column; border-right: 1px solid #c9ced6; background: #fff; }
 .at-list-head { display: flex; align-items: center; height: 52px; flex: none; padding: 0 16px; background: var(--navy); color: #fff; font-family: var(--font-outfit), sans-serif; font-size: 1.02rem; font-weight: 700; }
+.at-list-head-btn {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto; height: 28px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); color: #fff; font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer;
+}
+.at-list-head-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.at-list-head-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .at-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #e9edef; }
 .at-filters button {
   display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px; border: 0; border-radius: 999px;

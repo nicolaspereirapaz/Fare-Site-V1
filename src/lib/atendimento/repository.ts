@@ -410,6 +410,11 @@ export function markConversationRead(db: DatabaseSync, id: string) {
   db.prepare("UPDATE atd_conversations SET unread = 0 WHERE id = ?").run(id);
 }
 
+/** "Marcar todas como lidas": zera a bolinha de todas as conversas. */
+export function markAllConversationsRead(db: DatabaseSync) {
+  db.prepare("UPDATE atd_conversations SET unread = 0 WHERE unread > 0").run();
+}
+
 /** "Marcar como não lida" (como no WhatsApp): volta a bolinha para lembrar a equipe. */
 export function markConversationUnread(db: DatabaseSync, id: string) {
   getConversation(db, id);

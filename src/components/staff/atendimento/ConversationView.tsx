@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Bot,
+  CheckCheck,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -164,11 +165,28 @@ export function ConversationView({
     },
     [onConversationChanged, onSelect, selectedId],
   );
+  const anyUnread = conversations.some((conversation) => conversation.unread > 0);
+  const markAllRead = useCallback(async () => {
+    setUnreadError(null);
+    try {
+      const data = await api<{ conversations: Conversation[] }>("/api/atendimento/conversas", { method: "PATCH", body: { action: "todas_lidas" } });
+      data.conversations.forEach(onConversationChanged);
+    } catch (markError) {
+      setUnreadError(markError instanceof Error ? markError.message : "Não foi possível marcar.");
+    }
+  }, [onConversationChanged]);
 
   return (
     <div className="at-inbox">
       <aside className="at-list" aria-label="Conversas">
-        <div className="at-list-head">Conversas</div>
+        <div className="at-list-head">
+          Conversas
+          {anyUnread ? (
+            <button className="at-list-head-btn" onClick={() => void markAllRead()} title="Marcar todas as conversas como lidas" type="button">
+              <CheckCheck aria-hidden="true" size={15} /> Marcar todas como lidas
+            </button>
+          ) : null}
+        </div>
         <div className="at-filters" role="tablist" aria-label="Filtrar conversas">
           {FILTERS.map(({ id, label }) => (
             <button aria-selected={filter === id} className={filter === id ? "active" : undefined} key={id} onClick={() => setFilter(id)} role="tab" type="button">
