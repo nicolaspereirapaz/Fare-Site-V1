@@ -531,13 +531,16 @@ export function setAiEnabled(db: DatabaseSync, enabled: boolean) {
   db.prepare("INSERT INTO atd_meta (key, value) VALUES ('ia_ligada', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(enabled ? "1" : "0");
 }
 
-/** IA desligada e o cliente escreveu numa conversa \"com a IA\": vai direto para "Em atendimento". */
-export function holdForSeller(db: DatabaseSync, id: string): Conversation {
+/**
+ * Cliente escreveu e a IA não deve responder: vai direto para "Em atendimento" (não lida).
+ * Padrão: IA desligada. Com `reason`: regra do atendimento (pedido em aberto, cliente na loja…). Vale para conversa com a IA ou finalizada.
+ */
+export function holdForSeller(db: DatabaseSync, id: string, reason?: string): Conversation {
   const current = getConversation(db, id);
-  if (current.status !== "ia") return current;
-  setStatus(db, id, "em_atendimento", { staff: null, handoffReason: "Cliente escreveu (IA desligada)", waiting: true });
+  if (current.status !== "ia" && current.status !== "finalizada") return current;
+  setStatus(db, id, "em_atendimento", { staff: null, handoffReason: reason ?? "Cliente escreveu (IA desligada)", waiting: true });
   db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
-  system(db, id, "IA desligada: a conversa foi para Em atendimento.", "fila");
+  system(db, id, reason ? `${reason}. A IA não responde: a conversa foi para Em atendimento.` : "IA desligada: a conversa foi para Em atendimento.", "fila");
   return getConversation(db, id);
 }
 

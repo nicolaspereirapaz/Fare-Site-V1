@@ -21,7 +21,7 @@ import {
   runAtendimentoMigrations,
   saveQuickReply,
 } from "@/lib/atendimento/repository";
-import { addNote, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
 import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
 import { mkdtempSync, existsSync as fileExists, rmSync as removeDir } from "node:fs";
 import os from "node:os";
@@ -39,7 +39,9 @@ import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
 import { parseWhatsApp, stripWhatsApp } from "@/lib/atendimento/waFormat";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
 import { normalizeOutboundPhone, startWhatsAppConversation } from "@/lib/atendimento/whatsapp";
-import { createPanelCustomer } from "@/lib/customers/repository";
+import { createPanelCustomer, resolveCustomer } from "@/lib/customers/repository";
+import { createOrder } from "@/lib/orders/repository";
+import { orderCode } from "@/lib/orders/orderCode";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -52,6 +54,9 @@ beforeEach(() => {
 
 const newConversation = () => createConversation(db, { channel: "simulador", phone: "(11) 98888-7777" });
 const say = (id: string, text: string, brain: Brain = simulatedBrain) => receiveCustomerMessage(db, id, text, brain);
+/** Última mensagem da conversa "n dias atrás". */
+const daysAgo = (id: string, days: number) =>
+  db.prepare("UPDATE atd_conversations SET last_message_at = ? WHERE id = ?").run(new Date(Date.now() - days * 86_400_000).toISOString(), id);
 
 describe("IA simulada", () => {
   it("pergunta o nome, guarda e responde o que o cliente já tinha pedido", async () => {
@@ -173,9 +178,10 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
     expect(listMessages(db, id).at(-1)?.author).toBe("ia");
   });
 
-  it("finalizada reabre com a IA quando o cliente volta a escrever", async () => {
+  it("finalizada reabre com a IA quando o cliente volta a escrever (passados 3 dias)", async () => {
     const { id } = newConversation();
     finishConversation(db, id, ana);
+    daysAgo(id, 4);
     await say(id, "oi de novo");
     expect(getConversation(db, id).status).toBe("ia");
   });
@@ -919,5 +925,59 @@ describe("marcar como não lida", () => {
     markConversationUnread(db, second);
     markAllConversationsRead(db);
     expect([getConversation(db, first).unread, getConversation(db, second).unread]).toEqual([0, 0]);
+  });
+});
+
+describe("quem a IA responde", () => {
+  const whats = (externalId: string, phone: string, text: string) =>
+    receiveWhatsAppMessage(db, parseInbound({ externalId, chatId: `${phone}@s.whatsapp.net`, phone, pushName: "Cliente", text }));
+
+  it("número novo: fica com a IA", () => {
+    const { conversationId } = whats("Q1", "5511911112222", "oi, quanto custa revelar?");
+    expect(getConversation(db, conversationId).status).toBe("ia");
+  });
+
+  it("QR Code da loja: não responde, vai para o vendedor (também no meio da conversa com a IA)", async () => {
+    expect(isStoreQrMessage("Olá, estou na loja")).toBe(true);
+    expect(isStoreQrMessage("ola estou na loja!")).toBe(true);
+    expect(isStoreQrMessage("Olá, estou na loja agora com as fotos")).toBe(true);
+    expect(isStoreQrMessage("vou passar na loja amanhã")).toBe(false);
+    const { conversationId } = whats("Q2", "5511922223333", "Olá, estou na loja");
+    const conversation = getConversation(db, conversationId);
+    expect(conversation).toMatchObject({ status: "em_atendimento", handoffReason: "Cliente na loja (QR Code)", unread: 1 });
+    expect(await runAi(db, conversationId, simulatedBrain)).toEqual([]);
+
+    const { id } = newConversation();
+    await say(id, "oi");
+    await say(id, "Olá, estou na loja");
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+    expect(listMessages(db, id).at(-1)?.author).toBe("sistema");
+  });
+
+  it("cliente com pedido em aberto vai para o vendedor; pedido finalizado não prende", () => {
+    const maria = createPanelCustomer(db, { name: "Maria Souza", phone: "(11) 93333-4444" }, ana);
+    const owner = resolveCustomer(db, maria.ref)!.ownerId;
+    const order = createOrder(db, { userId: owner, idempotencyKey: "p1", customer: { name: "Maria Souza" }, items: [], paymentMethod: "pix" });
+    const { conversationId } = whats("Q3", "5511933334444", "oi, meu pedido ficou pronto?");
+    expect(getConversation(db, conversationId)).toMatchObject({ status: "em_atendimento", handoffReason: `Cliente com ${orderCode(order.id)} em aberto` });
+
+    db.prepare("UPDATE fare_orders SET status = 'concluido' WHERE id = ?").run(order.id);
+    finishConversation(db, conversationId, ana);
+    daysAgo(conversationId, 5);
+    whats("Q4", "5511933334444", "oi, quero fazer outro pedido");
+    expect(getConversation(db, conversationId).status).toBe("ia");
+  });
+
+  it("voltou até 3 dias depois: fica com o vendedor; conversa em andamento com a IA continua com a IA", async () => {
+    const { id } = newConversation();
+    await say(id, "oi");
+    finishConversation(db, id, ana);
+    await say(id, "esqueci de perguntar uma coisa");
+    expect(getConversation(db, id)).toMatchObject({ status: "em_atendimento", handoffReason: "Cliente voltou a escrever logo depois da última conversa" });
+
+    const other = createConversation(db, { channel: "simulador", phone: "(11) 97777-0000" }).id;
+    await say(other, "oi");
+    await say(other, "quero 10 fotos 10x15");
+    expect(getConversation(db, other).status).toBe("ia");
   });
 });

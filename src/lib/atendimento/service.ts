@@ -19,8 +19,31 @@ import {
   type StaffActor,
 } from "@/lib/atendimento/repository";
 import { isInternal, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { openDocumentForPhone } from "@/lib/atendimento/customer";
+import { foldText } from "@/lib/atendimento/search";
 
-/** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"). Não chama a IA. */
+// Voltou a escrever até 3 dias depois da última mensagem: continuação do mesmo assunto, fica com o vendedor.
+const RECENT_MS = 3 * 86_400_000;
+/** Mensagem pronta do QR Code da loja: cliente está no balcão, a equipe atende ali. */
+export const isStoreQrMessage = (text: string) => /^\W*ola\W+estou na loja\b/.test(foldText(text));
+
+/**
+ * Por que a IA NÃO deve responder esta mensagem (vai para o vendedor), ou null.
+ * A IA responde todos os números, menos: cliente na loja (QR Code) e, ao começar ou reabrir a conversa,
+ * quem tem orçamento/pedido em aberto ou voltou logo depois da última conversa.
+ */
+function sellerReason(db: DatabaseSync, before: Conversation, text: string, now = Date.now()): string | null {
+  if (before.status !== "ia" && before.status !== "finalizada") return null;
+  if (isStoreQrMessage(text)) return "Cliente na loja (QR Code)";
+  const starting = before.status === "finalizada" || !listMessages(db, before.id).some((message) => !isInternal(message.author));
+  if (!starting) return null;
+  const open = before.channel === "whatsapp" ? openDocumentForPhone(db, before.phone, now) : null;
+  if (open) return `Cliente com ${open} em aberto`;
+  if (before.status === "finalizada" && now - Date.parse(before.lastMessageAt) < RECENT_MS) return "Cliente voltou a escrever logo depois da última conversa";
+  return null;
+}
+
+/** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"; aplica as regras de quem responde). Não chama a IA. */
 export function recordCustomerMessage(
   db: DatabaseSync,
   conversationId: string,
@@ -28,9 +51,12 @@ export function recordCustomerMessage(
   media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
 ): Message {
   const before = getConversation(db, conversationId);
-  if (before.status === "finalizada") reopenConversation(db, conversationId);
+  const reason = sellerReason(db, before, text);
+  if (before.status === "finalizada" && !reason) reopenConversation(db, conversationId);
   if (before.status === "aguardando_cliente") customerReplied(db, conversationId);
-  return addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
+  const message = addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
+  if (reason) holdForSeller(db, conversationId, reason);
+  return message;
 }
 
 /** Conversas em que a IA está pensando agora (o painel mostra "digitando…"). */

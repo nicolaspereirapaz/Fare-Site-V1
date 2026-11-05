@@ -77,3 +77,19 @@ export function customersForPhone(db: DatabaseSync, phone: string): LinkedCustom
         })),
     }));
 }
+
+const CLOSED_QUOTE = new Set(["virou_pedido", "encerrado"]);
+const CLOSED_ORDER = new Set(["concluido", "cancelado"]);
+// Orçamento esquecido em aberto não prende o cliente para sempre: só conta o dos últimos 30 dias.
+const OPEN_QUOTE_DAYS = 30;
+
+/** Orçamento ou pedido em andamento de algum cadastro com esse WhatsApp (código, ex. "PED-0123"), ou null. */
+export function openDocumentForPhone(db: DatabaseSync, phone: string, now = Date.now()): string | null {
+  for (const customer of customersForPhone(db, phone)) {
+    const open = customer.history.find((entry) => entry.kind === "order"
+      ? !CLOSED_ORDER.has(entry.status)
+      : !CLOSED_QUOTE.has(entry.status) && now - Date.parse(entry.createdAt) < OPEN_QUOTE_DAYS * 86_400_000);
+    if (open) return open.code;
+  }
+  return null;
+}
