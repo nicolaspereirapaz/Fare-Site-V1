@@ -4,6 +4,7 @@ import { readStaffSession } from "@/lib/staff/server";
 import { createListBackofficeOrdersHandler } from "@/lib/backoffice/access";
 import { listAllOrders, listOrderStatusHistory } from "@/lib/orders/repository";
 import { getOrderFinance } from "@/lib/orders/payments";
+import { isProfessional } from "@/lib/professional";
 
 export const dynamic = "force-dynamic";
 
@@ -25,4 +26,5 @@ export const GET = createListBackofficeOrdersHandler(
     by: staffName(entry.actorId),
   })),
   (order) => getOrderFinance(database, order.id),
+  (order) => isProfessional(database, order.userId),
 );

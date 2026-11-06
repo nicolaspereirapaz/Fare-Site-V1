@@ -21,6 +21,8 @@ export type StaffDocument = {
   proposalSentAt: string | null; orderId: string | null; history: OrderHistoryEntry[];
   /** Entrega prevista do orçamento (pedido usa `finance`). */
   quoteDelivery?: { date: string | null; time: string | null } | null;
+  /** Cliente profissional (cadastro pelo convite). */
+  professional?: boolean;
 };
 
 type DetailDeps = {
@@ -30,6 +32,7 @@ type DetailDeps = {
   history?: (id: string) => OrderHistoryEntry[];
   imageOf: (item: QuoteCartItem) => Promise<string | null>;
   productOf?: (item: QuoteCartItem) => Promise<{ imageUrl: string | null; catalogInfo: ProductCatalogInfo | null }>;
+  professionalOf?: (userId: string) => boolean;
 };
 const json = (body: unknown, status = 200) => Response.json(body, {status, headers:{'Cache-Control':'no-store'}});
 /** Snapshot interno completo, somente depois da autorização; não recalcula preços nem personalização. */
@@ -54,6 +57,7 @@ export function createDocumentDetailsHandler(deps: DetailDeps) {
       finance,paymentMethod:quote?null:(record as Order).paymentMethod,
       proposalSentAt:quote?.proposalSentAt??null,orderId:quote?.orderId??null,history:deps.history?.(id)??[],
       quoteDelivery:quote?{date:quote.deliveryDate,time:quote.deliveryTime}:null,
+      ...(record.userId&&deps.professionalOf?.(record.userId)?{professional:true}:{}),
     };
     return json({document});
   };

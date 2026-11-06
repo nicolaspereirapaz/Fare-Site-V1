@@ -40,6 +40,8 @@ export type BackofficeOrder = {
   itemCount: number;
   /** Pedido de fotos do site: os arquivos estão na pasta "Pedidos". */
   photos?: boolean;
+  /** Cliente profissional: etiqueta azul discreta no card. */
+  professional?: boolean;
   total: number;
   discount?: { label: string; amount: number } | null;
   createdAt: string;
@@ -187,7 +189,12 @@ function OrdersBoard({ freshOrderId, onFreshShown, search = "" }: { freshOrderId
     title: order.customerCompany || order.customerName,
     total: order.total,
     finance: order.finance,
-    badge: order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : undefined,
+    badge: order.photos || order.professional ? (
+      <>
+        {order.photos ? <span className="kb-tag kb-tag-photos">Fotos</span> : null}
+        {order.professional ? <span className="kb-tag kb-tag-pro">Cliente profissional</span> : null}
+      </>
+    ) : undefined,
     meta: order.status === "concluido"
       ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
       : order.finance?.paymentOnPickup ? 'Pagamento na retirada'

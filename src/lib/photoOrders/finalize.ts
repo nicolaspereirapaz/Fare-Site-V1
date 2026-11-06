@@ -10,7 +10,8 @@ import {
 import { buildWhatsAppUrl } from "@/lib/commerce";
 import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
 import { orderCode } from "@/lib/orders/orderCode";
-import { createOrder } from "@/lib/orders/repository";
+import { createOrder, findOrderById } from "@/lib/orders/repository";
+import { closeSiteOrder } from "@/lib/orders/payments";
 import { renderOrderHtml } from "@/lib/proposals/html";
 import type { OrderDocument } from "@/lib/proposals/orderDocument";
 import { FARE_COMPANY } from "@/lib/proposals/proposal";
@@ -103,7 +104,8 @@ const thumbnail = async (file: string) =>
 export async function createPhotoOrder(database: DatabaseSync, user: { id: string }, input: PhotoOrderInput) {
   const data = validate(input);
   // Cliente profissional (cadastro pelo convite): tabela profissional.
-  const { uploads, summary } = await readPhotos(data.photos, isProfessional(database, user.id));
+  const professional = isProfessional(database, user.id);
+  const { uploads, summary } = await readPhotos(data.photos, professional);
 
   const id = randomUUID();
   const deliveryText = data.delivery === "retirada" ? "Retirar na loja." : "Receber em casa (taxa combinada no WhatsApp).";
@@ -139,10 +141,29 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
     const result = await assemblePhotoFolder(database, {
       id, orderId: boardOrder.id, code, userId: user.id, customer: data.customer, delivery: data.delivery, photos: data.photos, uploads, summary,
     });
+    if (professional && data.delivery === "retirada") payOnPickup(database, boardOrder.id);
     return { ...result, whatsappUrl: buildWhatsAppUrl(FARE_FOTO_WHATSAPP, photoOrderMessage(result.order, result.prazo)) };
   } catch (error) {
     dropBoardOrder();
     throw error;
+  }
+}
+
+/**
+ * Cliente profissional que vai retirar: pedido já entra como "Pagamento na retirada" (sai de Aguardando pagamento).
+ * Falhar aqui não derruba o pedido: ele só fica aguardando pagamento, como antes.
+ */
+function payOnPickup(database: DatabaseSync, orderId: string) {
+  try {
+    const order = findOrderById(database, orderId);
+    if (!order) return;
+    closeSiteOrder(database, {
+      orderId, expectedUpdatedAt: order.updatedAt, actorId: "site-profissional", actorName: "Site (cliente profissional)",
+      paymentMethod: "pix", paymentOnPickup: true, payment: { amountCents: 0, paidAt: null },
+      deliveryMode: "retirada", deliveryDate: null, deliveryTime: null, deliveryAddress: null, installments: null, dueDate: null,
+    });
+  } catch (error) {
+    console.error("[fotos] pagamento na retirada (profissional):", error instanceof Error ? error.message : error);
   }
 }
 

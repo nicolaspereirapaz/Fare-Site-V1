@@ -177,6 +177,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [editingCustomer, setEditingCustomer] = useState(false);
   // Cliente profissional (cadastro pelo convite): fotos pela tabela profissional.
   const professional = fixedCustomer ? fixedProfessional : Boolean(customer?.professional);
+  // Pedido novo de cliente profissional: "Total na retirada" vem marcado (a equipe pode trocar).
+  const closingChoice: ClosingChoice = paymentChoice ?? (professional && isOrder && !editingOrder ? "pickup" : null);
   /** Orçamento já salvo sem cliente: dá para escolher agora. */
   const [needsCustomer, setNeedsCustomer] = useState(false);
   const [changingCustomer, setChangingCustomer] = useState(false);
@@ -306,7 +308,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
 
   async function submit() {
     if (isOrder && !editingOrder && (!customer || !payment.paid.trim() || paymentFormError(payment, Math.round(totals.total * 100)))) return;
-    const pickup = paymentChoice === "pickup";
+    const pickup = closingChoice === "pickup";
     const quoteDelivery = isOrder ? {} : { deliveryDate: delivery.date || null, deliveryTime: delivery.date && delivery.time ? delivery.time : null };
     setSaving(true);
     setSaveError(null);
@@ -492,7 +494,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
             ) : null}
           </section>
 
-          {isOrder && !editingOrder ? <DirectOrderFields choice={paymentChoice} onChange={setPayment} onChoice={setPaymentChoice} total={totals.total} value={payment} /> : null}
+          {isOrder && !editingOrder ? <DirectOrderFields choice={closingChoice} onChange={setPayment} onChoice={setPaymentChoice} total={totals.total} value={payment} /> : null}
           {/* Link para o cliente mandar as fotos: já no orçamento (as fotos viram itens com o preço da tabela). */}
           {!isOrder || editingOrder ? (
             <section className="qe-card">

@@ -36,6 +36,8 @@ export type BackofficeOrderSummary = {
   itemCount: number;
   /** Pedido de fotos do site (itens "fotos/…"). */
   photos?: boolean;
+  /** Cliente profissional (cadastro pelo convite): etiqueta no quadro. */
+  professional?: boolean;
   total: number;
   /** Desconto vindo do orçamento (rótulo e valor). */
   discount: { label: string; amount: number } | null;
@@ -76,7 +78,7 @@ function calculateOrderSummaryTotal(items: Order["items"]): number {
   return cents / 100;
 }
 
-function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [], finance: OrderFinance | null = null): BackofficeOrderSummary {
+function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [], finance: OrderFinance | null = null, professional = false): BackofficeOrderSummary {
   return {
     id: order.id,
     code: orderCode(order.id),
@@ -98,6 +100,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     updatedAt: order.updatedAt,
     history,
     ...(finance ? { finance } : {}),
+    ...(professional ? { professional: true } : {}),
   };
 }
 
@@ -116,6 +119,7 @@ export function createListBackofficeOrdersHandler(
   listOrders: ListOrders,
   listHistory: ListOrderHistory = () => [],
   readFinance: (order: Order) => OrderFinance | null = () => null,
+  isProfessionalOrder: (order: Order) => boolean = () => false,
 ) {
   return async function listBackofficeOrders(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -131,7 +135,7 @@ export function createListBackofficeOrdersHandler(
     const orders = listOrders();
 
     return Response.json({
-      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order), readFinance(order))),
+      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order), readFinance(order), isProfessionalOrder(order))),
       counts: buildStatusCounts(orders),
     });
   };
