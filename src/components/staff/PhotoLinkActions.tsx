@@ -57,7 +57,7 @@ export function PhotoLinkActions({ kind, id, locked = false }: { kind: "quote" |
         <h3><ImagePlus aria-hidden="true" size={15} /> Link das fotos</h3>
         <span>O cliente envia, recorta e escolhe o papel</span>
       </div>
-      <div className="kb-proposal-actions">
+      <div className="kb-proposal-actions kb-photo-link-actions">
         <button className="kb-secondary" disabled={busy} onClick={() => run("copy")} type="button"><Copy aria-hidden="true" size={15} /> Copiar link</button>
         <button className="kb-secondary" disabled={busy} onClick={() => run("open")} type="button"><ExternalLink aria-hidden="true" size={15} /> Abrir link</button>
         <button className="kb-secondary" disabled={busy || locked} onClick={() => run("edit")} title={locked ? "O pedido já entrou em produção" : "Abre o editor com as fotos já enviadas"} type="button"><PencilLine aria-hidden="true" size={15} /> Editar fotos</button>

@@ -152,9 +152,12 @@ export function QuotesBoard({ freshQuoteId, onFreshShown, search = "" }: { canCa
   const orderCard = (order: BackofficeOrder) => ({
     code: order.code,
     summary: itemsSummary(order.items),
-    badge: order.photos
-      ? <span className="kb-tag kb-tag-photos"><Camera aria-hidden="true" size={12} /> Fotos do site</span>
-      : <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>,
+    badge: <>
+      {order.photos
+        ? <span className="kb-tag kb-tag-photos"><Camera aria-hidden="true" size={12} /> Fotos do site</span>
+        : <span className="kb-tag"><ShoppingCart aria-hidden="true" size={12} /> {order.finance ? `Pedido · ${order.finance.createdBy}` : "Pedido do site"}</span>}
+      {order.professional ? <span className="kb-tag kb-tag-pro">Cliente profissional</span> : null}
+    </>,
     title: order.customerCompany || order.customerName,
     total: order.total,
     meta: `Pedido ${formatDay(order.createdAt)}`,

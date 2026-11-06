@@ -164,7 +164,7 @@ describe("pedido de fotos", () => {
       expect(readdirSync(order.folder)).toContain("10x15 com ímã Brilho");
     });
 
-    it("profissional que retira: pedido já entra como pagamento na retirada; cliente comum continua aguardando pagamento", async () => {
+    it("profissional que retira: pedido fica aguardando pagamento (equipe usa Fechar Pedido), igual ao cliente comum", async () => {
       const { getOrderFinance } = await import("@/lib/orders/payments");
       const { findOrderById } = await import("@/lib/orders/repository");
       setProfessional(database, "pro-2", true, "Equipe");
@@ -172,8 +172,8 @@ describe("pedido de fotos", () => {
       const photo = { ...edits, uploadId: sent.id, sizeId: "10x15", paper: "brilho" as const, copies: 2 };
       const pro = await createPhotoOrder(database, { id: "pro-2" }, { customer: { name: "Rafa Pro", phone: "(11) 97777-2222" }, delivery: "retirada", photos: [photo] });
       const proOrder = findOrderById(database, pro.order.orderId!)!;
-      expect(proOrder.status).toBe("aguardando_arte");
-      expect(getOrderFinance(database, proOrder.id)).toMatchObject({ paymentOnPickup: true, deliveryMode: "retirada" });
+      expect(proOrder.status).toBe("aguardando_pagamento");
+      expect(getOrderFinance(database, proOrder.id)).toBeNull();
 
       const sent2 = await upload("comum.jpg", 1200, 1800);
       const common = await createPhotoOrder(database, { id: "comum-2" }, { customer: { name: "Leo", phone: "(11) 97777-3333" }, delivery: "retirada", photos: [{ ...photo, uploadId: sent2.id }] });
