@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ORDER_STAFF_LABELS } from "@/lib/backoffice/orderStatus";
-import { createPanelCustomer, customerHistory, DuplicateCustomerError, findCustomerDuplicates, normalizePhone, resolveCustomer } from "@/lib/customers/repository";
+import { confirmAutoCustomerName, createPanelCustomer, customerHistory, DuplicateCustomerError, findCustomerDuplicates, normalizePhone, resolveCustomer } from "@/lib/customers/repository";
+import { formatPersonName } from "@/lib/text/names";
 import { isBrazilianPhone } from "@/lib/account/documents";
 import { getConversation, setConversationCustomer, updateConversationProfile } from "@/lib/atendimento/repository";
 import type { Conversation } from "@/lib/atendimento/types";
@@ -20,6 +21,41 @@ const quoteLabels = QUOTE_STATUS_LABELS as Record<string, string>;
 const orderLabels = ORDER_STAFF_LABELS as Record<string, string>;
 
 const AUTO_ACTOR = { id: "atendimento-whatsapp", name: "Atendimento (WhatsApp)" };
+/** Pré-cadastro com o nome que o cliente disse à IA (o vendedor completa o sobrenome depois). */
+const AI_ACTOR = { id: "atendimento-ia", name: "Atendimento (IA)" };
+
+/**
+ * A IA soube o nome do cliente: vira o pré-cadastro.
+ *   - conversa sem cadastro: cria um com esse nome e o telefone;
+ *   - cadastro criado sozinho com o nome do WhatsApp: troca pelo nome dito;
+ *   - conta do site ou cadastro feito/confirmado antes: não mexe.
+ */
+export function preRegisterFromAi(db: DatabaseSync, conversationId: string, name: string): Conversation {
+  const conversation = getConversation(db, conversationId);
+  const clean = formatPersonName(name.replace(/[~*_]/g, ""));
+  if (conversation.channel !== "whatsapp" || clean.length < 2) return conversation;
+  try {
+    if (conversation.customerRef) {
+      if (confirmAutoCustomerName(db, conversation.customerRef, clean, AUTO_ACTOR.name, AI_ACTOR)) {
+        setConversationCustomer(db, conversationId, conversation.customerRef, clean);
+      }
+      return getConversation(db, conversationId);
+    }
+    const phone = normalizePhone(conversation.phone);
+    if (!isBrazilianPhone(phone)) return conversation;
+    try {
+      const created = createPanelCustomer(db, { name: clean, phone }, AI_ACTOR);
+      setConversationCustomer(db, conversationId, created.ref, created.name);
+    } catch (error) {
+      if (!(error instanceof DuplicateCustomerError) || !error.matches[0]) return conversation;
+      setConversationCustomer(db, conversationId, error.matches[0].ref, error.matches[0].name);
+    }
+    return getConversation(db, conversationId);
+  } catch (error) {
+    console.error("[atendimento] pré-cadastro pela IA:", error instanceof Error ? error.message : error);
+    return getConversation(db, conversationId);
+  }
+}
 
 /**
  * Liga a conversa do WhatsApp a um cadastro do site:

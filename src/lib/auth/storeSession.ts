@@ -1,5 +1,6 @@
 import { auth, database } from "@/lib/auth";
 import { readGuestId } from "@/lib/auth/temporaryGuest";
+import { formatPersonName } from "@/lib/text/names";
 
 function guestTable() {
   database.exec("CREATE TABLE IF NOT EXISTS fare_temporary_visitors (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)");
@@ -24,5 +25,5 @@ export async function updateStoreName(name: string, headers: Headers) {
   const id = readGuestId(headers);
   if (!id) throw new Error("AUTH_REQUIRED");
   guestTable();
-  database.prepare("UPDATE fare_temporary_visitors SET name = ? WHERE id = ?").run(name, id);
+  database.prepare("UPDATE fare_temporary_visitors SET name = ? WHERE id = ?").run(formatPersonName(name) || name, id);
 }

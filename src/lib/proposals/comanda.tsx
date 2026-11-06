@@ -15,6 +15,7 @@ import { findOrderById, type Order } from "@/lib/orders/repository";
 import { buildOrderDocument, orderDeliveryAddress, type OrderDocument } from "./orderDocument";
 import { registerFonts } from "./pdf";
 import { brl } from "./proposal";
+import { shortPersonName } from "@/lib/text/names";
 
 /** Comanda: etiqueta A5 colada no pacote do pedido (cliente, produtos, entrega e quanto falta pagar). */
 export type Comanda = {
@@ -121,6 +122,11 @@ function PaymentBox({ payment }: { payment: Comanda["payment"] }) {
   );
 }
 
+/** Na comanda, só o primeiro e o último nome do cliente ("Carlos Barbosa"); sem nome, a empresa. */
+export function comandaCustomerName(customer: { name?: string | null; company?: string | null }) {
+  return (customer.name && shortPersonName(customer.name)) || customer.company || "Cliente não informado";
+}
+
 export function ComandaDocument({ comanda, logo }: { comanda: Comanda; logo: string }) {
   const { doc, delivery } = comanda;
   const customer = doc.customer;
@@ -144,7 +150,7 @@ export function ComandaDocument({ comanda, logo }: { comanda: Comanda; logo: str
         <View style={s.cols}>
           <View style={s.col}>
             <Text style={s.eyebrow}>Cliente</Text>
-            <Text style={s.big}>{customer.name || customer.company || "Cliente não informado"}</Text>
+            <Text style={s.big}>{comandaCustomerName(customer)}</Text>
             {customer.company && customer.name ? <Text style={s.line}>{customer.company}</Text> : null}
             {customer.phone ? <Text style={s.line}>{customer.phone}</Text> : null}
           </View>

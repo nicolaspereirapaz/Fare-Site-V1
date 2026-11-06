@@ -28,6 +28,12 @@ export function formatPersonName(name: string): string {
   return eachWord(tidy(name).toLocaleLowerCase("pt-BR"), (word, { first }) => (!first && NAME_CONNECTORS.has(word) ? word : capitalize(word)));
 }
 
+/** Comanda: só primeiro e último nome — "Carlos Vinicius Alves da Cruz Barbosa" → "Carlos Barbosa". */
+export function shortPersonName(name: string): string {
+  const words = formatPersonName(name).split(" ").filter((word) => word && !NAME_CONNECTORS.has(word));
+  return words.length > 2 ? `${words[0]} ${words.at(-1)}` : words.join(" ");
+}
+
 export function formatProductName(name: string): string {
   const text = tidy(name);
   // Tudo em maiúsculas (catálogo de fornecedor): começa do minúsculo. Senão, mantém siglas digitadas (PVC, DTF).

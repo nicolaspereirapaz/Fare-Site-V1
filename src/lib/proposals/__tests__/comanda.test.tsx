@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { OrderFinance } from "@/lib/orders/payments";
 import type { Order } from "@/lib/orders/repository";
-import { buildComanda, renderComandaPdf } from "@/lib/proposals/comanda";
+import { buildComanda, comandaCustomerName, renderComandaPdf } from "@/lib/proposals/comanda";
 
 const order: Order = {
   id: "ca7546d8-0000-0000-0000-000000000000", userId: "u1", idempotencyKey: "k", paymentMethod: "pix", status: "aguardando_arte",
@@ -17,6 +17,13 @@ const finance = (paidCents: number): OrderFinance => ({
 const noImage = async () => null;
 
 describe("comanda A5", () => {
+  it("mostra só o primeiro e o último nome do cliente", () => {
+    expect(comandaCustomerName({ name: "Carlos vinicius alves da cruz barbosa" })).toBe("Carlos Barbosa");
+    expect(comandaCustomerName({ name: "ana souza" })).toBe("Ana Souza");
+    expect(comandaCustomerName({ name: "Maria" })).toBe("Maria");
+    expect(comandaCustomerName({ name: "", company: "Fare Foto" })).toBe("Fare Foto");
+  });
+
   it("mostra quanto falta, ou pago, ou pagamento não registrado", async () => {
     expect((await buildComanda(order, finance(20000), noImage)).payment).toMatchObject({ total: 460, paid: 200, balance: 260, onPickup: false });
     expect((await buildComanda(order, finance(46000), noImage)).payment?.balance).toBe(0);

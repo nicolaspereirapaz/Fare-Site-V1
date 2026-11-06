@@ -124,7 +124,7 @@ function readPanel(database: DatabaseSync): PanelRow[] {
 }
 
 const accountSummary = (row: AccountRow): CustomerSummary => ({
-  ref: `conta:${row.id}`, kind: "conta", name: row.name, company: row.company ?? "", phone: row.phone ?? "", email: normalizeEmail(row.email), document: row.document ?? "",
+  ref: `conta:${row.id}`, kind: "conta", name: formatPersonName(row.name ?? "") || row.name, company: row.company ?? "", phone: row.phone ?? "", email: normalizeEmail(row.email), document: row.document ?? "",
   ...(row.professional ? { professional: true } : {}),
 });
 const panelSummary = (row: PanelRow): CustomerSummary => ({
@@ -221,6 +221,20 @@ function validate(input: PanelCustomerInput) {
 }
 
 /** Cadastra o cliente pelo painel. Se WhatsApp, e-mail ou CPF/CNPJ já existirem, lança DuplicateCustomerError. */
+/**
+ * Pré-cadastro criado automaticamente (ex.: com o nome do perfil do WhatsApp) recebe o nome confirmado
+ * pelo cliente. Só troca se o cadastro ainda for do autor automático `fromActor` (nunca mexe no que a equipe editou).
+ */
+export function confirmAutoCustomerName(database: DatabaseSync, ref: string, name: string, fromActor: string, actor: { id: string; name: string }): boolean {
+  if (!ref.startsWith("painel:")) return false;
+  const formatted = formatPersonName(name).slice(0, 120);
+  if (formatted.length < 2) return false;
+  migrate(database);
+  const result = database.prepare("UPDATE fare_panel_customers SET name = ?, created_by_id = ?, created_by_name = ? WHERE id = ? AND created_by_name = ?")
+    .run(formatted, actor.id, actor.name, ref.slice("painel:".length), fromActor);
+  return Number(result.changes) > 0;
+}
+
 export function createPanelCustomer(database: DatabaseSync, input: PanelCustomerInput, actor: { id: string; name: string }): CustomerSummary & { id: string } {
   const data = validate(input);
   migrate(database);

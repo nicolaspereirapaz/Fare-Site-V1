@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "better-auth";
 import { DEFAULT_USER_ROLE } from "@/lib/auth/roles";
+import { formatPersonName } from "@/lib/text/names";
 import { buildPasswordResetEmail, createMailer, type Mailer } from "@/lib/email/mailer";
 
 type AuthEnv = Partial<Record<"NODE_ENV" | "PORT" | "BETTER_AUTH_TRUSTED_ORIGINS" | "RESEND_API_KEY" | "EMAIL_FROM", string>>;
@@ -47,6 +48,13 @@ export function buildAuthOptions(
           // A resposta ao visitante é sempre a mesma (não revela se a conta existe); a falha fica no log.
           console.error("[e-mail] falha ao enviar o link de redefinição de senha", error);
         }
+      },
+    },
+    // Nome do cliente sempre formatado ao criar/editar a conta ("Ana Maria da Silva").
+    databaseHooks: {
+      user: {
+        create: { before: async (user) => ({ data: { ...user, name: formatPersonName(user.name ?? "") || user.name } }) },
+        update: { before: async (user) => (typeof user.name === "string" ? { data: { ...user, name: formatPersonName(user.name) || user.name } } : undefined) },
       },
     },
     user: {

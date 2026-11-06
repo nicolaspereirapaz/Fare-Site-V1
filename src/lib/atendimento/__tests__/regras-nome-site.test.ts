@@ -6,7 +6,7 @@ import { SITE_HELP_REPLY, SITE_ORDER_REPLY, simulatedBrain, statedName } from "@
 import { registeredNameFor } from "@/lib/atendimento/customer";
 import { createRealBrain } from "@/lib/atendimento/hermesBrain";
 import { parseInbound, receiveWhatsAppMessage } from "@/lib/atendimento/whatsapp";
-import { createPanelCustomer } from "@/lib/customers/repository";
+import { createPanelCustomer, resolveCustomer } from "@/lib/customers/repository";
 
 let db: DatabaseSync;
 beforeEach(() => {
@@ -76,6 +76,37 @@ describe("não pergunta o nome quando já sabe", () => {
       expect(result.reply).toBe("Olá, Maria!");
       expect(bodies[0]?.registeredName).toBe("Maria Souza");
     }
+  });
+});
+
+describe("pré-cadastro com o nome dito à IA", () => {
+  const ia = async (id: string, contactName: string) => runAi(db, id, async () => ({ reply: "Prazer!", contactName }), "IA");
+
+  it("troca o cadastro automático (nome do WhatsApp) pelo nome que o cliente escreveu; depois passa a contar", async () => {
+    const { conversationId } = inbound("P1", "5511977776666", "euamobrecho");
+    expect(getConversation(db, conversationId).customerName).toBe("Euamobrecho");
+    await receiveCustomerMessage(db, conversationId, "carla", async () => ({ reply: null }));
+    await ia(conversationId, "Carla");
+    const conversation = getConversation(db, conversationId);
+    expect(conversation.customerName).toBe("Carla");
+    expect(registeredNameFor(db, conversation)).toBe("Carla");
+    const cadastro = resolveCustomer(db, conversation.customerRef!);
+    expect(cadastro).toMatchObject({ name: "Carla", createdBy: "Atendimento (IA)" });
+  });
+
+  it("não usa nome que o cliente não escreveu (ex.: nome de exibição)", async () => {
+    const { conversationId } = inbound("P2", "5511977775555", "Bia Store");
+    await receiveCustomerMessage(db, conversationId, "quero fotos", async () => ({ reply: null }));
+    await ia(conversationId, "Bia");
+    expect(getConversation(db, conversationId).customerName).toBe("Bia Store");
+  });
+
+  it("não mexe em cadastro da equipe nem no sobrenome já completado", async () => {
+    createPanelCustomer(db, { name: "Maria Souza", phone: "(11) 98888-7777" }, ana);
+    const { conversationId } = inbound("P3", "5511988887777", "mary");
+    await receiveCustomerMessage(db, conversationId, "aqui é a Mari", async () => ({ reply: null }));
+    await ia(conversationId, "Mari");
+    expect(getConversation(db, conversationId).customerName).toBe("Maria Souza");
   });
 });
 

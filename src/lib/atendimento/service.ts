@@ -2,7 +2,8 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Brain } from "@/lib/atendimento/simulatedBrain";
 import { SIMULATED_AI_NAME } from "@/lib/atendimento/simulatedBrain";
 import { copyMedia } from "@/lib/atendimento/media";
-import { registeredNameFor } from "@/lib/atendimento/customer";
+import { preRegisterFromAi, registeredNameFor } from "@/lib/atendimento/customer";
+
 import {
   AtendimentoError,
   addMessage,
@@ -70,6 +71,8 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
       if (result.contactName || result.summary !== undefined) {
         updateConversationProfile(db, conversationId, { contactName: result.contactName, summary: result.summary });
       }
+      // Só vira cadastro o nome que o cliente escreveu (nunca o nome de exibição do WhatsApp).
+      if (result.contactName && nameTypedByCustomer(result.contactName, messages)) preRegisterFromAi(db, conversationId, result.contactName);
       if (result.reply) created.push(addMessage(db, { conversationId, author: "ia", authorName: aiName, body: result.reply }));
       if (result.handoff) sendToQueue(db, conversationId, null, result.handoff.reason);
       return created;
@@ -183,4 +186,13 @@ export function sendStaffMessage(
     deliveredText: options.sign ? signedText(staff.name, body) : body,
     replyToId: options.replyToId,
   });
+}
+
+const foldText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** O primeiro nome aparece, como palavra, em alguma mensagem escrita (ou transcrita) pelo cliente. */
+export function nameTypedByCustomer(name: string, messages: Message[]) {
+  const first = foldText(name.trim().split(/\s+/)[0] ?? "");
+  if (first.length < 2) return false;
+  const word = new RegExp(`(^|[^\\p{L}])${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}])`, "u");
+  return messages.some((message) => message.author === "cliente" && word.test(foldText(`${message.body} ${message.transcript ?? ""}`)));
 }
