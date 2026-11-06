@@ -314,6 +314,8 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-album-tile { position: relative; aspect-ratio: 1; padding: 0; border: 0; background: var(--navy-soft); cursor: zoom-in; }
 .at-album-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .at-album-tile:hover img { filter: brightness(.92); }
+.at-album-tile.is-flash { z-index: 1; animation: at-tile-flash 1.6s ease-out; }
+@keyframes at-tile-flash { 0%, 50% { outline: 4px solid #b7791f; outline-offset: -4px; } 100% { outline: 4px solid transparent; outline-offset: -4px; } }
 .at-album-more { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 18, 38, .55); color: #fff; font-size: 1.6rem; font-weight: 700; }
 
 /* Responder citando */
@@ -323,6 +325,9 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-reply-btn:hover { color: var(--navy); }
 .at-quote { display: flex; flex-direction: column; align-items: flex-start; width: 100%; margin: 0 0 4px; padding: 4px 8px; border: 0; border-left: 3px solid var(--navy); border-radius: 6px; background: rgba(0, 0, 0, .05); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .at-quote strong { color: var(--navy); font-size: 0.72rem; }
+.at-quote.has-thumb { flex-direction: row; align-items: center; gap: 8px; }
+.at-quote-text { display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; }
+.at-quote-thumb { flex: none; width: 44px; height: 44px; border-radius: 4px; object-fit: cover; }
 .at-quote span { display: -webkit-box; overflow: hidden; font-size: 0.8rem; opacity: .8; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .at-bubble.is-flash { animation: at-flash 1.6s ease-out; }
 @keyframes at-flash { 0%, 40% { box-shadow: 0 0 0 3px #b7791f; } 100% { box-shadow: 0 1px 0 rgba(9, 30, 66, .08); } }

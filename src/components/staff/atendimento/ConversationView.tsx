@@ -262,12 +262,17 @@ function useNow(interval = 30_000) {
 
 /** Conversa aberta: cabeçalho com ações, mensagens, campo de resposta e painel do cliente. */
 /** Rola até a mensagem e faz ela piscar (citação, busca). */
-function jumpToMessage(id: string) {
-  const element = document.getElementById(`msg-${id}`);
-  if (!element) return;
+/** "shown": a mensagem/foto está à vista; "hidden": foto escondida no "+N" do álbum; "missing": não carregada. */
+function jumpToMessage(id: string): "shown" | "hidden" | "missing" {
+  // Foto dentro de um álbum: o balão tem o id da 1ª foto; as outras ficam em data-album / data-msg.
+  const element = document.getElementById(`msg-${id}`) ?? document.querySelector<HTMLElement>(`[data-album~="${CSS.escape(id)}"]`);
+  if (!element) return "missing";
   element.scrollIntoView({ behavior: "smooth", block: "center" });
-  element.classList.add("is-flash");
-  window.setTimeout(() => element.classList.remove("is-flash"), 1600);
+  const tile = element.querySelector<HTMLElement>(`[data-msg~="${CSS.escape(id)}"]`);
+  const target = tile ?? element;
+  target.classList.add("is-flash");
+  window.setTimeout(() => target.classList.remove("is-flash"), 1600);
+  return tile && tile.dataset.msg?.split(" ")[0] !== id ? "hidden" : "shown";
 }
 
 /** Texto com as palavras procuradas marcadas. */
@@ -320,7 +325,10 @@ function ChatPanel({
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const lookup = (id: string) => byId.get(id);
-  const jumpTo = jumpToMessage;
+  // Citação de foto escondida no "+N" do álbum: além de rolar até o álbum, abre a própria foto.
+  const jumpTo = (id: string) => {
+    if (jumpToMessage(id) !== "shown" && byId.get(id)?.media?.mime.startsWith("image/")) openPhoto(id);
+  };
   // Veio da busca da lista: depois de carregar, vai até a mensagem encontrada.
   useEffect(() => {
     if (loading || !focus) return;
@@ -673,10 +681,17 @@ const whoOf = (message: Message) => (message.author === "cliente" ? "Cliente" : 
 function QuotedSnippet({ id, lookup, onJump }: { id: string | null } & Pick<QuoteProps, "lookup" | "onJump">) {
   if (!id) return null;
   const quoted = lookup(id);
+  const photo = quoted?.media?.mime.startsWith("image/") ? quoted : null;
   return (
-    <button className="at-quote" disabled={!quoted} onClick={() => onJump(id)} title="Ir para a mensagem citada" type="button">
-      <strong>{quoted ? whoOf(quoted) : "Mensagem"}</strong>
-      <span>{quoted ? snippetOf(quoted) : "Mensagem antiga"}</span>
+    <button className={`at-quote${photo ? " has-thumb" : ""}`} disabled={!quoted} onClick={() => onJump(id)} title={photo ? "Ver a foto citada" : "Ir para a mensagem citada"} type="button">
+      <div className="at-quote-text">
+        <strong>{quoted ? whoOf(quoted) : "Mensagem"}</strong>
+        <span>{quoted ? snippetOf(quoted) : "Mensagem antiga"}</span>
+      </div>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- miniatura privada servida pela API
+        <img alt="" className="at-quote-thumb" loading="lazy" src={mediaUrl(photo.id, { mini: Boolean(photo.media?.hasThumb) })} />
+      ) : null}
     </button>
   );
 }
@@ -711,7 +726,7 @@ function AlbumBubble({
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`} id={`msg-${first.id}`}>
+      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`} data-album={messages.map((message) => message.id).join(" ")} id={`msg-${first.id}`}>
         <ReplyButton message={first} onReply={onReply} />
         {!sameAuthor ? <AuthorLabel message={first} /> : null}
         <QuotedSnippet id={first.replyToId} lookup={lookup} onJump={onJump} />
@@ -720,6 +735,8 @@ function AlbumBubble({
             <button
               aria-label={index === 3 && extra > 0 ? `Ver as ${messages.length} fotos` : `Ver foto ${index + 1} de ${messages.length}`}
               className="at-album-tile"
+              // A 4ª miniatura (+N) também representa as fotos escondidas, para a citação achar.
+              data-msg={index === 3 ? messages.slice(3).map((item) => item.id).join(" ") : message.id}
               key={message.id}
               onClick={() => onOpenPhoto(message.id)}
               type="button"
