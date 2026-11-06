@@ -15,13 +15,37 @@ import {
   listMessages,
   customerReplied,
   reopenConversation,
-  sendToQueue,
+  handOffToStaff,
+  openForStaff,
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isInternal, isSellerStatus, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isInternal, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { openDocumentForPhone } from "@/lib/atendimento/customer";
+import { foldText } from "@/lib/atendimento/search";
 
-/** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"). Não chama a IA. */
+// Voltou a escrever até 3 dias depois da última mensagem: continuação do mesmo assunto, fica com o vendedor.
+const RECENT_MS = 3 * 86_400_000;
+/** Mensagem pronta do QR Code da loja: cliente está no balcão, a equipe atende ali. */
+export const isStoreQrMessage = (text: string) => /^\W*ola\W+estou na loja\b/.test(foldText(text));
+
+/**
+ * Por que a IA NÃO deve responder esta mensagem (vai para o vendedor), ou null.
+ * A IA responde todos os números, menos: cliente na loja (QR Code) e, ao começar ou reabrir a conversa,
+ * quem tem orçamento/pedido em aberto ou voltou logo depois da última conversa.
+ */
+function sellerReason(db: DatabaseSync, before: Conversation, text: string, now = Date.now()): string | null {
+  if (before.status !== "ia" && before.status !== "finalizada") return null;
+  if (isStoreQrMessage(text)) return "Cliente na loja (QR Code)";
+  const starting = before.status === "finalizada" || !listMessages(db, before.id).some((message) => !isInternal(message.author));
+  if (!starting) return null;
+  const open = before.channel === "whatsapp" ? openDocumentForPhone(db, before.phone, now) : null;
+  if (open) return `Cliente com ${open} em aberto`;
+  if (before.status === "finalizada" && now - Date.parse(before.lastMessageAt) < RECENT_MS) return "Cliente voltou a escrever logo depois da última conversa";
+  return null;
+}
+
+/** Grava a mensagem do cliente (reabre finalizada; tira de "Aguardando cliente"; aplica as regras de quem responde). Não chama a IA. */
 export function recordCustomerMessage(
   db: DatabaseSync,
   conversationId: string,
@@ -29,9 +53,12 @@ export function recordCustomerMessage(
   media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
 ): Message {
   const before = getConversation(db, conversationId);
-  if (before.status === "finalizada") reopenConversation(db, conversationId);
+  const reason = sellerReason(db, before, text);
+  if (before.status === "finalizada" && !reason) reopenConversation(db, conversationId);
   if (before.status === "aguardando_cliente") customerReplied(db, conversationId);
-  return addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
+  const message = addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
+  if (reason) holdForSeller(db, conversationId, reason);
+  return message;
 }
 
 /** Conversas em que a IA está pensando agora (o painel mostra "digitando…"). */
@@ -63,7 +90,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
 
       const result = await brain({ conversation, messages, registeredName: registeredNameFor(db, conversation) });
 
-      // Um vendedor assumiu enquanto a IA pensava: resposta descartada.
+      // A equipe entrou na conversa enquanto a IA pensava: resposta descartada.
       if (getConversation(db, conversationId).status !== "ia") return created;
       // Chegou mensagem nova do cliente: responde de novo, vendo tudo.
       if (state.again || listMessages(db, conversationId, lastSeq).some((message) => message.author === "cliente")) continue;
@@ -74,7 +101,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
       // Só vira cadastro o nome que o cliente escreveu (nunca o nome de exibição do WhatsApp).
       if (result.contactName && nameTypedByCustomer(result.contactName, messages)) preRegisterFromAi(db, conversationId, result.contactName);
       if (result.reply) created.push(addMessage(db, { conversationId, author: "ia", authorName: aiName, body: result.reply }));
-      if (result.handoff) sendToQueue(db, conversationId, null, result.handoff.reason);
+      if (result.handoff) handOffToStaff(db, conversationId, result.handoff.reason);
       return created;
     }
     return created;
@@ -84,7 +111,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
 }
 
 /**
- * IA desligada: a conversa com mensagem nova do cliente vai para a fila de vendedores (ninguém responde sozinho).
+ * IA desligada: a conversa com mensagem nova do cliente vai para "Em atendimento" (ninguém responde sozinho).
  * Devolve true se a IA está desligada (quem chamou não deve rodar a IA).
  */
 export function queueIfAiOff(db: DatabaseSync, conversationId: string): boolean {
@@ -112,7 +139,7 @@ export function signedText(staffName: string, text: string) {
   return `*${firstName(staffName)}:*\n${text}`;
 }
 
-/** Nota interna: qualquer pessoa da equipe escreve (não precisa assumir); o cliente e a IA nunca veem. */
+/** Nota interna: qualquer pessoa da equipe escreve; o cliente e a IA nunca veem. */
 export function addNote(db: DatabaseSync, conversationId: string, staff: StaffActor, text: string): Message {
   const body = text.trim();
   if (!body) throw new AtendimentoError("INVALID_REQUEST", "Nota vazia.");
@@ -120,7 +147,7 @@ export function addNote(db: DatabaseSync, conversationId: string, staff: StaffAc
   return addMessage(db, { conversationId, author: "nota", authorName: staff.name, body });
 }
 
-/** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). Mesma regra: só quem assumiu. */
+/** Vendedor envia foto/arquivo (legenda opcional, assinada como as mensagens). */
 export function sendStaffMedia(
   db: DatabaseSync,
   conversationId: string,
@@ -129,10 +156,7 @@ export function sendStaffMedia(
   caption: string,
   options: { sign: boolean; replyToId?: string | null },
 ): Message {
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const body = caption.trim();
   return addMessage(db, {
     conversationId,
@@ -156,15 +180,12 @@ export async function sendQuickReplyMedia(
 ): Promise<Message> {
   const reply = getQuickReply(db, quickReplyId);
   if (!reply.mediaFile || !reply.media) throw new AtendimentoError("INVALID_REQUEST", "Esta mensagem rápida não tem anexo.");
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const file = await copyMedia(reply.mediaFile, conversationId);
   return sendStaffMedia(db, conversationId, staff, { ...reply.media, file }, caption, options);
 }
 
-/** Vendedor responde. Só quem assumiu a conversa pode escrever (evita duas pessoas respondendo o mesmo cliente). */
+/** Vendedor responde. Qualquer pessoa da equipe escreve; conversa com a IA ou finalizada vai para "Em atendimento". */
 export function sendStaffMessage(
   db: DatabaseSync,
   conversationId: string,
@@ -172,10 +193,7 @@ export function sendStaffMessage(
   text: string,
   options: { sign: boolean; replyToId?: string | null },
 ): Message {
-  const conversation = getConversation(db, conversationId);
-  if (!isSellerStatus(conversation.status) || conversation.assignedStaffId !== staff.id) {
-    throw new AtendimentoError("NOT_ASSIGNED", "Assuma a conversa antes de responder.");
-  }
+  openForStaff(db, conversationId, staff);
   const body = text.trim();
   if (!body) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
   return addMessage(db, {
@@ -188,7 +206,6 @@ export function sendStaffMessage(
   });
 }
 
-const foldText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 /** O primeiro nome aparece, como palavra, em alguma mensagem escrita (ou transcrita) pelo cliente. */
 export function nameTypedByCustomer(name: string, messages: Message[]) {
   const first = foldText(name.trim().split(/\s+/)[0] ?? "");

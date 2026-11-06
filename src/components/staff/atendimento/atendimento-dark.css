@@ -47,35 +47,42 @@
 [data-atd-theme="dark"] .at-btn:hover:not(:disabled) { border-color: #4a5160; background: #2a303b; }
 [data-atd-theme="dark"] .at-btn-primary { border-color: var(--d-accent); background: var(--d-accent); color: #fff; }
 [data-atd-theme="dark"] .at-btn-primary:hover:not(:disabled) { border-color: var(--d-accent-hover); background: var(--d-accent-hover); }
-[data-atd-theme="dark"] .at-btn-orange { border-color: #f65c2d; background: #f65c2d; color: #fff; }
 [data-atd-theme="dark"] .at-btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
 [data-atd-theme="dark"] .at-btn-quiet:hover:not(:disabled) { border-color: transparent; background: rgba(255, 255, 255, .06); }
 [data-atd-theme="dark"] .at-icon-danger { color: #f08a8a; }
 [data-atd-theme="dark"] .at-icon-danger:hover { background: rgba(240, 138, 138, .12); }
 [data-atd-theme="dark"] .at-sim-tag { background: #3b2e14; color: #f0c674; }
 [data-atd-theme="dark"] .at-filter-count { background: rgba(255, 255, 255, .1); color: var(--ink); }
-[data-atd-theme="dark"] .at-filter-count.is-alert { background: #f65c2d; color: #fff; }
-[data-atd-theme="dark"] .at-wait { color: #ff9f7a; }
+[data-atd-theme="dark"] .at-filter-count.is-alert { background: #00a884; color: #111b21; }
+[data-atd-theme="dark"] .at-stage-text { color: #8696a0; }
+[data-atd-theme="dark"] .at-context-menu { background: #233138; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+[data-atd-theme="dark"] .at-context-menu button { color: #e9edef; }
+[data-atd-theme="dark"] .at-context-menu button:hover, [data-atd-theme="dark"] .at-context-menu button:focus-visible { background: #182229; }
+[data-atd-theme="dark"] .at-unread { background: #00a884; color: #111b21; }
 [data-atd-theme="dark"] .at-stage select { border-color: var(--d-border-strong); background-color: var(--d-raised); color: var(--ink); }
 
-/* Lista | conversa | cliente */
-[data-atd-theme="dark"] .at-inbox { background: var(--d-surface); box-shadow: 0 0 0 1px var(--d-border); }
-[data-atd-theme="dark"] .at-list { border-color: var(--d-border); background: var(--d-list); }
-[data-atd-theme="dark"] .at-filters { border-color: var(--d-border); }
-[data-atd-theme="dark"] .at-filters button { border-color: var(--d-border-strong); background: var(--d-raised); color: var(--muted); }
-[data-atd-theme="dark"] .at-filters button.active { border-color: var(--d-accent); background: var(--d-accent); color: #fff; }
-[data-atd-theme="dark"] .at-item { border-bottom-color: var(--d-border); }
-[data-atd-theme="dark"] .at-item:hover { background: #1d2129; }
-[data-atd-theme="dark"] .at-item.is-active { border-left-color: #6f86e8; background: #232a3d; box-shadow: inset 0 0 0 1px var(--d-border-strong); }
-[data-atd-theme="dark"] .at-item.is-waiting:not(.is-active) { background: #2a1d17; }
-[data-atd-theme="dark"] .at-item-preview, [data-atd-theme="dark"] .at-kb-preview { color: var(--d-text-2); }
-[data-atd-theme="dark"] .at-chat { background: #0c0f13; }
-[data-atd-theme="dark"] .at-chat-empty { background: var(--d-list); }
+/* Lista | conversa | cliente (cores do WhatsApp escuro; topo da lista no azul da Fare) */
+[data-atd-theme="dark"] .at-inbox { border-color: #2a3942; background: #111b21; box-shadow: none; }
+[data-atd-theme="dark"] .at-list { border-color: #2a3942; background: #111b21; }
+[data-atd-theme="dark"] .at-list-head { background: #2c3561; color: #fff; }
+[data-atd-theme="dark"] .at-filters { border-color: #222d34; }
+[data-atd-theme="dark"] .at-filters button { background: #202c33; color: #aebac1; }
+[data-atd-theme="dark"] .at-filters button:hover:not(.active) { background: #2a3942; }
+[data-atd-theme="dark"] .at-filters button.active { background: var(--d-accent); color: #fff; }
+[data-atd-theme="dark"] .at-item { border-bottom-color: #222d34; background: #111b21; }
+[data-atd-theme="dark"] .at-item:hover { background: #202c33; }
+[data-atd-theme="dark"] .at-item.is-active { border-left-color: #8d9bf0; background: #2a3942; }
+[data-atd-theme="dark"] .at-item-top strong, [data-atd-theme="dark"] .at-chat-title h2 { color: #e9edef; }
+[data-atd-theme="dark"] .at-item-time { color: #8696a0; }
+[data-atd-theme="dark"] .at-item.has-unread .at-item-time { color: #00a884; }
+[data-atd-theme="dark"] .at-item-preview, [data-atd-theme="dark"] .at-kb-preview { color: #aebac1; }
+[data-atd-theme="dark"] .at-item.has-unread .at-item-preview { color: #e9edef; }
+[data-atd-theme="dark"] .at-chat { background: #0b141a; }
+[data-atd-theme="dark"] .at-chat-empty { background: #222e35; }
 [data-atd-theme="dark"] .at-chat-head,
 [data-atd-theme="dark"] .at-return,
-[data-atd-theme="dark"] .at-composer { border-color: var(--d-border); background: var(--d-surface); }
+[data-atd-theme="dark"] .at-composer { border-color: #2a3942; background: #202c33; }
 [data-atd-theme="dark"] .at-banner { border-color: var(--d-border); }
-[data-atd-theme="dark"] .at-banner-alert { background: #3a2016; color: #ffb59a; }
 [data-atd-theme="dark"] .at-banner-error { background: #3a1a1a; color: #ff9c9c; }
 
 /* Campos */
@@ -93,16 +100,16 @@
 [data-atd-theme="dark"] .at-composer textarea:focus { outline-color: rgba(141, 155, 240, .3); }
 
 /* Mensagens */
-[data-atd-theme="dark"] .at-day { background: #232831; box-shadow: none; color: #c3c8d2; }
+[data-atd-theme="dark"] .at-day { background: #182229; box-shadow: none; color: #8696a0; }
 [data-atd-theme="dark"] .at-bubble { box-shadow: none; }
-[data-atd-theme="dark"] .at-bubble-cliente { border-color: #343b47; background: #232831; color: #eceef2; }
+[data-atd-theme="dark"] .at-bubble-cliente { background: #202c33; color: #e9edef; }
 [data-atd-theme="dark"] .at-bubble-ia { border-color: #4c3d80; background: #2f2650; color: #ece6ff; }
 [data-atd-theme="dark"] .at-bubble-ia .at-bubble-author { color: #c4b5fd; }
-[data-atd-theme="dark"] .at-bubble-vendedor { border-color: #2f5ea8; background: #1d3d73; color: #eaf2ff; }
-[data-atd-theme="dark"] .at-bubble-vendedor .at-bubble-author { color: #9cc3ff; }
+[data-atd-theme="dark"] .at-bubble-vendedor { background: #005c4b; color: #e9edef; }
+[data-atd-theme="dark"] .at-bubble-vendedor .at-bubble-author { color: #b8c2ff; }
 [data-atd-theme="dark"] .at-bubble-time { color: rgba(255, 255, 255, .62); }
 [data-atd-theme="dark"] .at-delivery.is-sent { color: #7cc4ff; }
-[data-atd-theme="dark"] .at-system { background: rgba(255, 255, 255, .06); color: var(--d-text-2); }
+[data-atd-theme="dark"] .at-system { background: #182229; box-shadow: none; color: #8696a0; }
 [data-atd-theme="dark"] .at-bubble.is-flash { animation: at-flash-dark 1.6s ease-out; }
 [data-atd-theme="dark"] .at-album-tile.is-flash { animation: at-tile-flash-dark 1.6s ease-out; }
 @keyframes at-tile-flash-dark { 0%, 50% { outline: 4px solid #d9a441; outline-offset: -4px; } 100% { outline: 4px solid transparent; outline-offset: -4px; } }
@@ -116,7 +123,9 @@
 [data-atd-theme="dark"] .at-composer-locked p { color: var(--d-text-2); }
 [data-atd-theme="dark"] .at-composer-error { color: #ff9c9c; }
 [data-atd-theme="dark"] .at-quick-attach { border-left-color: #d9a441; background: #3b2e14; color: #f5deb0; }
-[data-atd-theme="dark"] .at-send.at-mic { background: var(--d-accent); }
+[data-atd-theme="dark"] .at-send, [data-atd-theme="dark"] .at-send.at-mic { background: var(--d-accent); }
+[data-atd-theme="dark"] .at-send:hover:not(:disabled) { background: var(--d-accent-hover); }
+[data-atd-theme="dark"] .at-send.is-note { background: #b7791f; }
 
 /* Mensagens rápidas (lista ao digitar / e janela) */
 [data-atd-theme="dark"] .at-picker { background: var(--d-raised); box-shadow: 0 14px 40px rgba(0, 0, 0, .55), 0 0 0 1px var(--d-border-strong); }
@@ -129,16 +138,13 @@
 [data-atd-theme="dark"] .at-qr-list p, [data-atd-theme="dark"] .sim-tips ol { color: var(--d-text-2); }
 
 /* Painel do cliente */
-[data-atd-theme="dark"] .at-customer { border-color: var(--d-border); background: var(--d-list); }
+[data-atd-theme="dark"] .at-customer { border-color: #2a3942; background: #111b21; }
 [data-atd-theme="dark"] .at-card { background: var(--d-surface); box-shadow: 0 0 0 1px var(--d-border); }
 [data-atd-theme="dark"] .at-linked + .at-linked { border-color: var(--d-border); }
 [data-atd-theme="dark"] .at-history a:hover, [data-atd-theme="dark"] .sim-list button:hover { background: rgba(255, 255, 255, .05); }
 [data-atd-theme="dark"] .at-form-error { background: #3a1a1a; color: #ff9c9c; }
 
 /* Quadro */
-[data-atd-theme="dark"] .at-card-kb.is-waiting { box-shadow: 0 0 0 1px var(--d-border), inset 3px 0 0 #d4532a; }
-[data-atd-theme="dark"] .at-kb-reason { background: #3a2016; color: #ffb59a; }
-[data-atd-theme="dark"] .at-kb-seller { color: #6fd3a4; }
 
 /* Busca */
 [data-atd-theme="dark"] .at-hits, [data-atd-theme="dark"] .at-hit { border-color: var(--d-border); }
@@ -154,7 +160,7 @@
 [data-atd-theme="dark"] .at-composer textarea.at-note-mode { border-color: #8a6a10; background: #2e2810; }
 [data-atd-theme="dark"] .at-icon-btn.is-note { background: #3b3416; color: #e0b84d; }
 [data-atd-theme="dark"] .at-tag-add { border-color: #4a5160; }
-[data-atd-theme="dark"] .at-tag, [data-atd-theme="dark"] .at-chip { filter: saturate(.85) brightness(.92); }
+[data-atd-theme="dark"] .at-tag { filter: saturate(.85) brightness(.92); }
 
 /* Pedido de fotos, anexos e janela Mídias */
 [data-atd-theme="dark"] .at-order-form { border-color: var(--d-border-strong); background: #1c2027; }
@@ -175,7 +181,7 @@
 [data-atd-theme="dark"] .at-report-card.is-alert { border-color: #5a2e1e; background: #2a1a14; }
 [data-atd-theme="dark"] .at-report-card.is-alert strong { color: #ffa27e; }
 [data-atd-theme="dark"] .at-report-table th, [data-atd-theme="dark"] .at-report-table td { border-color: var(--d-border); }
-[data-atd-theme="dark"] .at-report-table tr.is-waiting td { background: #2a1a14; color: #ffb59a; }
+[data-atd-theme="dark"] .at-report-table tr.is-waiting td { background: #202c33; }
 [data-atd-theme="dark"] .at-hour-bar { background: #6f7fd9; }
 
 /* Simulador: cores do WhatsApp escuro */

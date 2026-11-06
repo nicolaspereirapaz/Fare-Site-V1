@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { mediaPath } from "@/lib/atendimento/media";
 import {
   AtendimentoError,
-  assumeConversation,
+  openForStaff,
   type StaffActor,
   addMessage,
   createConversation,
@@ -115,7 +115,7 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   }
   // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
   if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
-  // Cadastro do site: usa o que já existe com esse WhatsApp ou cria um com o nome do WhatsApp.
+  // Cadastro do site: liga ao que já existe com esse WhatsApp (não cria).
   linkConversationCustomer(db, conversation.id, inbound.pushName);
   const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media);
   db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
@@ -161,10 +161,8 @@ export async function startWhatsAppConversation(
   const conversation = ensureWhatsAppConversation(db, found.chatId, found.phone || phone);
   const name = (input.name ?? "").trim().slice(0, 80);
   if (name && !conversation.contactName) updateConversationProfile(db, conversation.id, { contactName: name });
-  if (!(conversation.status !== "ia" && conversation.status !== "finalizada" && conversation.assignedStaffId === staff.id)) {
-    assumeConversation(db, conversation.id, staff, { force: true });
-  }
-  return linkConversationCustomer(db, conversation.id, name);
+  openForStaff(db, conversation.id, staff);
+  return linkConversationCustomer(db, conversation.id, name, true);
 }
 
 /** Citação para o WhatsApp: id da mensagem citada, se foi nossa e o texto (a ponte monta a resposta "citando"). */

@@ -157,8 +157,10 @@ describe("pedido de fotos", () => {
       await expect(createPhotoOrder(database, { id: "comum" }, { ...base, photos: [photo] })).rejects.toThrow("só para clientes profissionais");
       setProfessional(database, "pro-1", true, "Equipe");
       await expect(createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [{ ...photo, sizeId: "ima-5x5" }] })).rejects.toThrow("5 × 5 com ímã: mínimo de 4 fotos");
-      const { order } = await createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [photo] });
+      const { order, whatsappUrl } = await createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [photo] });
       expect(order.totalCents).toBe(1170); // 3 × R$ 3,90
+      // Confirmação do profissional vai para o WhatsApp dos profissionais.
+      expect(whatsappUrl).toMatch(/^https:\/\/wa\.me\/5511957768485\?/);
       expect(readdirSync(order.folder)).toContain("10x15 com ímã Brilho");
     });
 

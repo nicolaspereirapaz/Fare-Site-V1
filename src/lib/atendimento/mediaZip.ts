@@ -1,3 +1,4 @@
+import { formatNumberList } from "@/lib/atendimento/numberList";
 import type { Conversation, Message } from "@/lib/atendimento/types";
 
 /**
@@ -7,15 +8,14 @@ import type { Conversation, Message } from "@/lib/atendimento/types";
 export function mediaZipPlan(
   all: Array<Message & { mediaFile: string }>,
   conversation: Pick<Conversation, "contactName" | "phone">,
-  options: { from: number; to: number; onlyPhotos: boolean; onlyCustomer: boolean },
+  /** numbers = números da lista escolhidos (null = todos). */
+  options: { numbers: ReadonlySet<number> | null; onlyPhotos: boolean; onlyCustomer: boolean },
 ) {
-  const from = Math.max(1, Math.floor(Math.min(options.from, options.to)));
-  const to = Math.floor(Math.max(options.from, options.to));
   const width = Math.max(3, String(all.length).length);
   const used = new Set<string>();
   const entries = all
     .map((message, index) => ({ message, number: index + 1 }))
-    .filter(({ message, number }) => number >= from && number <= to && message.media)
+    .filter(({ message, number }) => (!options.numbers || options.numbers.has(number)) && message.media)
     .filter(({ message }) => !options.onlyPhotos || message.media!.mime.startsWith("image/"))
     .filter(({ message }) => !options.onlyCustomer || message.author === "cliente")
     .map(({ message, number }) => {
@@ -27,7 +27,7 @@ export function mediaZipPlan(
       return { name, file: message.mediaFile, date };
     });
   const who = (conversation.contactName || "contato").replace(/[\\/:*?"<>|]/g, "").trim().replace(/\s+/g, "-") || "contato";
-  const range = entries.length ? `${from}-a-${Math.min(to, all.length)}` : "";
+  const range = options.numbers ? formatNumberList(options.numbers).replace(/, /g, "_") : "todas";
   return { entries, zipName: `midias-${who}-${conversation.phone.slice(-4)}-${range}.zip` };
 }
 

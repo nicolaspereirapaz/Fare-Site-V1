@@ -100,13 +100,6 @@ export function ReportApp() {
               value={formatMinutes(totals.waitAverageMinutes)}
               note={`média · mediana ${formatMinutes(totals.waitMedianMinutes)} · maior ${formatMinutes(totals.waitMaxMinutes)}`}
             />
-            <Card
-              alert={totals.waitingNow > 0}
-              icon={<Clock size={18} />}
-              label="Esperando agora"
-              value={String(totals.waitingNow)}
-              note={totals.waitingNow ? "clientes aguardando vendedor" : "ninguém esperando"}
-            />
           </section>
 
           <section className="at-report-block">
@@ -189,9 +182,9 @@ export function ReportApp() {
   );
 }
 
-function Card({ icon, label, value, note, alert = false }: { icon: React.ReactNode; label: string; value: string; note: string; alert?: boolean }) {
+function Card({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
   return (
-    <div className={`at-report-card${alert ? " is-alert" : ""}`}>
+    <div className="at-report-card">
       <span className="at-report-card-label">
         {icon} {label}
       </span>

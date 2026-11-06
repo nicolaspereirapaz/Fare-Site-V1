@@ -3,11 +3,12 @@ import { existsSync } from "node:fs";
 import { mediaPath, mediaRetentionDays, zipStream } from "@/lib/atendimento/media";
 import { atendimentoDb, withStaff } from "@/lib/atendimento/server";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
+import { parseNumberList } from "@/lib/atendimento/numberList";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Baixa as mídias do contato num ZIP: ?de=N&ate=M (números da lista de mídias),
+ * Baixa as mídias do contato num ZIP: ?nums=1-5,8 (números da lista de mídias; sem nums = todas),
  * ?tipo=fotos (só fotos) ou todas; ?quem=cliente (só o que o cliente mandou).
  */
 export const GET = withStaff(async (_staff, request, context: RouteContext<"/api/atendimento/conversas/[id]/midias/zip">) => {
@@ -15,9 +16,10 @@ export const GET = withStaff(async (_staff, request, context: RouteContext<"/api
   const db = atendimentoDb();
   const conversation = getConversation(db, id);
   const params = new URL(request.url).searchParams;
-  const plan = mediaZipPlan(listContactMedia(db, id), conversation, {
-    from: Number(params.get("de")) || 1,
-    to: Number(params.get("ate")) || Number.MAX_SAFE_INTEGER,
+  const all = listContactMedia(db, id);
+  const nums = params.get("nums")?.trim();
+  const plan = mediaZipPlan(all, conversation, {
+    numbers: nums ? parseNumberList(nums.slice(0, 2000), all.length) : null,
     onlyPhotos: params.get("tipo") === "fotos",
     onlyCustomer: params.get("quem") === "cliente",
   });

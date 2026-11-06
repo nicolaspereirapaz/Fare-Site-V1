@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Bot,
+  CheckCheck,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   ClipboardList,
   FileText,
-  Hand,
   Images,
   IdCard,
   Inbox,
   Mic,
   Paperclip,
+  MessageSquareDot,
   MessageSquareText,
   Send,
   Reply,
@@ -25,7 +26,6 @@ import {
   Undo2,
   UserPlus,
   UserRound,
-  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -40,19 +40,15 @@ import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
   CONVERSATION_STATUSES,
-  CONVERSATION_STATUS_COLORS,
   CONVERSATION_STATUS_LABELS,
-  isSellerStatus,
   type ConversationStatus,
 } from "@/lib/atendimento/types";
 import { stripWhatsApp,
-  ApiError,
   api,
   clockTime,
   displayName,
   formatPhone,
   shortTime,
-  waitingFor,
   WhatsAppText,
   type Conversation,
   type LinkedCustomer,
@@ -61,24 +57,19 @@ import { stripWhatsApp,
   type StaffUser,
 } from "@/components/staff/atendimento/shared";
 
-export type ListFilter = "todas" | "nao_lidas" | "minhas" | ConversationStatus;
+export type ListFilter = "todas" | "nao_lidas" | ConversationStatus;
 
 const FILTERS: Array<{ id: ListFilter; label: string }> = [
   { id: "todas", label: "Todas" },
   { id: "nao_lidas", label: "Não lidas" },
-  { id: "aguardando_vendedor", label: "Aguardando" },
-  { id: "minhas", label: "Minhas" },
   { id: "ia", label: "IA" },
   { id: "aguardando_orcamento", label: "Orçamento" },
   { id: "aguardando_cliente", label: "Ag. cliente" },
   { id: "finalizada", label: "Finalizadas" },
 ];
 
-export const isMine = (conversation: Conversation, me: StaffUser) => isSellerStatus(conversation.status) && conversation.assignedStaffId === me.id;
-
-export function matchesFilter(conversation: Conversation, filter: ListFilter, me: StaffUser) {
+export function matchesFilter(conversation: Conversation, filter: ListFilter) {
   if (filter === "todas") return conversation.status !== "finalizada";
-  if (filter === "minhas") return isMine(conversation, me);
   if (filter === "nao_lidas") return conversation.unread > 0;
   return conversation.status === filter;
 }
@@ -87,19 +78,13 @@ const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g,
 export function matchesQuery(conversation: Conversation, query: string) {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const haystack = fold(`${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.assignedStaffName ?? ""} ${conversation.tags.join(" ")}`);
+  const haystack = fold(`${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.tags.join(" ")}`);
   return words.every((word) => haystack.includes(word));
 }
 
-export function StatusChip({ status, assigned }: { status: ConversationStatus; assigned?: string | null }) {
-  const colors = CONVERSATION_STATUS_COLORS[status];
-  return (
-    <span className="at-chip" style={{ background: colors.bg, color: colors.fg }}>
-      <span aria-hidden="true" className="at-chip-dot" style={{ background: colors.dot }} />
-      {status === "em_atendimento" && assigned ? `Com ${assigned.split(" ")[0]}` : CONVERSATION_STATUS_LABELS[status]}
-      {status !== "em_atendimento" && isSellerStatus(status) && assigned ? ` · ${assigned.split(" ")[0]}` : ""}
-    </span>
-  );
+/** Etapa em texto cinza pequeno (como o WhatsApp: sem cor chamando atenção). */
+export function StatusChip({ status }: { status: ConversationStatus }) {
+  return <span className="at-stage-text">{CONVERSATION_STATUS_LABELS[status]}</span>;
 }
 
 /** Tela "Conversas": lista à esquerda, conversa no meio e cliente à direita. */
@@ -116,7 +101,7 @@ export function ConversationView({
   me: StaffUser;
   conversations: Conversation[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   quickReplies: QuickReply[];
   onOpenQuickReplies: () => void;
   onConversationChanged: (conversation: Conversation) => void;
@@ -138,34 +123,79 @@ export function ConversationView({
     return () => window.clearTimeout(timer);
   }, [query]);
   const hits = query.length >= 3 && found.query === query ? found.hits : [];
-  // Quem espera vendedor fica no topo (o mais antigo primeiro); o resto, pela última mensagem.
+  // Como no WhatsApp: a conversa com a última mensagem mais nova fica no topo.
   const visible = conversations
-    .filter((conversation) => matchesFilter(conversation, filter, me) && matchesQuery(conversation, search))
-    .sort((a, b) => {
-      const aw = a.status === "aguardando_vendedor" ? 0 : 1;
-      const bw = b.status === "aguardando_vendedor" ? 0 : 1;
-      if (aw !== bw) return aw - bw;
-      if (aw === 0) return (a.waitingSince ?? "").localeCompare(b.waitingSince ?? "");
-      return b.lastMessageAt.localeCompare(a.lastMessageAt);
-    });
+    .filter((conversation) => matchesFilter(conversation, filter) && matchesQuery(conversation, search))
+    .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
   const counts = useMemo(() => {
     const result = Object.fromEntries([...FILTERS.map(({ id }) => [id, 0]), ["em_atendimento", 0]]) as Record<ListFilter, number>;
-    for (const conversation of conversations) for (const { id } of FILTERS) if (matchesFilter(conversation, id, me)) result[id] += 1;
+    for (const conversation of conversations) for (const { id } of FILTERS) if (matchesFilter(conversation, id)) result[id] += 1;
     return result;
-  }, [conversations, me]);
+  }, [conversations]);
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+
+  // Menu do botão direito na lista (como no WhatsApp Web).
+  const [menu, setMenu] = useState<{ conversation: Conversation; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (event: globalThis.KeyboardEvent) => event.key === "Escape" && close();
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+  const [unreadError, setUnreadError] = useState<string | null>(null);
+  const setUnread = useCallback(
+    async (conversation: Conversation, unread: boolean) => {
+      setMenu(null);
+      setUnreadError(null);
+      // Fecha antes: a conversa aberta marca como lida sozinha.
+      if (unread && conversation.id === selectedId) onSelect(null);
+      try {
+        const data = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: unread ? "nao_lida" : "lida" } });
+        onConversationChanged(data.conversation);
+      } catch (markError) {
+        setUnreadError(markError instanceof Error ? markError.message : "Não foi possível marcar.");
+      }
+    },
+    [onConversationChanged, onSelect, selectedId],
+  );
+  const anyUnread = conversations.some((conversation) => conversation.unread > 0);
+  const markAllRead = useCallback(async () => {
+    setUnreadError(null);
+    try {
+      const data = await api<{ conversations: Conversation[] }>("/api/atendimento/conversas", { method: "PATCH", body: { action: "todas_lidas" } });
+      data.conversations.forEach(onConversationChanged);
+    } catch (markError) {
+      setUnreadError(markError instanceof Error ? markError.message : "Não foi possível marcar.");
+    }
+  }, [onConversationChanged]);
 
   return (
     <div className="at-inbox">
       <aside className="at-list" aria-label="Conversas">
+        <div className="at-list-head">
+          Conversas
+          {anyUnread ? (
+            <button className="at-list-head-btn" onClick={() => void markAllRead()} title="Marcar todas as conversas como lidas" type="button">
+              <CheckCheck aria-hidden="true" size={15} /> Marcar todas como lidas
+            </button>
+          ) : null}
+        </div>
         <div className="at-filters" role="tablist" aria-label="Filtrar conversas">
           {FILTERS.map(({ id, label }) => (
             <button aria-selected={filter === id} className={filter === id ? "active" : undefined} key={id} onClick={() => setFilter(id)} role="tab" type="button">
               {label}
-              {counts[id] ? <span className={`at-filter-count${id === "aguardando_vendedor" || id === "nao_lidas" ? " is-alert" : ""}`}>{counts[id]}</span> : null}
+              {counts[id] ? <span className={`at-filter-count${id === "nao_lidas" ? " is-alert" : ""}`}>{counts[id]}</span> : null}
             </button>
           ))}
         </div>
+        {unreadError ? <div className="at-banner at-banner-error" role="alert">{unreadError}</div> : null}
         <div className="at-list-body">
           {visible.length === 0 && !hits.length ? (
             <div className="at-list-empty">
@@ -176,9 +206,13 @@ export function ConversationView({
             visible.map((conversation) => (
               <button
                 aria-current={conversation.id === selectedId ? "true" : undefined}
-                className={`at-item${conversation.id === selectedId ? " is-active" : ""}${conversation.status === "aguardando_vendedor" ? " is-waiting" : ""}`}
+                className={`at-item${conversation.id === selectedId ? " is-active" : ""}${conversation.unread ? " has-unread" : ""}`}
                 key={conversation.id}
                 onClick={() => onSelect(conversation.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenu({ conversation, x: event.clientX, y: event.clientY });
+                }}
                 type="button"
               >
                 <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} />
@@ -187,16 +221,17 @@ export function ConversationView({
                     <strong>{displayName(conversation)}</strong>
                     <span className="at-item-time">{shortTime(conversation.lastMessageAt, now)}</span>
                   </span>
-                  <span className="at-item-preview">
-                    {conversation.lastMessageAuthor === "ia" ? <Bot aria-label="IA" size={13} /> : conversation.lastMessageAuthor === "vendedor" ? <UserRound aria-label="Vendedor" size={13} /> : null}
-                    {stripWhatsApp(conversation.lastMessagePreview) || "Sem mensagens"}
+                  <span className="at-item-row">
+                    <span className="at-item-preview">
+                      {conversation.lastMessageAuthor === "ia" ? <Bot aria-label="IA" size={13} /> : conversation.lastMessageAuthor === "vendedor" ? <UserRound aria-label="Vendedor" size={13} /> : null}
+                      {stripWhatsApp(conversation.lastMessagePreview) || "Sem mensagens"}
+                    </span>
+                    {conversation.unread ? <span className="at-unread" aria-label={`${conversation.unread} não lidas`}>{conversation.unread}</span> : null}
                   </span>
                   <span className="at-item-bottom">
-                    <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
-                    {conversation.status === "aguardando_vendedor" && conversation.waitingSince ? <span className="at-wait">{waitingFor(conversation.waitingSince, now)}</span> : null}
+                    <StatusChip status={conversation.status} />
                     {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
                     <TagChips small tags={conversation.tags} />
-                    {conversation.unread ? <span className="at-unread" aria-label={`${conversation.unread} não lidas`}>{conversation.unread}</span> : null}
                   </span>
                 </span>
               </button>
@@ -229,6 +264,13 @@ export function ConversationView({
           ) : null}
         </div>
       </aside>
+      {menu ? (
+        <div className="at-context-menu" role="menu" style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 60) }}>
+          <button onClick={() => void setUnread(menu.conversation, !menu.conversation.unread)} role="menuitem" type="button">
+            <MessageSquareDot aria-hidden="true" size={16} /> {menu.conversation.unread ? "Marcar como lida" : "Marcar como não lida"}
+          </button>
+        </div>
+      ) : null}
 
       {selected ? (
         <ChatPanel
@@ -237,6 +279,7 @@ export function ConversationView({
           key={selected.id}
           me={me}
           onChanged={onConversationChanged}
+          onMarkUnread={() => void setUnread(selected, true)}
           onOpenQuickReplies={onOpenQuickReplies}
           quickReplies={quickReplies}
         />
@@ -300,6 +343,7 @@ function ChatPanel({
   quickReplies,
   onOpenQuickReplies,
   onChanged,
+  onMarkUnread,
 }: {
   conversation: Conversation;
   focus: { messageId: string; at: number } | null;
@@ -307,6 +351,7 @@ function ChatPanel({
   quickReplies: QuickReply[];
   onOpenQuickReplies: () => void;
   onChanged: (conversation: Conversation) => void;
+  onMarkUnread: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [customers, setCustomers] = useState<LinkedCustomer[] | null>(null);
@@ -354,7 +399,6 @@ function ChatPanel({
   const lastSeq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
-  const now = useNow();
 
   // Carrega a conversa e depois busca só as mensagens novas a cada 2 s.
   useEffect(() => {
@@ -419,7 +463,7 @@ function ChatPanel({
     if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
   }, [messages]);
 
-  async function act(action: "assumir" | "devolver" | "fila" | "finalizar" | "mover" | "reenviar", extra: Record<string, unknown> = {}) {
+  async function act(action: "devolver" | "finalizar" | "mover" | "reenviar", extra: Record<string, unknown> = {}) {
     setBusy(true);
     setError(null);
     try {
@@ -427,24 +471,13 @@ function ChatPanel({
       onChanged(data.conversation);
       setReturning(false);
     } catch (actionError) {
-      if (actionError instanceof ApiError && actionError.code === "ASSIGNED_TO_OTHER") {
-        if (window.confirm(`${actionError.detail || "Outro vendedor"} está atendendo este cliente. Assumir mesmo assim?`)) {
-          setBusy(false);
-          return act(action, { ...extra, force: true });
-        }
-      } else {
-        setError(actionError instanceof Error ? actionError.message : "Erro inesperado.");
-      }
+      setError(actionError instanceof Error ? actionError.message : "Erro inesperado.");
     } finally {
       setBusy(false);
     }
   }
 
-  const mine = isMine(conversation, me);
-  const otherSeller = isSellerStatus(conversation.status) && !mine ? conversation.assignedStaffName : null;
-
-  // Citar só quem pode responder (quem assumiu a conversa).
-  const quoteProps = { lookup, onJump: jumpTo, onReply: mine ? setReplyTo : undefined };
+  const quoteProps = { lookup, onJump: jumpTo, onReply: setReplyTo };
 
   return (
     <>
@@ -464,10 +497,12 @@ function ChatPanel({
             </p>
             <TagEditor conversation={conversation} onChanged={onChanged} />
           </div>
-          <StatusChip assigned={conversation.assignedStaffName} status={conversation.status} />
           <div className="at-chat-actions">
             <button aria-label="Procurar nesta conversa" aria-pressed={finding} className="at-btn at-btn-quiet" onClick={() => setFinding((open) => !open)} title="Procurar nesta conversa" type="button">
               <Search aria-hidden="true" size={16} />
+            </button>
+            <button aria-label="Marcar como não lida" className="at-btn at-btn-quiet" onClick={onMarkUnread} title="Marcar como não lida (fecha a conversa e volta a bolinha)" type="button">
+              <MessageSquareDot aria-hidden="true" size={16} />
             </button>
             <button className="at-btn at-btn-quiet" onClick={() => setMediaOpen(true)} title="Fotos e arquivos do contato (baixar em lote)" type="button">
               <Images aria-hidden="true" size={16} /> Mídias
@@ -487,11 +522,6 @@ function ChatPanel({
                 ))}
               </select>
             </label>
-            {!mine ? (
-              <button className="at-btn at-btn-primary" disabled={busy} onClick={() => void act("assumir")} type="button">
-                <Hand aria-hidden="true" size={16} /> Assumir
-              </button>
-            ) : null}
             {conversation.status !== "ia" && aiOn ? (
               <button className="at-btn" disabled={busy} onClick={() => setReturning((open) => !open)} type="button">
                 <Bot aria-hidden="true" size={16} /> Devolver para IA
@@ -551,22 +581,6 @@ function ChatPanel({
         {returning ? (
           <ReturnToAiForm busy={busy} onCancel={() => setReturning(false)} onConfirm={(note) => void act("devolver", { note })} />
         ) : null}
-        {conversation.status === "aguardando_vendedor" ? (
-          <div className="at-banner at-banner-alert">
-            <Users aria-hidden="true" size={16} />
-            <span>
-              <strong>Cliente aguardando vendedor</strong>
-              {conversation.waitingSince ? ` ${waitingFor(conversation.waitingSince, now)}` : ""}
-              {conversation.handoffReason ? ` — ${conversation.handoffReason}` : ""}
-            </span>
-          </div>
-        ) : null}
-        {otherSeller ? (
-          <div className="at-banner">
-            <UserRound aria-hidden="true" size={16} />
-            <span><strong>{otherSeller}</strong> está atendendo este cliente.</span>
-          </div>
-        ) : null}
         {error ? <div className="at-banner at-banner-error" role="alert">{error}</div> : null}
 
         <div
@@ -592,8 +606,6 @@ function ChatPanel({
         <Composer
           conversation={conversation}
           me={me}
-          mine={mine}
-          onAssume={() => void act("assumir")}
           onOpenQuickReplies={onOpenQuickReplies}
           onSent={(message, updated) => {
             stickToBottom.current = true;
@@ -836,9 +848,7 @@ const SIGN_KEY = "fare-atendimento-assinar";
 function Composer({
   conversation,
   me,
-  mine,
   quickReplies,
-  onAssume,
   onOpenQuickReplies,
   onSent,
   replyTo,
@@ -846,9 +856,7 @@ function Composer({
 }: {
   conversation: Conversation;
   me: StaffUser;
-  mine: boolean;
   quickReplies: QuickReply[];
-  onAssume: () => void;
   onOpenQuickReplies: () => void;
   onSent: (message: Message, conversation: Conversation) => void;
   replyTo: Message | null;
@@ -871,7 +879,6 @@ function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const recorder = useRecorder();
-  const aiOn = useAiEnabled();
 
   /** Para a gravação e manda como mensagem de voz. */
   async function sendRecording() {
@@ -991,30 +998,6 @@ function Composer({
       event.preventDefault();
       void send();
     }
-  }
-
-  if (!mine && !noteMode) {
-    return (
-      <div className="at-composer at-composer-locked">
-        <p>
-          {conversation.status === "ia" && !aiOn
-            ? "A IA está desligada: quando o cliente escrever, a conversa vai para a fila de vendedores. Para escrever agora, assuma a conversa."
-            : conversation.status === "ia"
-            ? "A IA está respondendo este cliente. Para escrever, assuma a conversa — a IA para na hora."
-            : isSellerStatus(conversation.status)
-              ? `${conversation.assignedStaffName ?? "Outro vendedor"} está com esta conversa (${CONVERSATION_STATUS_LABELS[conversation.status]}).`
-              : "Assuma a conversa para responder o cliente."}
-        </p>
-        <span className="at-order-actions">
-          <button className="at-btn" onClick={() => setNoteMode(true)} title="Anotação só para a equipe" type="button">
-            <StickyNote aria-hidden="true" size={16} /> Nota interna
-          </button>
-          <button className="at-btn at-btn-primary" onClick={onAssume} type="button">
-            <Hand aria-hidden="true" size={16} /> Assumir conversa
-          </button>
-        </span>
-      </div>
-    );
   }
 
   return (
@@ -1189,7 +1172,6 @@ function Composer({
       {noteMode ? (
         <p className="at-sign at-note-hint">
           <StickyNote aria-hidden="true" size={13} /> Nota interna: fica só no painel. O cliente e a IA não veem.
-          {!mine ? " Para responder o cliente, assuma a conversa." : null}
         </p>
       ) : (
       <label className="at-sign">
@@ -1320,7 +1302,7 @@ function CustomerPanel({
       </section>
 
       <section className="at-card at-card-actions">
-        <Link className="at-btn at-btn-orange at-btn-block" href="/equipe/orcamentos/novo">
+        <Link className="at-btn at-btn-primary at-btn-block" href="/equipe/orcamentos/novo">
           <FileText aria-hidden="true" size={16} /> Novo orçamento
         </Link>
         <Link className="at-btn at-btn-block" href="/equipe/pedidos/novo">

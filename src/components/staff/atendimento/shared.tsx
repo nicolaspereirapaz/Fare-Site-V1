@@ -13,7 +13,6 @@ export type StaffUser = { id: string; name: string; role: string };
 
 const ERROR_TEXT: Record<string, string> = {
   AUTH_REQUIRED: "Sua sessão expirou. Entre de novo na área da equipe.",
-  NOT_ASSIGNED: "Assuma a conversa antes de responder.",
   CONVERSATION_NOT_FOUND: "Conversa não encontrada.",
 };
 

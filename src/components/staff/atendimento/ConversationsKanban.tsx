@@ -4,15 +4,14 @@ import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Bot, UserRound } from "lucide-react";
 import { KanbanBoard, KanbanColumn } from "@/components/backofficeShared";
-import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, isSellerStatus, type ConversationStatus } from "@/lib/atendimento/types";
+import { CONVERSATION_STATUSES, CONVERSATION_STATUS_COLORS, CONVERSATION_STATUS_LABELS, type ConversationStatus } from "@/lib/atendimento/types";
 import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
-import { stripWhatsApp, displayName, formatPhone, shortTime, waitingFor, type Conversation } from "@/components/staff/atendimento/shared";
+import { stripWhatsApp, displayName, formatPhone, shortTime, type Conversation } from "@/components/staff/atendimento/shared";
 import { TagChips } from "@/components/staff/atendimento/tags";
 
 const EMPTY: Record<ConversationStatus, string> = {
   ia: "Nenhum cliente com a IA agora.",
-  aguardando_vendedor: "Ninguém esperando. 🎉",
-  em_atendimento: "Arraste para cá para assumir.",
+  em_atendimento: "Conversas com a equipe.",
   aguardando_orcamento: "Conversas esperando o orçamento ficar pronto.",
   aguardando_cliente: "Conversas esperando resposta do cliente.",
   finalizada: "Arraste para cá para finalizar.",
@@ -21,7 +20,7 @@ const EMPTY: Record<ConversationStatus, string> = {
 /** Finalizadas ficam no quadro por 24 h (depois só na lista "Finalizadas"). */
 const FINISHED_VISIBLE_MS = 24 * 60 * 60 * 1000;
 
-/** Quadro das conversas: arrastar muda a etapa (assumir, devolver para IA, fila, finalizar). */
+/** Quadro das conversas: arrastar muda a etapa (em atendimento, devolver para IA, orçamento, finalizar). */
 export function ConversationsKanban({
   conversations,
   busyIds,
@@ -51,8 +50,7 @@ export function ConversationsKanban({
       {CONVERSATION_STATUSES.map((status) => {
         const column = visible
           .filter((conversation) => conversation.status === status)
-          // Na fila, quem espera há mais tempo fica em cima.
-          .sort((a, b) => (status === "aguardando_vendedor" ? (a.waitingSince ?? "").localeCompare(b.waitingSince ?? "") : b.lastMessageAt.localeCompare(a.lastMessageAt)));
+          .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
         return (
           <KanbanColumn color={CONVERSATION_STATUS_COLORS[status].dot} count={column.length} empty={EMPTY[status]} id={status} key={status} title={CONVERSATION_STATUS_LABELS[status]}>
             {column.map((conversation) => (
@@ -73,7 +71,7 @@ function ConversationCard({ conversation, busy, onOpen }: { conversation: Conver
       {...listeners}
       aria-label={`${displayName(conversation)} — abrir conversa`}
       aria-roledescription="cartão arrastável"
-      className={`kb-card at-card-kb${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}${conversation.status === "aguardando_vendedor" ? " is-waiting" : ""}`}
+      className={`kb-card at-card-kb${isDragging ? " is-ghosted" : ""}${busy ? " is-busy" : ""}`}
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -103,14 +101,10 @@ function CardBody({ conversation }: { conversation: Conversation }) {
         {conversation.lastMessageAuthor === "ia" ? <Bot aria-label="IA" size={12} /> : conversation.lastMessageAuthor === "vendedor" ? <UserRound aria-label="Vendedor" size={12} /> : null}
         {stripWhatsApp(conversation.lastMessagePreview) || "Sem mensagens"}
       </p>
-      {conversation.status === "aguardando_vendedor" && conversation.handoffReason ? <p className="at-kb-reason">{conversation.handoffReason}</p> : null}
       <TagChips small tags={conversation.tags} />
       <div className="kb-card-meta">
         {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
-        {isSellerStatus(conversation.status) && conversation.assignedStaffName ? <span className="at-kb-seller"><UserRound aria-hidden="true" size={12} /> {conversation.assignedStaffName.split(" ")[0]}</span> : null}
-        <span className="kb-meta">
-          {conversation.status === "aguardando_vendedor" && conversation.waitingSince ? `Esperando ${waitingFor(conversation.waitingSince)}` : shortTime(conversation.lastMessageAt)}
-        </span>
+        <span className="kb-meta">{shortTime(conversation.lastMessageAt)}</span>
       </div>
     </>
   );

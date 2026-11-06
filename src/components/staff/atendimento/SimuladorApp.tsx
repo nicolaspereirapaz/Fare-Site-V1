@@ -110,8 +110,8 @@ export function SimuladorApp() {
             <ol>
               <li>Abra o <a href="/equipe/atendimento" target="_blank">painel de Atendimento</a> em outra janela, lado a lado.</li>
               <li>Mande mensagens aqui. A IA responde como no WhatsApp (mesmas regras, FAQ e modelo do bot) — nada é enviado ao WhatsApp.</li>
-              <li>Peça um vendedor: a conversa vai para <strong>Aguardando vendedor</strong> e o painel toca um aviso.</li>
-              <li>No painel, assuma e responda: a mensagem aparece aqui, assinada.</li>
+              <li>Peça um vendedor: a conversa vai para <strong>Em atendimento</strong> e o painel toca um aviso.</li>
+              <li>No painel, responda: a mensagem aparece aqui, assinada.</li>
             </ol>
           </section>
         </aside>

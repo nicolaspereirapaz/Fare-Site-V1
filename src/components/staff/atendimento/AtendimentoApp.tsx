@@ -5,13 +5,13 @@ import "@/components/staff/atendimento/atendimento.css";
 import "@/components/staff/atendimento/atendimento-dark.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BarChart3, Bell, BellOff, Bot, BotOff, FlaskConical, MessageSquarePlus, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
-import { ConversationView, isMine, matchesQuery } from "@/components/staff/atendimento/ConversationView";
+import { ConversationView, matchesQuery } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
 import { NewConversationDialog } from "@/components/staff/atendimento/NewConversationDialog";
 import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import { AiEnabledContext } from "@/components/staff/atendimento/aiStatus";
-import { ApiError, api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
+import { api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
 import type { ConversationStatus } from "@/lib/atendimento/types";
 
 type View = "conversas" | "quadro";
@@ -31,7 +31,7 @@ function notifyDesktop(items: Array<{ conversation: Conversation; title: string 
 }
 const readPermission = (): NotificationPermission | "unsupported" => (typeof Notification === "undefined" ? "unsupported" : Notification.permission);
 
-/** Página Atendimento: lista de conversas (estilo WhatsApp Web) ou quadro Kanban, com avisos de "cliente pediu vendedor". */
+/** Página Atendimento: lista de conversas (estilo WhatsApp Web) ou quadro Kanban, com aviso de mensagem nova. */
 export function AtendimentoApp({ me, initialView, initialConversation }: { me: StaffUser; initialView: View; initialConversation?: string }) {
   const [view, setView] = useState<View>(initialView);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -68,7 +68,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   const permission = useSyncExternalStore(noSubscribe, readPermission, () => "default" as const);
   const [askedPermission, setAskedPermission] = useState<NotificationPermission | null>(null);
   const alerts = askedPermission ?? permission;
-  const waitingIds = useRef<Set<string> | null>(null);
   const unreadById = useRef<Map<string, number> | null>(null);
   const selectedRef = useRef<string | null>(selectedId);
   useEffect(() => {
@@ -86,34 +85,19 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
       setError(null);
       setLoaded(true);
 
-      // Aviso para o vendedor: cliente de uma conversa DELE escreveu (e ele não está com ela aberta na tela).
+      // Aviso para a equipe toda: cliente mandou mensagem nova (fora da conversa aberta na tela). Com a IA, não conta não lida.
       const previousUnread = unreadById.current;
       unreadById.current = new Map(data.conversations.map((conversation) => [conversation.id, conversation.unread]));
       if (previousUnread) {
-        const mineWithNews = data.conversations.filter(
-          (conversation) =>
-            isMine(conversation, me) &&
-            conversation.unread > (previousUnread.get(conversation.id) ?? 0) &&
-            (document.hidden || selectedRef.current !== conversation.id),
+        const withNews = data.conversations.filter(
+          (conversation) => conversation.unread > (previousUnread.get(conversation.id) ?? 0) && (document.hidden || selectedRef.current !== conversation.id),
         );
-        if (mineWithNews.length) {
+        if (withNews.length) {
           playChime();
-          notifyDesktop(mineWithNews.map((conversation) => ({ conversation, title: `${displayName(conversation)} respondeu` })), openFromAlert);
+          notifyDesktop(withNews.map((conversation) => ({ conversation, title: `${displayName(conversation)} mandou mensagem` })), openFromAlert);
         }
       }
-
-      // Aviso: conversa que ENTROU agora em "Aguardando vendedor" (não avisa as que já estavam ao abrir a página).
-      const waiting = data.conversations.filter((conversation) => conversation.status === "aguardando_vendedor");
-      const previous = waitingIds.current;
-      waitingIds.current = new Set(waiting.map((conversation) => conversation.id));
-      if (previous) {
-        const fresh = waiting.filter((conversation) => !previous.has(conversation.id));
-        if (fresh.length) {
-          playChime();
-          notifyDesktop(fresh.map((conversation) => ({ conversation, title: `${displayName(conversation)} quer falar com um vendedor` })), openFromAlert);
-        }
-      }
-  }, [me, openFromAlert]);
+  }, [openFromAlert]);
 
 
 
@@ -137,13 +121,15 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
       .catch(() => undefined);
   }, []);
 
-  // Título da aba com quantos clientes esperam vendedor.
-  const waitingCount = conversations.filter((conversation) => conversation.status === "aguardando_vendedor").length;
+  // Título da aba com quantas conversas têm mensagem não lida (como o WhatsApp Web).
+  const unreadCount = conversations.filter((conversation) => conversation.unread > 0).length;
   useEffect(() => {
-    document.title = `${waitingCount ? `(${waitingCount}) ` : ""}Atendimento | Equipe Fare Foto`;
-  }, [waitingCount]);
+    document.title = `${unreadCount ? `(${unreadCount}) ` : ""}Atendimento | Equipe Fare Foto`;
+  }, [unreadCount]);
 
   const onConversationChanged = useCallback((updated: Conversation) => {
+    // Mudança feita aqui (ex.: "marcar como não lida") não é mensagem nova: não toca aviso.
+    unreadById.current?.set(updated.id, updated.unread);
     setConversations((list) => list.map((conversation) => (conversation.id === updated.id ? updated : conversation)));
   }, []);
   const openReplies = useCallback(() => setEditingReplies(true), []);
@@ -162,22 +148,14 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
     changeView("conversas");
   }
 
-  async function move(conversation: Conversation, target: ConversationStatus, force = false): Promise<void> {
+  async function move(conversation: Conversation, target: ConversationStatus): Promise<void> {
     setBusyIds((ids) => new Set(ids).add(conversation.id));
     setConversations((list) => list.map((entry) => (entry.id === conversation.id ? { ...entry, status: target } : entry)));
     try {
-      const data = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "mover", status: target, force } });
+      const data = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "mover", status: target } });
       onConversationChanged(data.conversation);
     } catch (moveError) {
-      if (moveError instanceof ApiError && moveError.code === "ASSIGNED_TO_OTHER" && window.confirm(`${moveError.detail || "Outro vendedor"} está atendendo este cliente. Assumir mesmo assim?`)) {
-        setBusyIds((ids) => {
-          const next = new Set(ids);
-          next.delete(conversation.id);
-          return next;
-        });
-        return move(conversation, target, true);
-      }
-      if (!(moveError instanceof ApiError && moveError.code === "ASSIGNED_TO_OTHER")) setError(moveError instanceof Error ? moveError.message : "Erro inesperado.");
+      setError(moveError instanceof Error ? moveError.message : "Erro inesperado.");
       await refresh();
     } finally {
       setBusyIds((ids) => {
@@ -203,7 +181,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
         <div aria-label="Visualização" className="kb-tabs" role="tablist">
           <button aria-selected={view === "conversas"} className={view === "conversas" ? "active" : undefined} onClick={() => changeView("conversas")} role="tab" type="button">
             <MessagesSquare aria-hidden="true" size={16} /> Conversas
-            {waitingCount ? <span className="at-filter-count is-alert">{waitingCount}</span> : null}
+            {unreadCount ? <span className="at-filter-count is-alert">{unreadCount}</span> : null}
           </button>
           <button aria-selected={view === "quadro"} className={view === "quadro" ? "active" : undefined} onClick={() => changeView("quadro")} role="tab" type="button">
             <LayoutGrid aria-hidden="true" size={16} /> Quadro
@@ -215,7 +193,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
             <input aria-label="Pesquisar conversas" onChange={(event) => setSearch(event.target.value)} placeholder="Nome, telefone, etiqueta ou texto das mensagens" type="search" value={search} />
           </label>
           {alerts !== "granted" && alerts !== "unsupported" ? (
-            <button className="at-btn at-toolbar-btn" onClick={() => void enableAlerts()} title="Avisar no computador quando um cliente pedir vendedor" type="button">
+            <button className="at-btn at-toolbar-btn" onClick={() => void enableAlerts()} title="Avisar no computador quando um cliente mandar mensagem" type="button">
               {alerts === "denied" ? <BellOff aria-hidden="true" size={16} /> : <Bell aria-hidden="true" size={16} />}
               {alerts === "denied" ? "Avisos bloqueados" : "Ativar avisos"}
             </button>

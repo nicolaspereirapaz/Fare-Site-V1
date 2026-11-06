@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -19,6 +19,21 @@ import { FFMPEG } from "@/lib/photoOrders/config";
 export const MEDIA_DIR = process.env.FARE_ATENDIMENTO_MEDIA_DIR || path.join(process.cwd(), "data", "atendimento-midias");
 export const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 const THUMB_SUFFIX = ".mini.jpg";
+
+/** Miniatura no formato da foto (em pé fica em pé, deitada fica deitada), até 480 px no lado maior. */
+const makeThumb = (source: string) =>
+  sharp(source, { failOn: "none" }).rotate().resize(480, 480, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 75 }).toFile(source + THUMB_SUFFIX);
+
+/** Refaz miniaturas antigas (eram cortadas em quadrado) a partir do original, quando ele ainda existe. */
+export async function redoThumbs(files: string[]) {
+  let done = 0;
+  for (const relative of files) {
+    const original = mediaPath(relative);
+    if (!existsSync(original)) continue;
+    await makeThumb(original).then(() => (done += 1), () => undefined);
+  }
+  return done;
+}
 
 const MIME_EXT: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -106,7 +121,7 @@ export async function saveMedia(
   }
   if (mime.startsWith("image/")) {
     // Miniatura para a lista de mídias; se a foto não abrir (HEIC, por ex.), o painel usa o ícone.
-    await sharp(target, { failOn: "none" }).rotate().resize(320, 320, { fit: "cover" }).jpeg({ quality: 72 }).toFile(target + THUMB_SUFFIX).catch(() => undefined);
+    await makeThumb(target).catch(() => undefined);
   }
   return { file: relative.split(path.sep).join("/"), size, name, mime, kind: input.kind ?? kindFromMime(mime) };
 }

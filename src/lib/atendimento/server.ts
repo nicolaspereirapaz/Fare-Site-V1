@@ -6,7 +6,7 @@ import { readStaffSession } from "@/lib/staff/server";
 import { queueIfAiOff, runAi } from "@/lib/atendimento/service";
 import { deliverToWhatsApp } from "@/lib/atendimento/whatsapp";
 import { transcribeMessage } from "@/lib/atendimento/transcribe";
-import { pruneOldMedia } from "@/lib/atendimento/media";
+import { pruneOldMedia, redoThumbs } from "@/lib/atendimento/media";
 import type { Message } from "@/lib/atendimento/types";
 import { createRealBrain, realAiConfig, REAL_AI_NAME } from "@/lib/atendimento/hermesBrain";
 import { simulatedBrain, SIMULATED_AI_NAME, type Brain } from "@/lib/atendimento/simulatedBrain";
@@ -21,7 +21,7 @@ export function respondInBackground(db: DatabaseSync, conversationId: string, op
     try {
       // Áudio do cliente: transcreve antes, para a IA "ouvir" o que ele disse.
       if (options.transcribeFirst) await transcribeMessage(db, options.transcribeFirst);
-      // IA desligada no painel: a conversa vai para a fila de vendedores.
+      // IA desligada no painel: a conversa vai para "Em atendimento".
       if (queueIfAiOff(db, conversationId)) return;
       const created = await runAi(db, conversationId, brain, name);
       await deliverToWhatsApp(db, created);
@@ -49,7 +49,7 @@ export function activeBrain(): { brain: Brain; name: string; mode: "real" | "tes
 
 /** Banco do site (o mesmo dos clientes/orçamentos), com as tabelas do atendimento garantidas. */
 // Versão do esquema: o servidor de desenvolvimento mantém o globalThis entre recargas; com a versão, colunas novas entram sem reiniciar.
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 const globalAtendimento = globalThis as typeof globalThis & { fareAtendimentoSchema?: number };
 export function atendimentoDb() {
   if (globalAtendimento.fareAtendimentoSchema !== SCHEMA_VERSION) {
@@ -57,7 +57,32 @@ export function atendimentoDb() {
     globalAtendimento.fareAtendimentoSchema = SCHEMA_VERSION;
   }
   scheduleMediaCleanup();
+  scheduleThumbRedo();
   return database;
+}
+
+/** Uma vez só: miniaturas antigas eram quadradas; refaz no formato da foto (em segundo plano). */
+const globalThumbs = globalThis as typeof globalThis & { fareThumbRedo?: boolean };
+function scheduleThumbRedo() {
+  if (globalThumbs.fareThumbRedo) return;
+  globalThumbs.fareThumbRedo = true;
+  if (database.prepare("SELECT 1 FROM atd_meta WHERE key = 'miniaturas_formato'").get()) return;
+  const files = (
+    database
+      .prepare(
+        `SELECT media_file AS file FROM atd_messages WHERE media_thumb = 1 AND media_file IS NOT NULL AND media_pruned IS NULL
+         UNION SELECT media_file FROM atd_quick_replies WHERE media_thumb = 1 AND media_file IS NOT NULL`,
+      )
+      .all() as Array<{ file: string }>
+  ).map((row) => row.file);
+  setTimeout(() => {
+    redoThumbs(files)
+      .then((done) => {
+        database.prepare("INSERT OR REPLACE INTO atd_meta (key, value) VALUES ('miniaturas_formato', '1')").run();
+        console.log(`[atendimento] miniaturas refeitas no formato da foto: ${done}`);
+      })
+      .catch((error) => console.error("[atendimento] miniaturas:", error));
+  }, 0);
 }
 
 /** Limpeza das mídias antigas (originais com mais de FARE_MIDIAS_DIAS, padrão 90): no máximo a cada 6 h, em segundo plano. */
@@ -79,8 +104,6 @@ function scheduleMediaCleanup() {
 const STATUS_BY_CODE: Record<AtendimentoError["code"], number> = {
   CONVERSATION_NOT_FOUND: 404,
   QUICK_REPLY_NOT_FOUND: 404,
-  ASSIGNED_TO_OTHER: 409,
-  NOT_ASSIGNED: 409,
   DUPLICATE_SHORTCUT: 409,
   INVALID_REQUEST: 400,
 };

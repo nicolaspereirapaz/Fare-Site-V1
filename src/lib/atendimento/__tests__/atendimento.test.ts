@@ -13,13 +13,15 @@ import {
   listContactMedia,
   listQuickReplies,
   setConversationTags,
+  markAllConversationsRead,
   markConversationRead,
+  markConversationUnread,
   moveConversation,
   returnToAi,
   runAtendimentoMigrations,
   saveQuickReply,
 } from "@/lib/atendimento/repository";
-import { addNote, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
 import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
 import { mkdtempSync, existsSync as fileExists, rmSync as removeDir } from "node:fs";
 import os from "node:os";
@@ -27,8 +29,9 @@ import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
 import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
-import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, safeFileName, saveMedia } from "@/lib/atendimento/media";
+import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, redoThumbs, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
+import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { searchMessages, snippetAround } from "@/lib/atendimento/search";
 import { transcribeMessage, voiceConfig } from "@/lib/atendimento/transcribe";
@@ -36,7 +39,9 @@ import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
 import { parseWhatsApp, stripWhatsApp } from "@/lib/atendimento/waFormat";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
 import { normalizeOutboundPhone, startWhatsAppConversation } from "@/lib/atendimento/whatsapp";
-import { createPanelCustomer } from "@/lib/customers/repository";
+import { createPanelCustomer, resolveCustomer } from "@/lib/customers/repository";
+import { createOrder } from "@/lib/orders/repository";
+import { orderCode } from "@/lib/orders/orderCode";
 
 let db: DatabaseSync;
 const ana = { id: "staff-ana", name: "Ana Souza" };
@@ -49,6 +54,9 @@ beforeEach(() => {
 
 const newConversation = () => createConversation(db, { channel: "simulador", phone: "(11) 98888-7777" });
 const say = (id: string, text: string, brain: Brain = simulatedBrain) => receiveCustomerMessage(db, id, text, brain);
+/** Última mensagem da conversa "n dias atrás". */
+const daysAgo = (id: string, days: number) =>
+  db.prepare("UPDATE atd_conversations SET last_message_at = ? WHERE id = ?").run(new Date(Date.now() - days * 86_400_000).toISOString(), id);
 
 describe("IA simulada", () => {
   it("pergunta o nome, guarda e responde o que o cliente já tinha pedido", async () => {
@@ -90,12 +98,12 @@ describe("IA simulada", () => {
     expect(listMessages(db, id).filter((message) => message.author === "ia").every((message) => !message.body.includes("•"))).toBe(true);
   });
 
-  it("pedido de vendedor manda a conversa para a fila", async () => {
+  it("pedido de vendedor manda a conversa para Em atendimento", async () => {
     const { id } = newConversation();
     await say(id, "oi");
     await say(id, "quero falar com um vendedor");
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.waitingSince).not.toBeNull();
     expect(conversation.handoffReason).toContain("vendedor");
     expect(listMessages(db, id).some((message) => message.author === "sistema" && message.body.includes("A IA pediu um vendedor"))).toBe(true);
@@ -136,20 +144,23 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
     expect(listMessages(db, id).some((message) => message.body === "atrasada")).toBe(false);
   });
 
-  it("outro vendedor só assume com transferência explícita", () => {
+  it("qualquer pessoa da equipe responde; conversa com a IA vai para Em atendimento", () => {
     const { id } = newConversation();
-    assumeConversation(db, id, ana);
-    expect(() => assumeConversation(db, id, bruno)).toThrowError(AtendimentoError);
-    const moved = assumeConversation(db, id, bruno, { force: true });
-    expect(moved.assignedStaffName).toBe("Bruno Lima");
-    expect(listMessages(db, id).at(-1)?.body).toContain("no lugar de Ana Souza");
+    sendStaffMessage(db, id, ana, "Olá", { sign: true });
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+    expect(sendStaffMessage(db, id, bruno, "Também estou aqui", { sign: true }).deliveredText).toBe("*Bruno:*\nTambém estou aqui");
+    expect(listMessages(db, id).filter((message) => message.body.includes("entrou na conversa"))).toHaveLength(1);
   });
 
-  it("só quem assumiu responde; assinatura sai em negrito com o primeiro nome", () => {
+  it("responder conversa finalizada reabre em Em atendimento", () => {
     const { id } = newConversation();
-    expect(() => sendStaffMessage(db, id, ana, "Olá", { sign: true })).toThrowError(/Assuma a conversa/);
-    assumeConversation(db, id, ana);
-    expect(() => sendStaffMessage(db, id, bruno, "Olá", { sign: true })).toThrowError(AtendimentoError);
+    finishConversation(db, id, ana);
+    sendStaffMessage(db, id, bruno, "Oi de novo", { sign: true });
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+  });
+
+  it("assinatura sai em negrito com o primeiro nome", () => {
+    const { id } = newConversation();
     const signed = sendStaffMessage(db, id, ana, "Seu pedido está pronto", { sign: true });
     expect(signed.deliveredText).toBe("*Ana:*\nSeu pedido está pronto");
     expect(signed.body).toBe("Seu pedido está pronto");
@@ -167,17 +178,18 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
     expect(listMessages(db, id).at(-1)?.author).toBe("ia");
   });
 
-  it("finalizada reabre com a IA quando o cliente volta a escrever", async () => {
+  it("finalizada reabre com a IA quando o cliente volta a escrever (passados 3 dias)", async () => {
     const { id } = newConversation();
     finishConversation(db, id, ana);
+    daysAgo(id, 4);
     await say(id, "oi de novo");
     expect(getConversation(db, id).status).toBe("ia");
   });
 
   it("arrastar no quadro vira a ação da coluna", () => {
     const { id } = newConversation();
-    expect(moveConversation(db, id, "em_atendimento", ana).assignedStaffId).toBe(ana.id);
-    expect(moveConversation(db, id, "aguardando_vendedor", ana).assignedStaffId).toBeNull();
+    expect(moveConversation(db, id, "em_atendimento", ana).status).toBe("em_atendimento");
+    expect(moveConversation(db, id, "aguardando_cliente", bruno).status).toBe("aguardando_cliente");
     expect(moveConversation(db, id, "finalizada", ana).status).toBe("finalizada");
     expect(moveConversation(db, id, "ia", ana).status).toBe("ia");
   });
@@ -203,7 +215,7 @@ describe("vendedor e IA não respondem ao mesmo tempo", () => {
 });
 
 describe("aguardando orçamento / aguardando cliente", () => {
-  it("continua com o vendedor, a IA fica calada e só ele responde", async () => {
+  it("a IA fica calada e qualquer pessoa da equipe responde", async () => {
     const { id } = newConversation();
     const moved = moveConversation(db, id, "aguardando_orcamento", ana);
     expect(moved.status).toBe("aguardando_orcamento");
@@ -217,7 +229,8 @@ describe("aguardando orçamento / aguardando cliente", () => {
     expect(getConversation(db, id).status).toBe("aguardando_orcamento");
     expect(getConversation(db, id).unread).toBe(1);
     expect(sendStaffMessage(db, id, ana, "Já estou terminando", { sign: true }).deliveredText).toContain("*Ana:*");
-    expect(() => sendStaffMessage(db, id, bruno, "Oi", { sign: true })).toThrowError(AtendimentoError);
+    expect(sendStaffMessage(db, id, bruno, "Oi", { sign: true }).deliveredText).toContain("*Bruno:*");
+    expect(getConversation(db, id).status).toBe("aguardando_orcamento");
   });
 
   it("cliente responde em Aguardando cliente: volta para Em atendimento com o mesmo vendedor", async () => {
@@ -231,19 +244,13 @@ describe("aguardando orçamento / aguardando cliente", () => {
     expect(listMessages(db, id).some((message) => message.body.includes("voltou para Em atendimento"))).toBe(true);
   });
 
-  it("outro vendedor só muda a etapa de conversa alheia com confirmação", () => {
+  it("qualquer pessoa muda a etapa, sem confirmação", () => {
     const { id } = newConversation();
     assumeConversation(db, id, ana);
-    expect(() => moveConversation(db, id, "aguardando_cliente", bruno)).toThrowError(AtendimentoError);
-    expect(moveConversation(db, id, "aguardando_cliente", bruno, { force: true }).assignedStaffName).toBe("Bruno Lima");
-  });
-
-  it("dono volta a conversa para Em atendimento sem pedir confirmação", () => {
-    const { id } = newConversation();
-    moveConversation(db, id, "aguardando_orcamento", ana);
+    expect(moveConversation(db, id, "aguardando_cliente", bruno).status).toBe("aguardando_cliente");
     const back = moveConversation(db, id, "em_atendimento", ana);
     expect(back.status).toBe("em_atendimento");
-    expect(listMessages(db, id).at(-1)?.body).toContain("voltou a conversa");
+    expect(listMessages(db, id).at(-1)?.body).toContain("moveu para Em atendimento");
   });
 });
 
@@ -270,7 +277,7 @@ describe("IA real (serviço do Hermes)", () => {
     expect(sent!.headers["x-fare-token"]).toBe("segredo");
     expect(sent!.body.messages.every((message) => message.author !== "sistema")).toBe(true);
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Quer falar com vendedor");
     expect(conversation.contactName).toBe("Maria");
     expect(conversation.summary).toContain("Nome: Maria · Interesse: revelação");
@@ -282,7 +289,7 @@ describe("IA real (serviço do Hermes)", () => {
     const { id } = newConversation();
     await say(id, "oi", createRealBrain(config, reply({ error: "MODELO" }, 502)));
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toContain("falha técnica");
     expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
   });
@@ -381,7 +388,7 @@ describe("WhatsApp pela ponte", () => {
     const last = listMessages(db, id).filter((message) => message.author !== "sistema").at(-1);
     expect(last).toMatchObject({ author: "vendedor", authorName: "Celular", body: "Abrimos sim, até 13h.", delivery: "enviada" });
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Respondido pelo celular");
     // IA não responde mais; e a mensagem do celular nunca volta para a ponte.
     expect(await runAi(db, id, async () => ({ reply: "não deveria" }))).toEqual([]);
@@ -438,20 +445,31 @@ describe("mídias", () => {
     expect(listMessages(db, first.conversationId)[0].media).toEqual({ kind: "imagem", mime: "image/jpeg", name: "a.jpg", size: 1000, hasThumb: true });
   });
 
-  it("plano do ZIP: intervalo De/Até, só fotos, só do cliente, nomes numerados sem repetir", () => {
+  it("plano do ZIP: números escolhidos, só fotos, só do cliente, nomes numerados sem repetir", () => {
     const at = (minute: number) => new Date(2026, 10, 2, 14, minute).toISOString();
     const item = (n: number, author: "cliente" | "vendedor", name: string, mime = "image/jpeg") =>
       ({ id: `m${n}`, author, createdAt: at(n), mediaFile: `c/${n}`, media: { kind: "imagem", mime, name, size: 1, hasThumb: false } }) as unknown as Parameters<typeof mediaZipPlan>[0][number];
     const all = [item(1, "cliente", "IMG.jpg"), item(2, "cliente", "IMG.jpg"), item(3, "vendedor", "orcamento.pdf", "application/pdf"), item(4, "cliente", "x.jpg"), item(5, "cliente", "y.jpg")];
-    const plan = mediaZipPlan(all, { contactName: "Maria Souza", phone: "5511955554444" }, { from: 4, to: 1, onlyPhotos: false, onlyCustomer: false });
+    const plan = mediaZipPlan(all, { contactName: "Maria Souza", phone: "5511955554444" }, { numbers: parseNumberList("4-1", 5), onlyPhotos: false, onlyCustomer: false });
     expect(plan.entries.map((entry) => entry.name)).toEqual([
       "001 - 2026-11-02 14-01 - IMG.jpg",
       "002 - 2026-11-02 14-02 - IMG.jpg",
       "003 - 2026-11-02 14-03 - orcamento.pdf",
       "004 - 2026-11-02 14-04 - x.jpg",
     ]);
-    expect(plan.zipName).toBe("midias-Maria-Souza-4444-1-a-4.zip");
-    expect(mediaZipPlan(all, { contactName: "", phone: "5511955554444" }, { from: 1, to: 99, onlyPhotos: true, onlyCustomer: true }).entries.map((entry) => entry.file)).toEqual(["c/1", "c/2", "c/4", "c/5"]);
+    expect(plan.zipName).toBe("midias-Maria-Souza-4444-1-4.zip");
+    expect(mediaZipPlan(all, { contactName: "", phone: "5511955554444" }, { numbers: null, onlyPhotos: true, onlyCustomer: true }).entries.map((entry) => entry.file)).toEqual(["c/1", "c/2", "c/4", "c/5"]);
+    const some = mediaZipPlan(all, { contactName: "Ana", phone: "5511955554444" }, { numbers: parseNumberList("1, 3-4", 5), onlyPhotos: false, onlyCustomer: false });
+    expect(some.entries.map((entry) => entry.file)).toEqual(["c/1", "c/3", "c/4"]);
+    expect(some.zipName).toBe("midias-Ana-4444-1_3-4.zip");
+  });
+
+  it("lista de números como na impressora", () => {
+    expect([...parseNumberList("1-3, 8; 10 a 11 12", 20)]).toEqual([1, 2, 3, 8, 10, 11, 12]);
+    expect([...parseNumberList("5 até 3, 2–2", 20)].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+    expect([...parseNumberList("18-999999, 0, x, 7-", 20)]).toEqual([18, 19, 20]);
+    expect(formatNumberList([8, 1, 2, 3, 5, 7])).toBe("1-3, 5, 7-8");
+    expect(formatNumberList([])).toBe("");
   });
 
   it("CRC32 do ZIP e nomes de arquivo seguros", () => {
@@ -544,20 +562,17 @@ describe("cadastro do site na conversa", () => {
     expect(conversation.contactName).toBe("Maria Souza");
   });
 
-  it("sem cadastro: cria um com o nome do WhatsApp e o telefone (uma vez só)", () => {
+  it("sem cadastro: mensagem recebida não cria pré-cadastro (nem ao abrir a conversa)", () => {
     const { conversationId } = inbound("W2", "5511977776666", "euamobrecho");
-    const first = getConversation(db, conversationId);
-    expect(first.customerRef).toMatch(/^painel:/);
-    expect(first.customerName).toBe("Euamobrecho");
-    inbound("W3", "5511977776666", "euamobrecho");
-    expect(getConversation(db, conversationId).customerRef).toBe(first.customerRef);
-    expect(db.prepare("SELECT COUNT(*) AS n FROM fare_panel_customers").get()).toEqual({ n: 1 });
+    expect(getConversation(db, conversationId).customerRef).toBeNull();
+    expect(linkConversationCustomer(db, conversationId).customerRef).toBeNull();
+    expect(db.prepare("SELECT COUNT(*) AS n FROM fare_panel_customers").get()).toEqual({ n: 0 });
   });
 
-  it("sem nome e sem cadastro: fica sem cadastro (não inventa)", () => {
+  it("equipe abrindo pelo número com nome: cria o cadastro; sem nome, não inventa", () => {
     const { conversationId } = inbound("W4", "5511966665555", "");
-    expect(getConversation(db, conversationId).customerRef).toBeNull();
-    expect(linkConversationCustomer(db, conversationId, "Joana").customerName).toBe("Joana");
+    expect(linkConversationCustomer(db, conversationId, "", true).customerRef).toBeNull();
+    expect(linkConversationCustomer(db, conversationId, "Joana", true).customerName).toBe("Joana");
   });
 });
 
@@ -632,17 +647,17 @@ describe("formatação do WhatsApp", () => {
 });
 
 describe("IA ligada/desligada", () => {
-  it("começa desligada; cliente escreve -> fila de vendedores, sem resposta automática", () => {
+  it("começa desligada; cliente escreve -> Em atendimento, sem resposta automática", () => {
     expect(aiEnabled(db)).toBe(false);
     const { id } = newConversation();
     recordCustomerMessage(db, id, "oi, tem foto 3x4?");
     expect(queueIfAiOff(db, id)).toBe(true);
     const conversation = getConversation(db, id);
-    expect(conversation.status).toBe("aguardando_vendedor");
+    expect(conversation.status).toBe("em_atendimento");
     expect(conversation.handoffReason).toBe("Cliente escreveu (IA desligada)");
     expect(listMessages(db, id).filter((message) => message.author === "ia")).toHaveLength(0);
-    expect(listMessages(db, id).at(-1)?.body).toBe("IA desligada: a conversa foi direto para a fila de vendedores.");
-    // Outra mensagem: continua na fila, sem aviso repetido.
+    expect(listMessages(db, id).at(-1)?.body).toBe("IA desligada: a conversa foi para Em atendimento.");
+    // Outra mensagem: continua em Em atendimento, sem aviso repetido.
     recordCustomerMessage(db, id, "alô?");
     queueIfAiOff(db, id);
     expect(listMessages(db, id).filter((message) => message.author === "sistema")).toHaveLength(1);
@@ -696,6 +711,22 @@ describe("limpeza das mídias", () => {
   });
 });
 
+describe("miniatura no formato da foto", () => {
+  it("foto deitada fica deitada, em pé fica em pé; miniaturas antigas quadradas são refeitas", async () => {
+    const { default: sharp } = await import("sharp");
+    const photo = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: "#888" } }).png().toBuffer();
+    const { id } = newConversation();
+    const wide = await saveMedia(await photo(800, 400), { conversationId: id, name: "deitada.png", mime: "image/png" });
+    const tall = await saveMedia(await photo(300, 900), { conversationId: id, name: "em-pe.png", mime: "image/png" });
+    const size = async (file: string) => sharp(mediaPath(file, true)).metadata().then(({ width, height }) => [width, height]);
+    expect(await size(wide.file)).toEqual([480, 240]);
+    expect(await size(tall.file)).toEqual([160, 480]);
+    await sharp(await photo(320, 320)).jpeg().toFile(mediaPath(tall.file, true)); // como as antigas
+    expect(await redoThumbs([tall.file, "nao/existe.png"])).toBe(1);
+    expect(await size(tall.file)).toEqual([160, 480]);
+  });
+});
+
 describe("relatório da equipe", () => {
   afterEach(() => vi.useRealTimers());
   const at = (minutes: number) => vi.setSystemTime(new Date(Date.UTC(2026, 10, 3, 13, 0) + minutes * 60_000));
@@ -710,7 +741,7 @@ describe("relatório da equipe", () => {
     at(1);
     const b = createConversation(db, { channel: "simulador", phone: "11900000002", contactName: "Bia" });
     await say(b.id, "quero falar com vendedor");
-    expect(getConversation(db, b.id).status).toBe("aguardando_vendedor");
+    expect(getConversation(db, b.id).status).toBe("em_atendimento");
     at(5);
     assumeConversation(db, b.id, ana);
     sendStaffMessage(db, b.id, ana, "Oi Bia!", { sign: true });
@@ -729,7 +760,7 @@ describe("relatório da equipe", () => {
     at(55);
 
     const report = teamReport(db, { from: new Date(Date.UTC(2026, 10, 3, 12, 0)) });
-    expect(report.totals).toMatchObject({ conversations: 4, resolvedByAi: 1, resolvedByAiPercent: 25, handoffs: 3, waitAverageMinutes: 14.5, waitMedianMinutes: 14.5, waitMaxMinutes: 25, waitingNow: 1, staffMessages: 2 });
+    expect(report.totals).toMatchObject({ conversations: 4, resolvedByAi: 1, resolvedByAiPercent: 25, handoffs: 3, waitAverageMinutes: 14.5, waitMedianMinutes: 14.5, waitMaxMinutes: 25, staffMessages: 2 });
     expect(report.sellers).toEqual([
       { name: "Ana Souza", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 4, finished: 1 },
       { name: "Bruno Lima", messages: 1, conversations: 1, handoffsAnswered: 1, waitAverageMinutes: 25, finished: 0 },
@@ -861,5 +892,92 @@ describe("mensagens rápidas", () => {
     expect(edited.title).toBe("Frete e entrega");
     deleteQuickReply(db, created.id);
     expect(listQuickReplies(db).some((reply) => reply.shortcut === "frete")).toBe(false);
+  });
+});
+
+describe("sem a etapa Aguardando vendedor", () => {
+  it("conversas antigas nessa etapa passam para Em atendimento", () => {
+    const { id } = newConversation();
+    db.prepare("UPDATE atd_conversations SET status = 'aguardando_vendedor' WHERE id = ?").run(id);
+    runAtendimentoMigrations(db);
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+  });
+});
+
+describe("marcar como não lida", () => {
+  it("volta a bolinha sem perder a contagem que já tinha", async () => {
+    const { id } = newConversation();
+    assumeConversation(db, id, ana);
+    markConversationUnread(db, id);
+    expect(getConversation(db, id).unread).toBe(1);
+    await say(id, "a");
+    await say(id, "b");
+    markConversationUnread(db, id);
+    expect(getConversation(db, id).unread).toBe(3);
+    markConversationRead(db, id);
+    expect(getConversation(db, id).unread).toBe(0);
+  });
+
+  it("marcar todas como lidas zera todas as conversas", () => {
+    const first = newConversation().id;
+    const second = newConversation().id;
+    markConversationUnread(db, first);
+    markConversationUnread(db, second);
+    markAllConversationsRead(db);
+    expect([getConversation(db, first).unread, getConversation(db, second).unread]).toEqual([0, 0]);
+  });
+});
+
+describe("quem a IA responde", () => {
+  const whats = (externalId: string, phone: string, text: string) =>
+    receiveWhatsAppMessage(db, parseInbound({ externalId, chatId: `${phone}@s.whatsapp.net`, phone, pushName: "Cliente", text }));
+
+  it("número novo: fica com a IA", () => {
+    const { conversationId } = whats("Q1", "5511911112222", "oi, quanto custa revelar?");
+    expect(getConversation(db, conversationId).status).toBe("ia");
+  });
+
+  it("QR Code da loja: não responde, vai para o vendedor (também no meio da conversa com a IA)", async () => {
+    expect(isStoreQrMessage("Olá, estou na loja")).toBe(true);
+    expect(isStoreQrMessage("ola estou na loja!")).toBe(true);
+    expect(isStoreQrMessage("Olá, estou na loja agora com as fotos")).toBe(true);
+    expect(isStoreQrMessage("vou passar na loja amanhã")).toBe(false);
+    const { conversationId } = whats("Q2", "5511922223333", "Olá, estou na loja");
+    const conversation = getConversation(db, conversationId);
+    expect(conversation).toMatchObject({ status: "em_atendimento", handoffReason: "Cliente na loja (QR Code)", unread: 1 });
+    expect(await runAi(db, conversationId, simulatedBrain)).toEqual([]);
+
+    const { id } = newConversation();
+    await say(id, "oi");
+    await say(id, "Olá, estou na loja");
+    expect(getConversation(db, id).status).toBe("em_atendimento");
+    expect(listMessages(db, id).at(-1)?.author).toBe("sistema");
+  });
+
+  it("cliente com pedido em aberto vai para o vendedor; pedido finalizado não prende", () => {
+    const maria = createPanelCustomer(db, { name: "Maria Souza", phone: "(11) 93333-4444" }, ana);
+    const owner = resolveCustomer(db, maria.ref)!.ownerId;
+    const order = createOrder(db, { userId: owner, idempotencyKey: "p1", customer: { name: "Maria Souza" }, items: [], paymentMethod: "pix" });
+    const { conversationId } = whats("Q3", "5511933334444", "oi, meu pedido ficou pronto?");
+    expect(getConversation(db, conversationId)).toMatchObject({ status: "em_atendimento", handoffReason: `Cliente com ${orderCode(order.id)} em aberto` });
+
+    db.prepare("UPDATE fare_orders SET status = 'concluido' WHERE id = ?").run(order.id);
+    finishConversation(db, conversationId, ana);
+    daysAgo(conversationId, 5);
+    whats("Q4", "5511933334444", "oi, quero fazer outro pedido");
+    expect(getConversation(db, conversationId).status).toBe("ia");
+  });
+
+  it("voltou até 3 dias depois: fica com o vendedor; conversa em andamento com a IA continua com a IA", async () => {
+    const { id } = newConversation();
+    await say(id, "oi");
+    finishConversation(db, id, ana);
+    await say(id, "esqueci de perguntar uma coisa");
+    expect(getConversation(db, id)).toMatchObject({ status: "em_atendimento", handoffReason: "Cliente voltou a escrever logo depois da última conversa" });
+
+    const other = createConversation(db, { channel: "simulador", phone: "(11) 97777-0000" }).id;
+    await say(other, "oi");
+    await say(other, "quero 10 fotos 10x15");
+    expect(getConversation(db, other).status).toBe("ia");
   });
 });

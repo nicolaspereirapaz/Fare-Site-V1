@@ -3,7 +3,6 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   CONVERSATION_STATUS_LABELS,
   isConversationStatus,
-  isSellerStatus,
   type AuthorKind,
   type Channel,
   type Conversation,
@@ -15,7 +14,7 @@ import {
   type QuickReply,
 } from "@/lib/atendimento/types";
 
-export type AtendimentoErrorCode = "CONVERSATION_NOT_FOUND" | "ASSIGNED_TO_OTHER" | "NOT_ASSIGNED" | "INVALID_REQUEST" | "QUICK_REPLY_NOT_FOUND" | "DUPLICATE_SHORTCUT";
+export type AtendimentoErrorCode = "CONVERSATION_NOT_FOUND" | "INVALID_REQUEST" | "QUICK_REPLY_NOT_FOUND" | "DUPLICATE_SHORTCUT";
 
 /** Erros com código estável: a API devolve o código e o painel mostra a frase. (Sem "parameter properties": scripts rodam com node --experimental-strip-types.) */
 export class AtendimentoError extends Error {
@@ -107,6 +106,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   for (const [column, definition] of [["media_file", "TEXT"], ["media_kind", "TEXT"], ["media_mime", "TEXT"], ["media_name", "TEXT"], ["media_size", "INTEGER"], ["media_thumb", "INTEGER NOT NULL DEFAULT 0"]]) {
     addColumn(db, "atd_quick_replies", column, definition);
   }
+  // v11: sem a etapa "Aguardando vendedor" (todos respondem): quem estava nela vai para "Em atendimento".
+  db.prepare("UPDATE atd_conversations SET status = 'em_atendimento', assigned_staff_id = NULL, assigned_staff_name = NULL WHERE status = 'aguardando_vendedor'").run();
   seedQuickReplies(db);
 }
 
@@ -409,6 +410,17 @@ export function markConversationRead(db: DatabaseSync, id: string) {
   db.prepare("UPDATE atd_conversations SET unread = 0 WHERE id = ?").run(id);
 }
 
+/** "Marcar todas como lidas": zera a bolinha de todas as conversas. */
+export function markAllConversationsRead(db: DatabaseSync) {
+  db.prepare("UPDATE atd_conversations SET unread = 0 WHERE unread > 0").run();
+}
+
+/** "Marcar como não lida" (como no WhatsApp): volta a bolinha para lembrar a equipe. */
+export function markConversationUnread(db: DatabaseSync, id: string) {
+  getConversation(db, id);
+  db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
+}
+
 export function setConversationCustomer(db: DatabaseSync, id: string, ref: string, name: string) {
   db.prepare("UPDATE atd_conversations SET customer_ref = ?, customer_name = ?, updated_at = ? WHERE id = ?").run(ref, name.slice(0, 120), nowIso(), id);
 }
@@ -452,50 +464,32 @@ const system = (db: DatabaseSync, conversationId: string, body: string, event: S
   return message;
 };
 
-/**
- * Vendedor assume: a IA para de responder nesta conversa.
- * Se outro vendedor já está atendendo, só passa com force (transferência), para dois não responderem o mesmo cliente.
- */
-export function assumeConversation(db: DatabaseSync, id: string, staff: StaffActor, options: { force?: boolean } = {}): Conversation {
+/** Volta para "Em atendimento" (a IA para de responder). Qualquer pessoa da equipe pode: todos respondem o mesmo cliente. */
+export function assumeConversation(db: DatabaseSync, id: string, staff: StaffActor): Conversation {
   const current = getConversation(db, id);
-  if (current.status === "em_atendimento" && current.assignedStaffId === staff.id) return current;
-  const owned = isSellerStatus(current.status) && current.assignedStaffId;
-  if (owned && current.assignedStaffId !== staff.id && !options.force) {
-    throw new AtendimentoError("ASSIGNED_TO_OTHER", `${current.assignedStaffName ?? "Outro vendedor"} já está atendendo.`, current.assignedStaffName ?? "");
-  }
+  if (current.status === "em_atendimento") return current;
   setStatus(db, id, "em_atendimento", { staff, handoffReason: current.handoffReason });
   system(
     db,
     id,
-    owned && current.assignedStaffId === staff.id
-      ? `${staff.name} voltou a conversa para Em atendimento.`
-      : owned && current.assignedStaffName
-        ? `${staff.name} assumiu a conversa no lugar de ${current.assignedStaffName}.`
-        : `${staff.name} assumiu a conversa. A IA parou de responder.`,
+    current.status === "ia" ? `${staff.name} entrou na conversa. A IA parou de responder.` : `${staff.name} moveu para Em atendimento.`,
     "assumiu",
     staff,
   );
   return getConversation(db, id);
 }
 
-/**
- * Aguardando orçamento / Aguardando cliente: a conversa continua com o vendedor (a IA segue calada).
- * Se ninguém tinha assumido, quem move passa a ser o responsável.
- */
-export function setSellerStage(
-  db: DatabaseSync,
-  id: string,
-  stage: "aguardando_orcamento" | "aguardando_cliente",
-  staff: StaffActor,
-  options: { force?: boolean } = {},
-): Conversation {
+/** A equipe vai responder: conversa com a IA ou finalizada passa para "Em atendimento"; as outras etapas ficam como estão. */
+export function openForStaff(db: DatabaseSync, id: string, staff: StaffActor): Conversation {
+  const current = getConversation(db, id);
+  return current.status === "ia" || current.status === "finalizada" ? assumeConversation(db, id, staff) : current;
+}
+
+/** Aguardando orçamento / Aguardando cliente: a IA segue calada; qualquer pessoa da equipe move. */
+export function setSellerStage(db: DatabaseSync, id: string, stage: "aguardando_orcamento" | "aguardando_cliente", staff: StaffActor): Conversation {
   const current = getConversation(db, id);
   if (current.status === stage) return current;
-  const owner = isSellerStatus(current.status) && current.assignedStaffId ? { id: current.assignedStaffId, name: current.assignedStaffName ?? "" } : null;
-  if (owner && owner.id !== staff.id && !options.force) {
-    throw new AtendimentoError("ASSIGNED_TO_OTHER", `${owner.name || "Outro vendedor"} já está atendendo.`, owner.name);
-  }
-  setStatus(db, id, stage, { staff: owner && owner.id === staff.id ? owner : staff, handoffReason: current.handoffReason });
+  setStatus(db, id, stage, { staff, handoffReason: current.handoffReason });
   system(db, id, `${staff.name} moveu para ${CONVERSATION_STATUS_LABELS[stage]}.`, "moveu", staff);
   return getConversation(db, id);
 }
@@ -518,13 +512,13 @@ export function returnToAi(db: DatabaseSync, id: string, staff: StaffActor, note
   return getConversation(db, id);
 }
 
-/** Volta para a fila "Aguardando vendedor" (ninguém assumido). */
-export function sendToQueue(db: DatabaseSync, id: string, actor: StaffActor | null, reason: string): Conversation {
+/** A IA pediu um vendedor: vai para "Em atendimento" como não lida (o evento "fila" mede a espera no relatório). */
+export function handOffToStaff(db: DatabaseSync, id: string, reason: string): Conversation {
   const current = getConversation(db, id);
-  if (current.status === "aguardando_vendedor") return current;
-  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: reason, waiting: true });
-  if (!actor) db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
-  system(db, id, actor ? `${actor.name} colocou a conversa na fila de vendedores.` : `A IA pediu um vendedor: ${reason}`, "fila", actor);
+  if (current.status !== "ia") return current;
+  setStatus(db, id, "em_atendimento", { staff: null, handoffReason: reason, waiting: true });
+  db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
+  system(db, id, `A IA pediu um vendedor: ${reason}`, "fila");
   return getConversation(db, id);
 }
 
@@ -537,13 +531,16 @@ export function setAiEnabled(db: DatabaseSync, enabled: boolean) {
   db.prepare("INSERT INTO atd_meta (key, value) VALUES ('ia_ligada', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(enabled ? "1" : "0");
 }
 
-/** IA desligada e o cliente escreveu numa conversa \"com a IA\": vai direto para a fila de vendedores. */
-export function holdForSeller(db: DatabaseSync, id: string): Conversation {
+/**
+ * Cliente escreveu e a IA não deve responder: vai direto para "Em atendimento" (não lida).
+ * Padrão: IA desligada. Com `reason`: regra do atendimento (pedido em aberto, cliente na loja…). Vale para conversa com a IA ou finalizada.
+ */
+export function holdForSeller(db: DatabaseSync, id: string, reason?: string): Conversation {
   const current = getConversation(db, id);
-  if (current.status !== "ia") return current;
-  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: "Cliente escreveu (IA desligada)", waiting: true });
+  if (current.status !== "ia" && current.status !== "finalizada") return current;
+  setStatus(db, id, "em_atendimento", { staff: null, handoffReason: reason ?? "Cliente escreveu (IA desligada)", waiting: true });
   db.prepare("UPDATE atd_conversations SET unread = MAX(unread, 1) WHERE id = ?").run(id);
-  system(db, id, "IA desligada: a conversa foi direto para a fila de vendedores.", "fila");
+  system(db, id, reason ? `${reason}. A IA não responde: a conversa foi para Em atendimento.` : "IA desligada: a conversa foi para Em atendimento.", "fila");
   return getConversation(db, id);
 }
 
@@ -557,13 +554,13 @@ export function finishConversation(db: DatabaseSync, id: string, staff: StaffAct
 
 /**
  * Alguém respondeu pelo celular (app do WhatsApp Business). A IA para de responder:
- * a conversa vai para a fila até um vendedor assumir pelo painel. Se já está com um vendedor, nada muda.
+ * a conversa vai para "Em atendimento". Se já está com a equipe, nada muda.
  */
 export function phoneReplied(db: DatabaseSync, id: string): Conversation {
   const current = getConversation(db, id);
   if (current.status !== "ia" && current.status !== "finalizada") return current;
-  setStatus(db, id, "aguardando_vendedor", { staff: null, handoffReason: "Respondido pelo celular", waiting: true });
-  system(db, id, "Alguém respondeu pelo celular. A IA parou; assuma a conversa para continuar pelo painel.", "celular");
+  setStatus(db, id, "em_atendimento", { staff: null, handoffReason: "Respondido pelo celular" });
+  system(db, id, "Alguém respondeu pelo celular. A IA parou; a conversa está em Em atendimento.", "celular");
   return getConversation(db, id);
 }
 
@@ -574,11 +571,10 @@ export function reopenConversation(db: DatabaseSync, id: string) {
 }
 
 /** Arrastar no quadro: cada coluna de destino vira a ação correspondente. */
-export function moveConversation(db: DatabaseSync, id: string, target: ConversationStatus, staff: StaffActor, options: { force?: boolean } = {}) {
-  if (target === "em_atendimento") return assumeConversation(db, id, staff, options);
+export function moveConversation(db: DatabaseSync, id: string, target: ConversationStatus, staff: StaffActor) {
+  if (target === "em_atendimento") return assumeConversation(db, id, staff);
   if (target === "ia") return returnToAi(db, id, staff);
-  if (target === "aguardando_vendedor") return sendToQueue(db, id, staff, "Colocada na fila pela equipe.");
-  if (target === "aguardando_orcamento" || target === "aguardando_cliente") return setSellerStage(db, id, target, staff, options);
+  if (target === "aguardando_orcamento" || target === "aguardando_cliente") return setSellerStage(db, id, target, staff);
   return finishConversation(db, id, staff);
 }
 

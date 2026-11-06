@@ -9,7 +9,7 @@ import {
   FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
 } from "@/components/fotos/catalog";
 import { buildWhatsAppUrl } from "@/lib/commerce";
-import { FARE_FOTO_WHATSAPP } from "@/lib/constants";
+import { FARE_FOTO_WHATSAPP, FARE_FOTO_WHATSAPP_PRO } from "@/lib/constants";
 import { orderCode } from "@/lib/orders/orderCode";
 import { createOrder, findOrderById } from "@/lib/orders/repository";
 import { closeSiteOrder } from "@/lib/orders/payments";
@@ -143,7 +143,7 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
       id, orderId: boardOrder.id, code, userId: user.id, customer: data.customer, delivery: data.delivery, photos: data.photos, uploads, summary,
     });
     if (professional && data.delivery === "retirada") payOnPickup(database, boardOrder.id);
-    return { ...result, whatsappUrl: buildWhatsAppUrl(FARE_FOTO_WHATSAPP, photoOrderMessage(result.order, result.prazo)) };
+    return { ...result, whatsappUrl: buildWhatsAppUrl(professional ? FARE_FOTO_WHATSAPP_PRO : FARE_FOTO_WHATSAPP, photoOrderMessage(result.order, result.prazo)) };
   } catch (error) {
     dropBoardOrder();
     throw error;
