@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Brain } from "@/lib/atendimento/simulatedBrain";
 import { SIMULATED_AI_NAME } from "@/lib/atendimento/simulatedBrain";
 import { copyMedia } from "@/lib/atendimento/media";
+import { registeredNameFor } from "@/lib/atendimento/customer";
 import {
   AtendimentoError,
   addMessage,
@@ -59,7 +60,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
       if (messages.filter((message) => !isInternal(message.author)).at(-1)?.author !== "cliente") return created;
       const lastSeq = messages.at(-1)?.seq ?? 0;
 
-      const result = await brain({ conversation, messages });
+      const result = await brain({ conversation, messages, registeredName: registeredNameFor(db, conversation) });
 
       // Um vendedor assumiu enquanto a IA pensava: resposta descartada.
       if (getConversation(db, conversationId).status !== "ia") return created;

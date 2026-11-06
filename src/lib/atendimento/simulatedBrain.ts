@@ -5,7 +5,8 @@ import type { Conversation, Message } from "@/lib/atendimento/types";
  * Hoje: IA SIMULADA (regras fixas, sem custo e sem rede) só para testar o painel.
  * Próxima etapa: trocar pela IA de verdade (Hermes) mantendo esta mesma assinatura.
  */
-export type BrainInput = { conversation: Conversation; messages: Message[]; now?: Date };
+/** registeredName: nome do cadastro do site ligado ao número (não o nome de exibição do WhatsApp). */
+export type BrainInput = { conversation: Conversation; messages: Message[]; now?: Date; registeredName?: string | null };
 export type BrainResult = {
   reply: string | null;
   /** Pedir vendedor: a conversa vai para "Aguardando vendedor". */
@@ -19,11 +20,13 @@ export const SIMULATED_AI_NAME = "IA de teste";
 
 const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-type Intent = "vendedor" | "documentos" | "3x4" | "horario" | "endereco" | "revelacao" | "brindes" | "grafica" | "preco" | "obrigado" | "saudacao" | null;
+type Intent = "vendedor" | "site_dificuldade" | "pedido_site" | "documentos" | "3x4" | "horario" | "endereco" | "revelacao" | "brindes" | "grafica" | "preco" | "obrigado" | "saudacao" | null;
 
 export function detectIntent(text: string): Intent {
   const t = fold(text);
   if (/\b(vendedor|vendedora|atendente|humano|pessoa de verdade|falar com alguem|falar com (uma )?pessoa)\b/.test(t)) return "vendedor";
+  if (/(nao consegui|nao consigo|nao to conseguindo|nao estou conseguindo|dificuldade|nao sei (usar|mexer)|(site|pagina) (deu erro|nao (abre|funciona|carrega)|travou)|erro no site)/.test(t)) return "site_dificuldade";
+  if (/(como (eu )?(envio|mando|faco)|fazer (o |um |meu )?pedido|quero (fazer )?(o |um )?pedido|onde (eu )?(envio|mando)|(enviar|mandar) (as |minhas )?fotos)/.test(t)) return "pedido_site";
   if (/3\s*x\s*4/.test(t)) return "3x4";
   if (/(visto|passaporte|documento|5\s*x\s*5|5\s*x\s*7)/.test(t)) return "documentos";
   if (/(horario|que horas|abre|fecha|funciona|aberto)/.test(t)) return "horario";
@@ -37,7 +40,12 @@ export function detectIntent(text: string): Intent {
   return null;
 }
 
-const ANSWERS: Record<Exclude<Intent, null | "vendedor" | "saudacao">, string> = {
+export const SITE_ORDER_REPLY = "Você pode fazer o pedido pelo site, enviando as fotos em qualidade original: https://www.farefoto.com.br/produtos/revelacao-de-fotos";
+export const SITE_HELP_REPLY = "Sem problema! Pode enviar por aqui mesmo pelo WhatsApp, que um vendedor vai te atender.";
+const SITE_HELP_REASON = "Cliente com dificuldade no site — vai enviar o pedido pelo WhatsApp.";
+
+const ANSWERS: Record<Exclude<Intent, null | "vendedor" | "saudacao" | "site_dificuldade">, string> = {
+  pedido_site: SITE_ORDER_REPLY,
   "3x4": "A foto 3x4 sai em pacote de 6 fotos por R$ 30,00.",
   documentos: "Fazemos sim! Qual o tamanho da foto que você precisa?",
   horario: "A loja abre de segunda a sexta, das 9h às 18h, e aos sábados, das 9h às 13h. Fechamos aos domingos e feriados. Por aqui eu atendo 24h.",
@@ -133,6 +141,14 @@ export function extractName(text: string): string | null {
     .join(" ");
 }
 
+/** Nome dito pelo cliente no meio da mensagem: "Oi, aqui é a Maria, quero fotos" → "Maria". */
+export function statedName(text: string): string | null {
+  const match = text.match(/(?:^|[\s,.!])(?:meu nome (?:e|é)|me chamo|aqui (?:e|é) (?:o|a)|eu sou (?:o|a)|sou (?:o|a))\s+(\p{L}{2,})/iu);
+  if (!match) return null;
+  const word = match[1];
+  return word[0].toLocaleUpperCase("pt-BR") + word.slice(1).toLocaleLowerCase("pt-BR");
+}
+
 const ASK_NAME = "Qual o seu nome?";
 
 /** Resumo simples "Nome: X · Interesse: Y" mantido pela IA simulada. */
@@ -146,12 +162,14 @@ function buildSummary(name: string, interest: string | undefined, previous: stri
 }
 
 /** IA SIMULADA: segue o roteiro aprovado (pergunta o nome, responde o FAQ, chama vendedor quando pedido). */
-export const simulatedBrain: Brain = async ({ conversation, messages }) => {
+export const simulatedBrain: Brain = async ({ conversation, messages, registeredName }) => {
   const customerMessages = messages.filter((message) => message.author === "cliente");
   const last = customerMessages.at(-1);
   if (!last) return { reply: null };
   const aiMessages = messages.filter((message) => message.author === "ia");
-  const knownName = conversation.summary.match(/^Nome: ([^·\n]+)/)?.[1]?.trim() ?? null;
+  const saidName = customerMessages.map((message) => statedName(message.body)).find(Boolean) ?? null;
+  // Não pergunta o nome se o cliente já disse ou se o número tem cadastro no site.
+  const knownName = conversation.summary.match(/^Nome: ([^·\n]+)/)?.[1]?.trim() ?? saidName ?? registeredName?.trim().split(/\s+/)[0] ?? null;
   const intent = detectIntent(last.body);
 
   if (intent === "vendedor") {
@@ -160,6 +178,25 @@ export const simulatedBrain: Brain = async ({ conversation, messages }) => {
       reply: `Certo, ${who}já chamei um vendedor para continuar com você. Assim que alguém estiver livre, responde por aqui.`,
       handoff: { reason: "Cliente pediu para falar com um vendedor." },
       summary: knownName ? buildSummary(knownName, undefined, conversation.summary) : conversation.summary,
+    };
+  }
+
+  if (intent === "site_dificuldade") {
+    return {
+      reply: SITE_HELP_REPLY,
+      handoff: { reason: SITE_HELP_REASON },
+      summary: knownName ? buildSummary(knownName, undefined, conversation.summary) : conversation.summary,
+    };
+  }
+
+  // Primeira resposta com nome já conhecido: cumprimenta pelo nome, sem perguntar.
+  if (!aiMessages.length && knownName) {
+    const price = priceFlow(customerMessages.map((message) => message.body), "");
+    const answer = price ?? (intent && intent !== "saudacao" ? ANSWERS[intent] : "Como posso ajudar?");
+    return {
+      reply: `Olá, ${knownName}! Sou o assistente virtual da Fare Foto. ${answer}`,
+      contactName: knownName,
+      summary: buildSummary(knownName, intent ? INTEREST_LABEL[intent] : undefined, conversation.summary),
     };
   }
 
@@ -176,7 +213,7 @@ export const simulatedBrain: Brain = async ({ conversation, messages }) => {
       const pending = customerMessages
         .slice(0, -1)
         .map((message) => detectIntent(message.body))
-        .find((found): found is keyof typeof ANSWERS => Boolean(found) && found !== "saudacao" && found !== "obrigado" && found !== "vendedor");
+        .find((found): found is keyof typeof ANSWERS => Boolean(found) && found !== "saudacao" && found !== "obrigado" && found !== "vendedor" && found !== "site_dificuldade");
       const pendingText = customerMessages.slice(0, -1).map((message) => message.body).reverse().find((body) => detectIntent(body) === pending);
       const answer = pending ? (priceFlow([pendingText ?? ""], "") ?? ANSWERS[pending]) : "Em que posso te ajudar?";
       return {

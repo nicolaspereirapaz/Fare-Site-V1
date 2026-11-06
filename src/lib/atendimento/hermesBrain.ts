@@ -74,13 +74,13 @@ const MEDIA_NOTE: Record<NonNullable<Message["media"]>["kind"], string> = {
 };
 
 export function createRealBrain(config: { url: string; token: string }, fetcher: typeof fetch = fetch): Brain {
-  return async ({ conversation, messages }): Promise<BrainResult> => {
+  return async ({ conversation, messages, registeredName }): Promise<BrainResult> => {
     let answer: ServiceAnswer;
     try {
       const response = await fetcher(`${config.url}/responder`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-fare-token": config.token },
-        body: JSON.stringify({ messages: toServiceMessages(messages), summary: conversation.summary, contactName: conversation.contactName }),
+        body: JSON.stringify({ messages: toServiceMessages(messages), summary: conversation.summary, contactName: conversation.contactName, registeredName: registeredName || undefined }),
         signal: AbortSignal.timeout(90_000),
       });
       if (!response.ok) throw new Error(`IA respondeu ${response.status}`);

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ORDER_STAFF_LABELS } from "@/lib/backoffice/orderStatus";
-import { createPanelCustomer, customerHistory, DuplicateCustomerError, findCustomerDuplicates, normalizePhone } from "@/lib/customers/repository";
+import { createPanelCustomer, customerHistory, DuplicateCustomerError, findCustomerDuplicates, normalizePhone, resolveCustomer } from "@/lib/customers/repository";
 import { isBrazilianPhone } from "@/lib/account/documents";
 import { getConversation, setConversationCustomer, updateConversationProfile } from "@/lib/atendimento/repository";
 import type { Conversation } from "@/lib/atendimento/types";
@@ -52,6 +52,21 @@ export function linkConversationCustomer(db: DatabaseSync, conversationId: strin
   } catch (error) {
     console.error("[atendimento] cadastro automático:", error instanceof Error ? error.message : error);
     return getConversation(db, conversationId);
+  }
+}
+
+/**
+ * Nome do cadastro que a IA pode usar sem perguntar: conta do site ou cadastro feito pela equipe.
+ * Cadastro criado sozinho a partir do nome de exibição do WhatsApp NÃO conta (nome não confirmado).
+ */
+export function registeredNameFor(db: DatabaseSync, conversation: Conversation): string | null {
+  if (!conversation.customerRef) return null;
+  try {
+    const customer = resolveCustomer(db, conversation.customerRef);
+    if (!customer || (customer.kind === "painel" && customer.createdBy === AUTO_ACTOR.name)) return null;
+    return customer.name.replace(/[~*_]/g, "").trim() || null;
+  } catch {
+    return null;
   }
 }
 
