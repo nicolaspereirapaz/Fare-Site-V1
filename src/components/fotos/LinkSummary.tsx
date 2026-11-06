@@ -1,12 +1,82 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, Lock, Pencil, Send } from "lucide-react";
 import { brl, minimumIssues, photoPayload, setPhotos, summarize, type Photo } from "@/components/fotos/shared";
 import { applyDiscount } from "@/lib/quotes/discount";
 import type { PhotoLinkView } from "@/lib/photoLinks/links";
 
-export type PhotoLinkProps = { token: string; view: PhotoLinkView; done: boolean; onDone: () => void };
+export type PhotoLinkProps = {
+  token: string; view: PhotoLinkView; done: boolean; onDone: () => void;
+  /** As fotos do envio anterior foram recolocadas no editor ("Alterar fotos"). */
+  reopened: boolean;
+  /** Abre o envio anterior no editor; devolve quantas fotos não deu para abrir e se os ajustes voltaram. */
+  reopen: () => Promise<{ missing: number; restoredEdits: boolean }>;
+  /** Equipe ("Editar fotos"): abre direto no editor. */
+  autoEdit: boolean;
+};
+
+/**
+ * Tela do link fora do editor: "Fotos recebidas" (com "Alterar fotos" enquanto o pedido não entrou em produção)
+ * ou o aviso de que não dá mais para mudar.
+ */
+export function LinkStatus({ link }: { link: PhotoLinkProps }) {
+  const { view } = link;
+  const canEdit = view.editable && (link.done || Boolean(view.previous));
+  const [busy, setBusy] = useState(() => link.autoEdit && canEdit);
+  const [error, setError] = useState<string | null>(null);
+  const received = link.done || Boolean(view.submittedAt);
+
+  const { reopen, autoEdit } = link;
+  useEffect(() => {
+    if (!autoEdit || !canEdit) return;
+    let active = true;
+    reopen().catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Não foi possível abrir as fotos."); })
+      .finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+    // Só ao abrir a página (um clique em "Editar fotos" = uma reabertura).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function edit() {
+    setBusy(true);
+    setError(null);
+    link.reopen().catch((caught) => setError(caught instanceof Error ? caught.message : "Não foi possível abrir as fotos.")).finally(() => setBusy(false));
+  }
+
+  if (!view.editable) {
+    return (
+      <section className="fp fp-page"><div className="container-shell">
+        <div className="fp-link-done">
+          <Lock aria-hidden="true" size={40} />
+          <h1 className="fp-h1">{received ? "As fotos não podem mais ser alteradas" : "Este link não aceita mais alterações"}</h1>
+          <p>{view.kindLabel === "pedido"
+            ? `O pedido ${view.code} já entrou em produção ou foi encerrado. Para mudar algo, fale com a loja pelo WhatsApp.`
+            : `O orçamento ${view.code} já foi fechado ou encerrado. Para mudar algo, fale com a loja pelo WhatsApp.`}</p>
+        </div>
+      </div></section>
+    );
+  }
+
+  return (
+    <section className="fp fp-page"><div className="container-shell">
+      <div className="fp-link-done">
+        <CheckCircle2 aria-hidden="true" size={40} />
+        <h1 className="fp-h1">Fotos recebidas!</h1>
+        <p>As fotos do {view.kindLabel} {view.code} chegaram para a Fare Foto{view.previous && !link.done ? ` (${view.previous.photos} ${view.previous.photos === 1 ? "foto" : "fotos"}, ${view.previous.copies} ${view.previous.copies === 1 ? "cópia" : "cópias"})` : ""}. Vamos conferir e falar com você pelo WhatsApp.</p>
+        {canEdit ? (
+          <>
+            <p className="fp-help">Quer trocar alguma foto, o tamanho, o papel ou as quantidades? Dá para alterar até o {view.kindLabel} entrar em produção. O novo envio substitui o anterior.</p>
+            <button className="button button-primary" disabled={busy} onClick={edit} type="button">
+              <Pencil aria-hidden="true" size={17} /> {busy ? "Abrindo as fotos enviadas…" : "Alterar fotos"}
+            </button>
+          </>
+        ) : null}
+        {error ? <p className="fp-help fp-link-error" role="alert">{error}</p> : null}
+      </div>
+    </div></section>
+  );
+}
 
 /**
  * Resumo do link das fotos: brindes do orçamento (fixos) + fotos do cliente (preço especial da equipe ou tabela),
@@ -29,20 +99,8 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
   const failed = photos.some((photo) => photo.upload?.status === "erro");
   const belowMinimum = minimumIssues(photos);
 
-  if (link.done || !view.editable) {
-    const received = link.done || Boolean(view.submittedAt);
-    return (
-      <section className="fp fp-page"><div className="container-shell">
-        <div className="fp-link-done">
-          <CheckCircle2 aria-hidden="true" size={40} />
-          <h1 className="fp-h1">{received ? "Fotos recebidas!" : "Este link não aceita mais alterações"}</h1>
-          <p>{received
-            ? `As fotos do ${view.kindLabel} ${view.code} chegaram para a Fare Foto. Vamos conferir e falar com você pelo WhatsApp.`
-            : `O ${view.kindLabel} ${view.code} já está em produção ou foi encerrado. Para mudar algo, fale com a loja pelo WhatsApp.`}</p>
-        </div>
-      </div></section>
-    );
-  }
+  // Já enviou antes: o envio novo troca o anterior.
+  const resend = Boolean(view.submittedAt) || link.reopened;
 
   async function send() {
     setSending(true);
@@ -89,8 +147,9 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
       <div className="fp-summary-total"><span>Total</span><strong>{onRequest ? "a combinar" : brl(priced.totalCents / 100)}</strong></div>
       {belowMinimum.map((text) => <p className="fp-help fp-link-error" key={text} role="status">{text}</p>)}
       <button className="button button-primary button-large" disabled={sending || !photos.length || uploading > 0 || failed || belowMinimum.length > 0} onClick={send} type="button">
-        <Send aria-hidden="true" size={18} /> {sending ? "Enviando…" : uploading ? `Enviando fotos (faltam ${uploading})…` : "Enviar para a loja"}
+        <Send aria-hidden="true" size={18} /> {sending ? "Enviando…" : uploading ? `Enviando fotos (faltam ${uploading})…` : resend ? "Enviar alterações" : "Enviar para a loja"}
       </button>
+      {resend ? <p className="fp-help">Substitui as fotos enviadas antes por estas.</p> : null}
       {failed ? <p className="fp-help fp-link-error">Alguma foto não subiu. Toque em “Tentar de novo” nela ou remova.</p> : null}
       {error ? <p className="fp-help fp-link-error" role="alert">{error}</p> : null}
       <p className="fp-help">O valor final é confirmado pela loja.</p>

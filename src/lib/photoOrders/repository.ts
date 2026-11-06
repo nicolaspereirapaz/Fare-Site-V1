@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import type { FilterId, Fit, Paper } from "@/components/fotos/catalog";
 
 /** Linha do pedido de fotos: um tamanho + papel, com os arquivos já prontos na pasta. */
 export type PhotoOrderLine = {
@@ -15,6 +16,16 @@ export type PhotoOrderLine = {
   totalCents: number;
   /** Arquivos prontos para imprimir, relativos à pasta do pedido. */
   files: Array<{ file: string; copies: number; original: string }>;
+};
+
+/**
+ * Cada foto como o cliente deixou (para reabrir o link com o mesmo corte, filtro, tamanho, papel e cópias).
+ * `original`: arquivo em Originais, relativo à pasta do pedido ("Originais/foto-01 - praia.jpg").
+ */
+export type StoredPhoto = {
+  original: string; name: string; width: number; height: number;
+  sizeId: string; paper: Paper; copies: number; fit: Fit; landscape: boolean; zoom: number; x: number; y: number;
+  border: number; filter: FilterId; filterStrength: number; brightness: number; contrast: number; saturation: number;
 };
 
 export type PhotoOrder = {
@@ -34,6 +45,8 @@ export type PhotoOrder = {
   folder: string;
   createdAt: string;
   filesDeletedAt: string | null;
+  /** Ajustes de cada foto (envios antigos: null, sem os ajustes guardados). */
+  photos?: StoredPhoto[] | null;
 };
 
 export function ensurePhotoOrderTables(database: DatabaseSync) {
@@ -63,6 +76,7 @@ export function ensurePhotoOrderTables(database: DatabaseSync) {
   `);
   const columns = (database.prepare("PRAGMA table_info(fare_photo_orders)").all() as Array<{ name: string }>).map((column) => column.name);
   if (!columns.includes("order_id")) database.exec("ALTER TABLE fare_photo_orders ADD COLUMN order_id TEXT");
+  if (!columns.includes("photos_json")) database.exec("ALTER TABLE fare_photo_orders ADD COLUMN photos_json TEXT");
 }
 
 export const formatCustomerNumber = (number: number) => `C${String(number).padStart(4, "0")}`;
@@ -82,20 +96,23 @@ export function customerNumberFor(database: DatabaseSync, userId: string, folder
 type Row = {
   id: string; order_id: string | null; code: string; user_id: string; customer_number: number; customer_json: string; delivery: "retirada" | "entrega";
   lines_json: string; total_cents: number; photo_count: number; copies: number; folder: string; created_at: string; files_deleted_at: string | null;
+  photos_json?: string | null;
 };
 const fromRow = (row: Row): PhotoOrder => ({
   id: row.id, orderId: row.order_id ?? null, code: row.code, userId: row.user_id, customerNumber: formatCustomerNumber(row.customer_number),
   customer: JSON.parse(row.customer_json), delivery: row.delivery, lines: JSON.parse(row.lines_json), totalCents: row.total_cents,
   photoCount: row.photo_count, copies: row.copies, folder: row.folder, createdAt: row.created_at, filesDeletedAt: row.files_deleted_at,
+  photos: row.photos_json ? JSON.parse(row.photos_json) : null,
 });
 
 export function insertPhotoOrder(database: DatabaseSync, order: Omit<PhotoOrder, "customerNumber" | "filesDeletedAt"> & { customerNumber: number }) {
   ensurePhotoOrderTables(database);
   database.prepare(`INSERT INTO fare_photo_orders
-    (id, order_id, code, user_id, customer_number, customer_json, delivery, lines_json, total_cents, photo_count, copies, folder, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    (id, order_id, code, user_id, customer_number, customer_json, delivery, lines_json, total_cents, photo_count, copies, folder, created_at, photos_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     order.id, order.orderId, order.code, order.userId, order.customerNumber, JSON.stringify(order.customer), order.delivery,
     JSON.stringify(order.lines), order.totalCents, order.photoCount, order.copies, order.folder, order.createdAt,
+    order.photos ? JSON.stringify(order.photos) : null,
   );
 }
 

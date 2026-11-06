@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { isProfessional } from "@/lib/professional";
-import { existsSync } from "node:fs";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { Readable } from "node:stream";
 import { photoFromName, photoItemName, photoTablePrice } from "@/components/staff/photoItems";
 import { paperLabel, PRO_PRICES, type Paper } from "@/components/fotos/catalog";
 import { buildQuoteItems } from "@/lib/backoffice/quoteBuilder";
@@ -11,8 +12,10 @@ import type { QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import { getOrderFinance } from "@/lib/orders/payments";
 import { findOrderById } from "@/lib/orders/repository";
-import { assemblePhotoFolder, PhotoOrderError, readPhotos, validatePhotos } from "@/lib/photoOrders/finalize";
-import { codeExists, ensurePhotoOrderTables } from "@/lib/photoOrders/repository";
+import { assemblePhotoFolder, inBatches, PhotoOrderError, readPhotos, validatePhotos } from "@/lib/photoOrders/finalize";
+import { codeExists, ensurePhotoOrderTables, getPhotoOrder, type PhotoOrder } from "@/lib/photoOrders/repository";
+import { saveUpload } from "@/lib/photoOrders/uploads";
+import { photoLinkEditable } from "@/lib/photoLinks/editable";
 import { existingDocumentFolder } from "@/lib/documentFolders";
 import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
 import { NO_CUSTOMER_NAME } from "@/lib/quotes/quoteCode";
@@ -23,6 +26,8 @@ import { findQuoteById, quoteCode, replaceQuoteItems } from "@/lib/quotes/reposi
  * O cliente vê os brindes (fixos) e as fotos, anexa, corta, escolhe papel e quantidades e envia.
  * Ao enviar: as fotos vão para a pasta do cliente e as linhas de foto do documento são trocadas pelo que ele escolheu.
  * Preço por foto: o especial da equipe (se houver) para aquele tamanho; senão, a tabela do site.
+ * Depois do envio o mesmo link reabre com as fotos enviadas (cliente, ou a equipe pelo "Editar fotos") até o pedido
+ * entrar em produção; o reenvio SUBSTITUI o anterior (pasta, registro das fotos e linhas do documento).
  */
 
 export type PhotoLinkKind = "quote" | "order";
@@ -43,15 +48,24 @@ export function ensurePhotoLinkTables(database: DatabaseSync) {
   `);
 }
 
-/** Link aberto do documento (o mesmo enquanto o cliente não enviar); depois do envio, um novo. */
+/**
+ * Link do documento: sempre o mesmo (antes e depois do envio, que pode ser editado pelo próprio link).
+ * Pedido que já tem fotos (pedido de fotos feito pelo site, ou fotos vindas do orçamento): o link novo já nasce
+ * com elas, para reabrir e editar em vez de criar um segundo envio.
+ */
 export function createPhotoLink(database: DatabaseSync, kind: PhotoLinkKind, docId: string, actorName: string) {
   ensurePhotoLinkTables(database);
-  const open = database.prepare("SELECT token FROM fare_photo_links WHERE kind = ? AND doc_id = ? AND submitted_at IS NULL ORDER BY created_at DESC LIMIT 1")
+  ensurePhotoOrderTables(database);
+  const latest = database.prepare("SELECT token FROM fare_photo_links WHERE kind = ? AND doc_id = ? ORDER BY created_at DESC LIMIT 1")
     .get(kind, docId) as { token: string } | undefined;
-  if (open) return open.token;
+  if (latest) return latest.token;
+  const existing = kind === "order"
+    ? database.prepare("SELECT id, created_at FROM fare_photo_orders WHERE order_id = ? ORDER BY (code = ?) DESC, created_at LIMIT 1")
+      .get(docId, orderCode(docId)) as { id: string; created_at: string } | undefined
+    : undefined;
   const token = randomBytes(18).toString("base64url");
-  database.prepare("INSERT INTO fare_photo_links (token, kind, doc_id, created_by, created_at) VALUES (?, ?, ?, ?, ?)")
-    .run(token, kind, docId, actorName, new Date().toISOString());
+  database.prepare("INSERT INTO fare_photo_links (token, kind, doc_id, created_by, created_at, submitted_at, photo_order_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(token, kind, docId, actorName, new Date().toISOString(), existing?.created_at ?? null, existing?.id ?? null);
   return token;
 }
 
@@ -61,8 +75,6 @@ function findLink(database: DatabaseSync, token: string): LinkRow | null {
   return (database.prepare("SELECT * FROM fare_photo_links WHERE token = ?").get(token) as LinkRow | undefined) ?? null;
 }
 
-const QUOTE_EDITABLE = ["aguardando_orcamento", "em_negociacao", "aguardando_pagamento"];
-const ORDER_EDITABLE = ["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao"];
 
 /** Foto do documento: item com nome de foto (painel) ou linha de pedido de fotos do site ("fotos/…"). */
 export function photoOf(item: QuoteCartItem): { sizeId: string; paper?: Paper } | null {
@@ -76,16 +88,22 @@ function loadDocument(database: DatabaseSync, link: LinkRow) {
   if (link.kind === "quote") {
     const quote = findQuoteById(database, link.doc_id);
     if (!quote) return null;
+    // Orçamento virou pedido: o mesmo link passa a editar o pedido (as fotos foram junto, ver movePhotoFoldersToOrder).
+    if (quote.status === "virou_pedido" && quote.orderId) return loadOrder(database, quote.orderId);
     return {
-      kind: link.kind, id: quote.id, code: quoteCode(quote.id), userId: quote.userId, customer: quote.customer, items: quote.items,
-      discount: quote.discount, editable: QUOTE_EDITABLE.includes(quote.status), paidCents: 0, updatedAt: quote.updatedAt, internalNotes: quote.internalNotes,
+      kind: "quote" as PhotoLinkKind, id: quote.id, code: quoteCode(quote.id), userId: quote.userId, customer: quote.customer, items: quote.items,
+      discount: quote.discount, editable: photoLinkEditable("quote", quote.status), paidCents: 0, updatedAt: quote.updatedAt, internalNotes: quote.internalNotes,
     };
   }
-  const order = findOrderById(database, link.doc_id);
+  return loadOrder(database, link.doc_id);
+}
+
+function loadOrder(database: DatabaseSync, id: string) {
+  const order = findOrderById(database, id);
   if (!order) return null;
   return {
-    kind: link.kind, id: order.id, code: orderCode(order.id), userId: order.userId, customer: order.customer, items: order.items as QuoteCartItem[],
-    discount: order.discount, editable: ORDER_EDITABLE.includes(order.status), paidCents: getOrderFinance(database, order.id)?.paidCents ?? 0,
+    kind: "order" as PhotoLinkKind, id: order.id, code: orderCode(order.id), userId: order.userId, customer: order.customer, items: order.items as QuoteCartItem[],
+    discount: order.discount, editable: photoLinkEditable("order", order.status), paidCents: getOrderFinance(database, order.id)?.paidCents ?? 0,
     updatedAt: order.updatedAt, internalNotes: "",
   };
 }
@@ -112,8 +130,11 @@ export type PhotoLinkView = {
   code: string;
   kindLabel: "orçamento" | "pedido";
   customerName: string;
+  /** Aceita envio ou alteração (orçamento aberto / pedido antes da produção), mesmo depois de já ter enviado. */
   editable: boolean;
   submittedAt: string | null;
+  /** O que já foi enviado (para "Alterar fotos"); null = nada ainda ou as fotos foram apagadas. */
+  previous: { id: string; photos: number; copies: number } | null;
   /** Brindes e outros itens: fixos, só para o cliente ver o total. */
   others: Array<{ id: string; name: string; details: string; quantity: number; unitPrice: number | null }>;
   /** Fotos pedidas pela equipe (ponto de partida). `paper`: papel escolhido pela equipe; o cliente pode trocar. */
@@ -126,12 +147,14 @@ export function photoLinkView(database: DatabaseSync, token: string): PhotoLinkV
   const link = findLink(database, token);
   const doc = link && loadDocument(database, link);
   if (!link || !doc) return null;
+  const previous = previousOf(database, link);
   return {
     code: doc.code,
     kindLabel: doc.kind === "quote" ? "orçamento" : "pedido",
     customerName: doc.customer.name === NO_CUSTOMER_NAME ? "" : doc.customer.name,
-    editable: doc.editable && !link.submitted_at,
+    editable: doc.editable,
     submittedAt: link.submitted_at,
+    previous: previous && !previous.filesDeletedAt ? { id: previous.id, photos: previous.photoCount, copies: previous.copies } : null,
     others: doc.items.filter((item) => !photoOf(item)).map((item) => ({
       id: item.id, name: item.productName, quantity: item.quantity, unitPrice: item.unitPrice,
       details: [item.selections?.["Variação"], ...(item.gravacoes ?? []).map((g) => (g.local ? `${g.descricao} (${g.local})` : g.descricao))].filter(Boolean).join(" · "),
@@ -157,15 +180,109 @@ function documentPhotosFolder(database: DatabaseSync, id: string) {
   return folder ? path.join(folder, "Fotos") : null;
 }
 
+const previousOf = (database: DatabaseSync, link: LinkRow) => (link.photo_order_id ? getPhotoOrder(database, link.photo_order_id) : null);
+
+const lockedMessage = (doc: LinkDocument) => doc.kind === "order"
+  ? `O pedido ${doc.code} já entrou em produção ou foi encerrado: as fotos não podem mais ser alteradas. Fale com a loja pelo WhatsApp.`
+  : `O orçamento ${doc.code} já foi fechado ou encerrado: as fotos não podem mais ser alteradas. Fale com a loja pelo WhatsApp.`;
+
+/** Foto do envio anterior pronta para o editor: um envio novo (cópia do original) com os ajustes de antes. */
+export type ReopenedPhoto = {
+  uploadId: string; name: string; width: number; height: number; convertedFrom: string | null;
+  sizeId: string; paper: Paper; copies: number; fit: "preencher" | "encaixar"; landscape: boolean; zoom: number; x: number; y: number;
+  border: number; filter: string; filterStrength: number; brightness: number; contrast: number; saturation: number;
+};
+
+/** Arquivo dentro de <pasta do pedido>/Originais (só o nome do arquivo vale: nada de subpasta nem ".."). */
+function originalPath(folder: string, relative: string) {
+  const parts = relative.split(/[\\/]/);
+  const name = parts[parts.length - 1];
+  if (parts.length !== 2 || parts[0] !== "Originais" || !name || name === "." || name === ".." || name.startsWith(".")) return null;
+  const file = path.resolve(folder, "Originais", name);
+  return path.relative(path.resolve(folder, "Originais"), file) === name ? file : null;
+}
+
+/**
+ * Fotos do envio anterior com o que o cliente escolheu. Envios novos guardam os ajustes de cada foto; os antigos
+ * (sem `photos`) voltam com tamanho, papel e cópias tirados das linhas e o corte/filtro padrão.
+ */
+async function previousPhotos(order: PhotoOrder) {
+  type Entry = { file: string | null; name: string; edits: Partial<ReopenedPhoto> };
+  if (order.photos?.length) {
+    return order.photos.map((photo): Entry => ({ file: originalPath(order.folder, photo.original), name: photo.name, edits: photo }));
+  }
+  const originals = await readdir(path.join(order.folder, "Originais")).catch(() => [] as string[]);
+  const byNumber = new Map(originals.flatMap((file) => {
+    const match = /^foto-(\d+) - /.exec(file);
+    return match ? [[match[1], file] as const] : [];
+  }));
+  const found = new Map<string, Entry>();
+  const add = (file: string, sizeId: string, paper: Paper, copies: number) => {
+    const entry = found.get(file) ?? { file: originalPath(order.folder, `Originais/${file}`), name: file.replace(/^foto-\d+ - /, ""), edits: { sizeId, paper, copies: 0 } };
+    entry.edits.copies = (entry.edits.copies ?? 0) + copies;
+    found.set(file, entry);
+  };
+  for (const line of order.lines) {
+    const paper: Paper = line.paper.toLowerCase() === "fosco" ? "fosco" : "brilho";
+    for (const item of line.files) {
+      const fileName = item.file.split(/[\\/]/).pop() ?? "";
+      const sheet = /^folha-\d+ \(fotos? ([\d e]+)\)/.exec(fileName);
+      if (sheet) {
+        // Instax: a folha junta 2 cartões; cada número na folha conta como uma cópia.
+        for (const number of sheet[1].split(" e ")) if (byNumber.has(number)) add(byNumber.get(number)!, line.sizeId, paper, 1);
+      } else {
+        add(item.original.split(/[\\/]/).pop() ?? "", line.sizeId, paper, item.copies);
+      }
+    }
+  }
+  return [...found.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, entry]) => entry);
+}
+
+/**
+ * "Alterar fotos": recoloca as fotos do envio anterior no editor. Cada original vira um envio novo (cópia, com
+ * prévia e conversão como um envio comum), então o editor e o reenvio funcionam igual a fotos recém-enviadas, e
+ * a pasta anterior só é trocada quando o reenvio der certo. Quem tem o link (cliente ou equipe) pode reabrir.
+ */
+export async function reopenPhotoLink(database: DatabaseSync, token: string) {
+  const link = findLink(database, token);
+  const doc = link && loadDocument(database, link);
+  if (!link || !doc) throw new PhotoOrderError("Link não encontrado. Peça um novo à loja.");
+  if (!doc.editable) throw new PhotoOrderError(lockedMessage(doc));
+  const previous = previousOf(database, link);
+  if (!previous || previous.filesDeletedAt) throw new PhotoOrderError("Não há fotos enviadas para alterar neste link. Envie as fotos de novo.");
+  const entries = await previousPhotos(previous);
+  const photos: Array<ReopenedPhoto | null> = entries.map(() => null);
+  await inBatches(entries, 3, async (entry, index) => {
+    if (!entry.file || !existsSync(entry.file)) return;
+    const upload = await saveUpload(Readable.toWeb(createReadStream(entry.file)) as unknown as ReadableStream<Uint8Array>, entry.name)
+      .catch((error) => { console.error(`[fotos] não reabriu ${entry.file}:`, error instanceof Error ? error.message : error); return null; });
+    if (!upload) return;
+    // Mesmas regras do envio (números fora da faixa são corrigidos; tamanho que saiu do catálogo volta para 10×15).
+    const raw = { landscape: upload.width > upload.height, ...entry.edits, uploadId: upload.id };
+    let edits: ReturnType<typeof validatePhotos>[number];
+    try {
+      [edits] = validatePhotos([raw]);
+    } catch {
+      [edits] = validatePhotos([{ ...raw, sizeId: "10x15" }]);
+    }
+    photos[index] = { ...edits, name: upload.name, width: upload.width, height: upload.height, convertedFrom: upload.convertedFrom };
+  });
+  const reopened = photos.filter((photo): photo is ReopenedPhoto => photo !== null);
+  if (!reopened.length) throw new PhotoOrderError("Não foi possível abrir as fotos enviadas. Envie as fotos de novo.");
+  return { photos: reopened, missing: entries.length - reopened.length, restoredEdits: Boolean(previous.photos?.length) };
+}
+
 export async function submitPhotoLink(database: DatabaseSync, token: string, rawPhotos: unknown) {
   const link = findLink(database, token);
   const doc = link && loadDocument(database, link);
   if (!link || !doc) throw new PhotoOrderError("Link não encontrado. Peça um novo à loja.");
-  if (link.submitted_at) throw new PhotoOrderError("As fotos deste link já foram enviadas. Se quiser mudar algo, fale com a loja.");
-  if (!doc.editable) throw new PhotoOrderError("Este orçamento/pedido não aceita mais alterações. Fale com a loja.");
+  if (!doc.editable) throw new PhotoOrderError(lockedMessage(doc));
+  // Já enviou antes: o reenvio substitui aquele envio (mesma pasta e mesmo código).
+  const previous = previousOf(database, link);
   const photos = validatePhotos(rawPhotos);
-  const { uploads, summary } = await readPhotos(photos);
-  const special = specialPrices(doc.items, isProfessional(database, doc.userId));
+  const pro = isProfessional(database, doc.userId);
+  const { uploads, summary } = await readPhotos(photos, pro);
+  const special = specialPrices(doc.items, pro);
   const unitPrice = (sizeId: string, table: number) => special[sizeId] ?? table;
 
   // Linhas novas do documento: uma por tamanho + papel (calculadas antes de mexer em pasta ou banco).
@@ -185,25 +302,25 @@ export async function submitPhotoLink(database: DatabaseSync, token: string, raw
     throw new PhotoOrderError("Com essas quantidades o pedido fica menor que o valor já pago. Fale com a loja.");
   }
 
-  let code = doc.code;
-  for (let n = 2; codeExists(database, code); n++) code = `${doc.code} envio ${n}`;
+  let code = previous?.code ?? doc.code;
+  // "envio N": só para documento antigo com mais de um link (hoje o link é um só e o reenvio substitui).
+  if (!previous) for (let n = 2; codeExists(database, code); n++) code = `${doc.code} envio ${n}`;
+  const submittedAt = new Date().toISOString();
   const result = await assemblePhotoFolder(database, {
     id: randomUUID(), orderId: doc.kind === "order" ? doc.id : null, code, userId: doc.userId,
     customer: { name: doc.customer.name, phone: doc.customer.phone ?? "", company: doc.customer.company ?? null },
-    delivery: "retirada", photos, uploads, summary, unitPrice,
+    delivery: previous?.delivery ?? "retirada", photos, uploads, summary, unitPrice,
     // 1º envio vai para "Fotos" dentro da pasta do orçamento/pedido (erro apaga só essa subpasta); envios seguintes, pasta própria.
     folder: code === doc.code ? documentPhotosFolder(database, doc.id) : null,
+    replacing: previous,
+    // Na mesma transação do registro das fotos: itens do documento e o link (todos os links que apontavam para o envio anterior).
+    commit: (order) => {
+      saveItems(database, doc, items, total);
+      database.prepare("UPDATE fare_photo_links SET submitted_at = ?, photo_order_id = ? WHERE token = ? OR photo_order_id = ?")
+        .run(submittedAt, order.id, token, previous?.id ?? "");
+    },
   });
-
-  try {
-    saveItems(database, doc, items, total);
-    database.prepare("UPDATE fare_photo_links SET submitted_at = ?, photo_order_id = ? WHERE token = ?").run(new Date().toISOString(), result.order.id, token);
-  } catch (error) {
-    await rm(result.order.folder, { recursive: true, force: true });
-    database.prepare("DELETE FROM fare_photo_orders WHERE id = ?").run(result.order.id);
-    throw error;
-  }
-  return { code: doc.code, totalCents: total, photoOrder: result.order };
+  return { code: doc.code, totalCents: total, photoOrder: result.order, replaced: Boolean(previous) };
 }
 
 function saveItems(database: DatabaseSync, doc: LinkDocument, items: QuoteCartItem[], total: number | null) {

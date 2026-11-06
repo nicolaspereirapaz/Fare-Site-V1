@@ -10,6 +10,7 @@ import { billingDocument, formatDate, messageFor, StageSelect } from '@/componen
 import { STATUS_LABELS, STATUS_COLORS } from '@/components/BackofficeBoard';
 import { CloseQuoteDialog } from '@/components/staff/CloseQuoteDialog';
 import { PhotoLinkActions } from "@/components/staff/PhotoLinkActions";
+import { photoLinkEditable } from "@/lib/photoLinks/editable";
 import { photoFromName } from "@/components/staff/photoItems";
 import { formatDeliveryAddress } from '@/lib/customers/address';
 import { ProposalActions } from '@/components/staff/ProposalActions';
@@ -175,7 +176,7 @@ export function StaffDocumentPage({kind,id,canCancel,children}:{kind:StaffDocume
    {isQuote?<div className="sd-pix"><p className="sd-muted">Pix · chave CNPJ</p><div><span>50.344.377/0001-36</span><button className="kb-secondary" type="button" onClick={async()=>{try{await navigator.clipboard.writeText('50.344.377/0001-36');setCopied(true);}catch{setError('Não foi possível copiar automaticamente. Selecione a chave para copiar.');}}}>Copiar chave</button></div>{copied?<small role="status">Chave Pix copiada.</small>:null}</div>:<>{!finance?.payments.length||finance.installments||finance.dueDate||finance.paymentOnPickup?<p className="sd-muted sd-method">{finance?.paymentOnPickup?(finance.paidCents===0?'Pagamento integral na retirada · forma a definir':[...new Set(finance.payments.map(receipt=>STAFF_PAYMENT_LABELS[receipt.paymentMethod]))].join(' + ')):document.paymentMethod?STAFF_PAYMENT_LABELS[document.paymentMethod]:''}{finance?.installments?` · ${finance.installments}×`:''}{finance?.dueDate?` · vence ${dateLabel(finance.dueDate)}`:''}</p>:null}{finance?<><OrderPaymentPanel compact orderId={id} status={orderStatus} paymentMethod={document.paymentMethod!} finance={finance} onRecorded={reload}/><PaymentPlanList finance={finance}/></>:<p className="sd-muted">Recebimentos não registrados para este pedido.</p>}</>}
    </section>
    <section className="qe-card sd-document-actions"><ProposalActions {...(isQuote?{quoteId:id,sentAt:document.proposalSentAt}:{orderId:id})} blocked={isQuote&&!openQuote?'Este orçamento já foi fechado.':document.items.some(i=>i.unitPrice===null)?'Há item sem preço. Edite o orçamento antes de gerar o documento.':null} onSent={reload}/>{isQuote?null:<ComandaPrint orderId={id}/>}</section>
-   {(isQuote?openQuote:editableOrder)?<section className="qe-card sd-document-actions"><PhotoLinkActions kind={isQuote?'quote':'order'} id={id}/></section>:null}
+   {(isQuote?openQuote:editableOrder)?<section className="qe-card sd-document-actions"><PhotoLinkActions kind={isQuote?'quote':'order'} id={id} locked={!photoLinkEditable(isQuote?'quote':'order',document.status)}/></section>:null}
   </aside></div>
   {closing?<CloseQuoteDialog quote={{id,code:document.code,customerName:document.customer.name,total:document.total,updatedAt:document.updatedAt,deliveryDate:document.quoteDelivery?.date,deliveryTime:document.quoteDelivery?.time}} onClose={()=>setClosing(false)} onClosed={order=>router.push(`/equipe?aba=${order.status==='aguardando_pagamento'?'orcamentos':'pedidos'}&novo=${order.id}`)}/>:null}
  </div>;

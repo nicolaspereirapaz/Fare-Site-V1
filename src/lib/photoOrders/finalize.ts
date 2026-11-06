@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isProfessional } from "@/lib/professional";
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { copyFile, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import sharp from "sharp";
@@ -17,7 +18,7 @@ import type { OrderDocument } from "@/lib/proposals/orderDocument";
 import { FARE_COMPANY } from "@/lib/proposals/proposal";
 import { dayFolder, ORDERS_DIR } from "./config";
 import { renderCard, renderPrint, renderSheet, type PhotoEdits } from "./render";
-import { codeExists, customerNumberFor, insertPhotoOrder, type PhotoOrder, type PhotoOrderLine } from "./repository";
+import { codeExists, customerNumberFor, insertPhotoOrder, type PhotoOrder, type PhotoOrderLine, type StoredPhoto } from "./repository";
 import { readUpload, removeUpload, type PhotoUpload } from "./uploads";
 
 export type PhotoOrderInput = {
@@ -84,7 +85,7 @@ function validate(input: PhotoOrderInput) {
 }
 
 /** Faz um trabalho por vez em `limit` filas (renderizar centenas de fotos sem travar o servidor). */
-async function inBatches<T>(items: T[], limit: number, work: (item: T, index: number) => Promise<void>) {
+export async function inBatches<T>(items: T[], limit: number, work: (item: T, index: number) => Promise<void>) {
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
@@ -183,10 +184,57 @@ export async function readPhotos(photos: ValidPhoto[], pro = false) {
   return { uploads, asPhotos, summary: summarize(asPhotos, pro) };
 }
 
+/** Grava no banco tudo de uma vez (pedido de fotos + o que o chamador precisar): erro desfaz tudo. */
+function inTransaction(database: DatabaseSync, action: () => void) {
+  const nested = database.isTransaction;
+  const savepoint = `fotos_${randomUUID().replaceAll("-", "")}`;
+  database.exec(nested ? `SAVEPOINT ${savepoint}` : "BEGIN IMMEDIATE");
+  try {
+    action();
+    database.exec(nested ? `RELEASE ${savepoint}` : "COMMIT");
+  } catch (error) {
+    database.exec(nested ? `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}` : "ROLLBACK");
+    throw error;
+  }
+}
+
+/** Nome simples de arquivo/pasta dentro da pasta do pedido (sem subpasta, sem "..", sem oculto). */
+const plainName = (name: string) => Boolean(name) && !/[\\/]/.test(name) && !name.startsWith(".");
+
+/**
+ * Move as entradas `names` de `from` para `to` (rename, sem copiar). Se uma falhar, volta as que já foram e repassa o erro.
+ * Devolve o "desfazer" (volta tudo para `from`).
+ */
+async function moveEntries(from: string, to: string, names: string[]) {
+  const moved: string[] = [];
+  const undo = async () => {
+    for (const name of [...moved].reverse()) {
+      await rename(path.join(to, name), path.join(from, name)).catch((error) => console.error(`[fotos] não voltou ${name}:`, error instanceof Error ? error.message : error));
+    }
+  };
+  try {
+    for (const name of names) {
+      if (!existsSync(path.join(from, name))) continue;
+      if (existsSync(path.join(to, name))) throw new PhotoOrderError(`Já existe "${name}" na pasta do pedido. Fale com a loja.`);
+      await mkdir(to, { recursive: true });
+      await rename(path.join(from, name), path.join(to, name));
+      moved.push(name);
+    }
+  } catch (error) {
+    await undo();
+    throw error;
+  }
+  return undo;
+}
+
 /**
  * Pasta do cliente (criada no 1º pedido) → pasta do pedido/orçamento (`code`) → uma pasta por tamanho + papel
  * com os arquivos prontos para imprimir, a pasta Originais e o <code>.html. Grava no banco e apaga os envios.
  * `unitPrice`: preço por foto de cada tamanho (padrão: tabela do site).
+ * `replacing`: reenvio pelo link. A pasta nova é montada à parte (".reenvio-…" dentro da pasta anterior) e só no fim
+ * troca de lugar com as fotos anteriores; o registro anterior sai do banco na mesma transação. Qualquer erro deixa
+ * a pasta e o registro anteriores como estavam. Outros arquivos da pasta (documento do pedido) não são tocados.
+ * `commit`: gravações do chamador (itens do documento, link) na mesma transação do pedido de fotos.
  */
 export async function assemblePhotoFolder(database: DatabaseSync, input: {
   id: string; orderId: string | null; code: string; userId: string;
@@ -195,6 +243,8 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
   unitPrice?: (sizeId: string, table: number) => number;
   /** Pasta já existente do orçamento/pedido (as fotos entram junto do arquivo do documento). */
   folder?: string | null;
+  replacing?: PhotoOrder | null;
+  commit?: (order: PhotoOrder) => void;
 }) {
   const { id, code, uploads, summary } = input;
   const data = input;
@@ -207,14 +257,22 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
   const priceOf = (sizeId: string, table: number) => input.unitPrice?.(sizeId, table) ?? table;
   const customerName = safeFolderName(firstAndLastName(input.customer.name));
   const customer = customerNumberFor(database, input.userId, customerName);
+  const previous = input.replacing ?? null;
+  // Reenvio com a pasta anterior ainda no disco: monta ao lado e troca no fim.
+  const staged = Boolean(previous && existsSync(previous.folder));
   // Regra da loja: pasta do dia e, dentro dela, uma pasta por pedido com o nome do cliente.
-  const orderDir = input.folder ?? path.join(ORDERS_DIR, dayFolder(), `${customerName} - ${code}`);
+  const finalDir = staged ? previous!.folder : input.folder ?? path.join(ORDERS_DIR, dayFolder(), `${customerName} - ${code}`);
+  const orderDir = staged ? path.join(finalDir, `.reenvio-${id}`) : finalDir;
   await mkdir(path.join(orderDir, "Originais"), { recursive: true });
 
   try {
     // foto-01, foto-02… (com mais zeros quando o pedido passa de 99 fotos), na ordem em que o cliente enviou.
     const digits = Math.max(2, String(asPhotos.length).length);
     const numbered = asPhotos.map((photo, index) => ({ photo, number: String(index + 1).padStart(digits, "0") }));
+    const originalName = (index: number) => {
+      const upload = uploads.get(data.photos[index].uploadId)!;
+      return `foto-${numbered[index].number} - ${safeFolderName(path.parse(upload.name).name)}${path.extname(upload.original)}`;
+    };
     const lines: PhotoOrderLine[] = [];
     const jobs: Array<() => Promise<void>> = [];
     for (const group of summary.sizes) {
@@ -233,7 +291,7 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
             const photo = asPhotos[Number(listed.id)];
             const { number } = numbered.find((item) => item.photo === photo)!;
             const upload = uploads.get(data.photos[Number(photo.id)].uploadId)!;
-            const original = path.join("Originais", `foto-${number} - ${safeFolderName(path.parse(upload.name).name)}${path.extname(upload.original)}`);
+            const original = path.join("Originais", originalName(Number(photo.id)));
             jobs.push(() => copyFile(upload.original, path.join(orderDir, original)));
             remaining.set(photo, photo.copies);
             const card = () => cards.get(photo) ?? cards.set(photo, renderCard(upload.source, { width: upload.width, height: upload.height }, photo).then((c) => c.buffer)).get(photo)!;
@@ -257,7 +315,7 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
           const { number } = numbered.find((item) => item.photo === photo)!;
           const upload = uploads.get(data.photos[Number(photo.id)].uploadId)!;
           const file = path.join(folder, `foto-${number} (${copiesLabel(photo.copies)}).jpg`);
-          const original = path.join("Originais", `foto-${number} - ${safeFolderName(path.parse(upload.name).name)}${path.extname(upload.original)}`);
+          const original = path.join("Originais", originalName(Number(photo.id)));
           files.push({ file, copies: photo.copies, original });
           jobs.push(async () => {
             await renderPrint(upload.source, { width: upload.width, height: upload.height }, photo, path.join(orderDir, file));
@@ -274,14 +332,51 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
     }
     await inBatches(jobs, 3, (job) => job());
 
+    // Ajustes de cada foto: o link reabre com o mesmo corte, filtro, tamanho, papel e cópias.
+    const photos: StoredPhoto[] = data.photos.map(({ uploadId, ...edits }, index) => {
+      const upload = uploads.get(uploadId)!;
+      return { ...edits, original: `Originais/${originalName(index)}`, name: upload.name, width: upload.width, height: upload.height };
+    });
     const order: PhotoOrder = {
       id, orderId: input.orderId, code, userId: input.userId, customerNumber: "", customer: data.customer, delivery: data.delivery, lines,
-      totalCents: lines.reduce((sum, line) => sum + line.totalCents, 0), photoCount: asPhotos.length, copies: summary.copies, folder: orderDir,
-      createdAt: new Date().toISOString(), filesDeletedAt: null,
+      totalCents: lines.reduce((sum, line) => sum + line.totalCents, 0), photoCount: asPhotos.length, copies: summary.copies, folder: finalDir,
+      createdAt: new Date().toISOString(), filesDeletedAt: null, photos,
     };
     const prazo = deadline(asPhotos);
-    await writeFile(path.join(orderDir, `${code}.html`), await photoOrderHtml(order, prazo));
-    insertPhotoOrder(database, { ...order, customerNumber: customer.number });
+    await writeFile(path.join(orderDir, `${code}.html`), await photoOrderHtml({ ...order, folder: orderDir }, prazo));
+
+    // Reenvio: as fotos anteriores (pastas de tamanho, Originais e o .html) vão para ".anterior-…", as novas entram no lugar.
+    const backupDir = path.join(finalDir, `.anterior-${id}`);
+    let undoOld: (() => Promise<void>) | null = null;
+    let undoNew: (() => Promise<void>) | null = null;
+    if (staged) {
+      const oldEntries = [...new Set([...previous!.lines.map((line) => line.folder), "Originais", `${previous!.code}.html`])].filter(plainName);
+      undoOld = await moveEntries(finalDir, backupDir, oldEntries);
+      try {
+        undoNew = await moveEntries(orderDir, finalDir, (await readdir(orderDir)).filter(plainName));
+      } catch (error) {
+        await undoOld();
+        await rmdir(backupDir).catch(() => undefined); // só se ficou vazia (tudo voltou)
+        throw error;
+      }
+    }
+    try {
+      inTransaction(database, () => {
+        if (previous) database.prepare("DELETE FROM fare_photo_orders WHERE id = ?").run(previous.id);
+        insertPhotoOrder(database, { ...order, customerNumber: customer.number });
+        input.commit?.(order);
+      });
+    } catch (error) {
+      await undoNew?.();
+      await undoOld?.();
+      if (staged) await rmdir(backupDir).catch(() => undefined); // só se ficou vazia (tudo voltou)
+      throw error;
+    }
+    if (staged) {
+      for (const dir of [backupDir, orderDir]) {
+        await rm(dir, { recursive: true, force: true }).catch((error) => console.error(`[fotos] não apagou ${dir}:`, error instanceof Error ? error.message : error));
+      }
+    }
     await Promise.all([...uploads.keys()].map(removeUpload));
     return { order, customerNumber: customer.folderName.split(" - ").pop()!, prazo };
   } catch (error) {

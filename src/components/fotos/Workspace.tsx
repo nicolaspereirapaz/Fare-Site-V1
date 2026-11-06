@@ -7,7 +7,7 @@ import { useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CloudCheck, ImagePlus, Info, Minus, Pencil, Plus, RefreshCw, RotateCw, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { PaperChoice } from "@/components/fotos/PaperChoice";
-import { LinkSummary, type PhotoLinkProps } from "@/components/fotos/LinkSummary";
+import { LinkStatus, LinkSummary, type PhotoLinkProps } from "@/components/fotos/LinkSummary";
 import { PhotoEditor } from "@/components/fotos/PhotoEditor";
 import {
   CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SIZE_GROUPS, SizePicker, groupOf, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
@@ -47,7 +47,8 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
     addFiles([...event.dataTransfer.files]);
   }
 
-  if (link && (link.done || !link.view.editable)) return <LinkSummary link={link} photos={photos} summary={summary} />;
+  // Link: travado (em produção/encerrado) ou já enviado e ainda sem abrir para alterar → tela de status.
+  if (link && (!link.view.editable || link.done || (link.view.submittedAt && !photos.length && !link.reopened))) return <LinkStatus link={link} />;
 
   if (!photos.length && link) {
     return (

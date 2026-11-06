@@ -65,10 +65,9 @@ describe("link das fotos", () => {
 
     const folder = path.join(root, "Pedidos", dayFolder(), `Bruna Lima - ${view.code}`);
     expect(readdirSync(folder).sort()).toEqual(["10x15 Brilho", "10x15 Fosco", "20x30 Brilho", `${view.code}.html`, "Originais"].sort());
-    expect(photoLinkView(database, token)).toMatchObject({ editable: false, submittedAt: expect.any(String) });
-    await expect(submitPhotoLink(database, token, [{ ...edits, uploadId: await upload(), sizeId: "10x15", paper: "brilho", copies: 1 }])).rejects.toThrow(/já foram enviadas/);
-    // Depois do envio, a equipe gera outro link (as fotos novas vão para outra pasta do mesmo documento).
-    expect(createPhotoLink(database, "quote", quote.id, "Equipe")).not.toBe(token);
+    // Depois do envio o link continua aberto para alterar (o reenvio substitui; ver photoLinkEdit.test.ts) e é o mesmo para a equipe.
+    expect(photoLinkView(database, token)).toMatchObject({ editable: true, submittedAt: expect.any(String), previous: { photos: 3, copies: 47 } });
+    expect(createPhotoLink(database, "quote", quote.id, "Equipe")).toBe(token);
   });
 
   it("papel escolhido pela equipe vai para o link (o cliente pode trocar)", () => {
