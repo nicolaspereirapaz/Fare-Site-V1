@@ -39,7 +39,7 @@ export function PickupActions({ orderId, status, paymentMethod, finance }: {
 
   return (
     <div className="rt-actions">
-      {due > 0 ? <p className="rt-lock">Falta receber {formatCurrency(due / 100)}. Registre o pagamento para liberar a retirada.</p> : null}
+      {due > 0 ? <p className="rt-lock">Falta receber {formatCurrency(due / 100)}. Registre o pagamento para liberar a {finance?.deliveryMode === "entrega" ? "entrega" : "retirada"}.</p> : null}
       {due > 0 && finance ? <OrderPaymentPanel compact finance={finance} onRecorded={() => router.refresh()} orderId={orderId} paymentMethod={paymentMethod} status={status} /> : null}
       <button className="rt-done" disabled={busy || due > 0} onClick={handOver} type="button">
         {busy ? "Salvando…" : finance?.deliveryMode === "entrega" ? "Entregue" : "Cliente retirou"}
