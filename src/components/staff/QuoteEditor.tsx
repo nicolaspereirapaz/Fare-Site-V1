@@ -19,7 +19,7 @@ import { quoteCode } from "@/lib/quotes/quoteCode";
 import { orderCode } from "@/lib/orders/orderCode";
 
 /** Mesma regra do servidor (ORDER_EDITABLE_STATUSES em lib/orders/payments). */
-const ORDER_EDITABLE = ["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback"];
+const ORDER_EDITABLE = ["aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "producao_externa", "aguardando_retirada", "aguardando_feedback"];
 import { DirectOrderFields } from "@/components/staff/DirectOrderFields";
 import type { ClosingChoice } from "@/components/staff/QuoteClosingFields";
 import { deliveryLabel, EMPTY_PAYMENT_FORM, paidCents, paymentFormError, todayInBrazil, type PaymentForm } from "@/components/staff/paymentFieldsShared";

@@ -63,6 +63,7 @@ export const STATUS_COLORS: Record<StatusPedido, { dot: string; bg: string; fg: 
   criando_arte: { dot: "#d4532a", bg: "#f8e7df", fg: "#8f3416" },
   aguardando_producao: { dot: "#8b93c4", bg: "#eff0f7", fg: "#1d2447" },
   em_producao: { dot: "#2c3561", bg: "#e9ebf3", fg: "#1d2447" },
+  producao_externa: { dot: "#7b5ea7", bg: "#f1ecf8", fg: "#4a2f73" },
   aguardando_retirada: { dot: "#b7791f", bg: "#fbf0dc", fg: "#7a4f0d" },
   aguardando_feedback: { dot: "#167b55", bg: "#e3f3ea", fg: "#0f5a3e" },
   concluido: { dot: "#8e9196", bg: "#eeeff1", fg: "#3f4248" },

@@ -11,6 +11,7 @@ export const ORDER_STATUS_LABELS: Record<StatusPedido, string> = {
   criando_arte: "Criando a arte",
   aguardando_producao: "Aguardando produção",
   em_producao: "Em produção",
+  producao_externa: "Em produção",
   aguardando_retirada: "Pronto para retirada",
   aguardando_feedback: "Entregue",
   concluido: "Concluído",

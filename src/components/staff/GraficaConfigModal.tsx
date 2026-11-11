@@ -119,7 +119,7 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
                     <span>Preço por peça (R$)</span>
                     <MoneyField ariaLabel="Preço por peça" calculated={calc?.unit ?? null} className="qe-num qe-strong" onChange={setPriceOverride} value={priceOverride} />
                     <small className="qe-fhint">
-                      {priceOverride && calc ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(calc.unit)})</button> : "área × valor do m² · clique para alterar"}
+                      {priceOverride && calc ? <button className="qe-reset" onClick={() => setPriceOverride("")} type="button">usar o calculado ({brl(calc.unit)})</button> : "área × valor do m², arredondado para cima · clique para alterar"}
                     </small>
                   </label>
                   <div className="qe-field">
@@ -131,7 +131,7 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
                     <div className="qe-ro qe-num">{brl(PEDIDO_MINIMO)}</div>
                   </div>
                 </div>
-                {calc?.minimum && !priceOverride ? <p className="qe-fhint qe-stock">Abaixo do mínimo: o valor por peça foi ajustado para fechar {brl(PEDIDO_MINIMO)}.</p> : null}
+                {calc?.minimum && !priceOverride ? <p className="qe-fhint qe-stock">Abaixo do mínimo: o valor por peça subiu para o item fechar pelo menos {brl(PEDIDO_MINIMO)}.</p> : null}
               </div>
             </section>
             {!sized ? <p className="qe-fhint">Preencha largura, altura e quantidade para calcular.</p> : null}

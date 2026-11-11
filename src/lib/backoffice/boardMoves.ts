@@ -4,22 +4,31 @@
  * Sem dependências de servidor (usado nas telas).
  */
 
-/** Etapas a gravar, em ordem, de `from` até `to`; [] se é a mesma coluna; null se algum passo não é permitido. */
+/**
+ * Etapas a gravar, em ordem, de `from` até `to`: o caminho mais curto de transições permitidas entre as colunas
+ * (pular colunas passa por cada etapa do meio; uma coluna "paralela", como Produção Externa, só entra no caminho
+ * quando é o destino ou não há outro). [] se é a mesma coluna; null se não há caminho.
+ */
 export function movePath<S extends string>(columns: readonly S[], from: S, to: S, can: (from: S, to: S) => boolean): S[] | null {
-  const start = columns.indexOf(from);
-  const end = columns.indexOf(to);
-  if (start < 0 || end < 0) return null;
-  if (start === end) return [];
-  const direction = end > start ? 1 : -1;
-  const path: S[] = [];
-  let current = from;
-  for (let index = start + direction; direction > 0 ? index <= end : index >= end; index += direction) {
-    const next = columns[index];
-    if (!can(current, next)) return null;
-    path.push(next);
-    current = next;
+  if (!columns.includes(from) || !columns.includes(to)) return null;
+  if (from === to) return [];
+  // Busca em largura; empate fica com a coluna que vem primeiro no quadro.
+  const previous = new Map<S, S>([[from, from]]);
+  const queue: S[] = [from];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const next of columns) {
+      if (previous.has(next) || !can(current, next)) continue;
+      previous.set(next, current);
+      if (next === to) {
+        const path: S[] = [];
+        for (let step: S = to; step !== from; step = previous.get(step)!) path.unshift(step);
+        return path;
+      }
+      queue.push(next);
+    }
   }
-  return path;
+  return null;
 }
 
 /** Colunas para onde o cartão pode ir (inclui a atual), na ordem do quadro. */

@@ -69,14 +69,14 @@ describe("painel: aba Pedidos", () => {
     vi.unstubAllGlobals();
   });
 
-  it("mostra as 5 etapas, cada uma numa coluna delimitada", async () => {
+  it("mostra as 6 etapas, cada uma numa coluna delimitada", async () => {
     stubOrdersApi([ORDER]);
     render(<BackofficeBoard canCancel={false} />);
     await screen.findByText("Cliente Teste");
 
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual([
-      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Finalizado",
+      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Produção Externa", "Finalizado",
     ]);
     const column = screen.getByRole("region", { name: "Aguardando arte" });
     expect(column).toHaveClass("kb-column");

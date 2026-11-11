@@ -1,6 +1,7 @@
 /*
  * Gráfica por m² no orçamento/pedido da equipe (Banner Lona, Adesivo Vinil): a equipe digita largura e altura
- * em cm, e o preço sai da área × R$ 140,00/m², com pedido mínimo de R$ 30,00 no item.
+ * em cm, e o preço sai da área × R$ 140,00/m² (sempre arredondado para cima, em reais inteiros),
+ * com pedido mínimo de R$ 30,00 no item. Só a equipe usa (orçamento/pedido do painel); o site não mostra.
  * Entra como item fora do catálogo com nome padrão ("Banner Lona 100 × 60 cm") e o preço gravado;
  * como o servidor guarda só o nome, é pelo nome que se reconhece o item para editar de novo.
  */
@@ -35,12 +36,13 @@ export function graficaFromName(name: string): GraficaChoice | null {
 export const areaM2 = (width: number, height: number) => (width * height) / 10_000;
 
 /**
- * Preço por peça: área × R$ 140,00 (arredondado para cima no centavo). Se o item todo ficar abaixo do
- * pedido mínimo, o valor por peça sobe para fechar R$ 30,00 (arredondado para cima no centavo).
+ * Preço por peça: área × R$ 140,00, sempre arredondado para cima no real inteiro (R$ 15,52 → R$ 16,00).
+ * Se o item todo ficar abaixo do pedido mínimo, o valor por peça sobe (também em reais inteiros, para cima)
+ * até o item fechar pelo menos R$ 30,00.
  */
 export function graficaUnitPrice(width: number, height: number, quantity: number): { unit: number; minimum: boolean } {
-  const unitCents = Math.ceil(areaM2(width, height) * PRECO_M2 * 100 - 1e-9);
+  const unit = Math.ceil(areaM2(width, height) * PRECO_M2 - 1e-9);
   const qty = Math.max(1, quantity);
-  if (unitCents * qty >= PEDIDO_MINIMO * 100) return { unit: unitCents / 100, minimum: false };
-  return { unit: Math.ceil((PEDIDO_MINIMO * 100) / qty) / 100, minimum: true };
+  if (unit * qty >= PEDIDO_MINIMO) return { unit, minimum: false };
+  return { unit: Math.ceil(PEDIDO_MINIMO / qty - 1e-9), minimum: true };
 }

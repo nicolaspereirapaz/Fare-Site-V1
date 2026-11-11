@@ -315,7 +315,7 @@ export function closeSiteOrder(db: DatabaseSync, input: CloseSiteOrderInput): Or
 
 /** Pedido pode ter os itens alterados enquanto não foi concluído nem cancelado. */
 export const ORDER_EDITABLE_STATUSES = [
-  "aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada", "aguardando_feedback",
+  "aguardando_pagamento", "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "producao_externa", "aguardando_retirada", "aguardando_feedback",
 ];
 const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 

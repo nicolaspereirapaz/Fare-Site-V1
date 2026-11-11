@@ -15,6 +15,7 @@ describe("situações do pedido", () => {
       "criando_arte",
       "aguardando_producao",
       "em_producao",
+      "producao_externa",
       "aguardando_retirada",
       "aguardando_feedback",
       "concluido",
@@ -22,10 +23,17 @@ describe("situações do pedido", () => {
     ]);
   });
 
-  it("o quadro de pedidos tem as 5 etapas, da arte ao Finalizado (pronto)", () => {
+  it("o quadro de pedidos tem as 6 etapas, da arte ao Finalizado (pronto)", () => {
     expect(COLUNAS_QUADRO_PEDIDOS).toEqual([
-      "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "aguardando_retirada",
+      "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "producao_externa", "aguardando_retirada",
     ]);
+  });
+
+  it("Produção Externa: entra de Aguardando produção ou Em produção e sai pronta (Finalizado) ou volta", () => {
+    for (const de of ["aguardando_producao", "em_producao", "aguardando_retirada"] as const) expect(podeTransicionarStatusPedido(de, "producao_externa")).toBe(true);
+    for (const para of ["aguardando_retirada", "em_producao", "aguardando_producao", "cancelado"] as const) expect(podeTransicionarStatusPedido("producao_externa", para)).toBe(true);
+    expect(podeTransicionarStatusPedido("criando_arte", "producao_externa")).toBe(false);
+    expect(podeTransicionarStatusPedido("producao_externa", "concluido")).toBe(false);
   });
 
   it("\"Cliente retirou\" por engano volta para Finalizado", () => {

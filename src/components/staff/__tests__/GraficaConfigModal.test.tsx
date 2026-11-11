@@ -5,16 +5,17 @@ import { GraficaConfigModal } from "@/components/staff/GraficaConfigModal";
 import { graficaFromName, graficaItemName, graficaUnitPrice } from "@/components/staff/graficaItems";
 
 describe("gráfica por m² (R$ 140,00 o m², mínimo R$ 30,00 no item)", () => {
-  it("preço por peça = área × 140, arredondado para cima no centavo", () => {
-    expect(graficaUnitPrice(100, 60, 1)).toEqual({ unit: 84, minimum: false }); // 0,6 m²
-    expect(graficaUnitPrice(90, 120, 2)).toEqual({ unit: 151.2, minimum: false }); // 1,08 m²
-    expect(graficaUnitPrice(33.3, 33.3, 3)).toEqual({ unit: 15.53, minimum: false }); // 0,110889 m² → 15,5245
+  it("preço por peça = área × 140, sempre arredondado para cima no real inteiro", () => {
+    expect(graficaUnitPrice(100, 60, 1)).toEqual({ unit: 84, minimum: false }); // 0,6 m² = 84,00 exato
+    expect(graficaUnitPrice(90, 120, 2)).toEqual({ unit: 152, minimum: false }); // 1,08 m² = 151,20
+    expect(graficaUnitPrice(33.3, 33.3, 3)).toEqual({ unit: 16, minimum: false }); // 0,110889 m² = 15,52
+    expect(graficaUnitPrice(150, 80, 1)).toEqual({ unit: 168, minimum: false }); // 1,2 m² = 168,00 exato
   });
 
-  it("item abaixo de R$ 30,00: o valor por peça sobe para fechar o mínimo", () => {
+  it("item abaixo de R$ 30,00: o valor por peça sobe (real inteiro) até fechar o mínimo", () => {
     expect(graficaUnitPrice(20, 20, 1)).toEqual({ unit: 30, minimum: true }); // 5,60 sozinho
-    expect(graficaUnitPrice(10, 10, 7)).toEqual({ unit: 4.29, minimum: true }); // 7 × 4,29 = 30,03
-    expect(graficaUnitPrice(30, 30, 3)).toEqual({ unit: 12.6, minimum: false }); // 3 × 12,60 = 37,80
+    expect(graficaUnitPrice(10, 10, 7)).toEqual({ unit: 5, minimum: true }); // 7 × 5,00 = 35,00
+    expect(graficaUnitPrice(30, 30, 3)).toEqual({ unit: 13, minimum: false }); // 12,60 → 13,00; 3 × 13 = 39,00
   });
 
   it("nome padrão volta para as medidas (para editar de novo); nome diferente não é gráfica", () => {

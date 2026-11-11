@@ -18,6 +18,14 @@ describe("arrastar no quadro: caminho de etapas até a coluna de destino", () =>
       .toEqual(["em_producao", "aguardando_producao", "criando_arte"]);
   });
 
+  it("Produção Externa é paralela: Em produção → Finalizado não passa por ela; para entrar, vai direto", () => {
+    expect(movePath(COLUNAS_QUADRO_PEDIDOS, "em_producao", "aguardando_retirada", podeTransicionarStatusPedido)).toEqual(["aguardando_retirada"]);
+    expect(movePath(COLUNAS_QUADRO_PEDIDOS, "aguardando_producao", "producao_externa", podeTransicionarStatusPedido)).toEqual(["producao_externa"]);
+    expect(movePath(COLUNAS_QUADRO_PEDIDOS, "aguardando_arte", "producao_externa", podeTransicionarStatusPedido))
+      .toEqual(["criando_arte", "aguardando_producao", "producao_externa"]);
+    expect(movePath(COLUNAS_QUADRO_PEDIDOS, "producao_externa", "criando_arte", podeTransicionarStatusPedido)).toEqual(["aguardando_producao", "criando_arte"]);
+  });
+
   it("orçamentos: Aguardando orçamento → Aguardando pagamento passa por Em negociação", () => {
     expect(movePath(QUOTE_BOARD_COLUMNS, "aguardando_orcamento", "aguardando_pagamento", canTransitionQuote))
       .toEqual(["em_negociacao", "aguardando_pagamento"]);

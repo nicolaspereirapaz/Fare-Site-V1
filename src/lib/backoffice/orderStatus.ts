@@ -2,8 +2,8 @@
  * Situações do PEDIDO.
  * - aguardando_pagamento: pedido feito no site, esperando o pagamento (aparece na aba Orçamentos do painel,
  *   coluna "Aguardando pagamento", junto com os orçamentos fechados).
- * - aguardando_arte → criando_arte → aguardando_producao → em_producao → aguardando_retirada ("Finalizado" no
- *   painel): as 5 colunas da aba Pedidos. Finalizado = pronto: fica 10 min no quadro e some (`finishedOrders.ts`);
+ * - aguardando_arte → criando_arte → aguardando_producao → em_producao (ou producao_externa, feito fora
+ *   da loja) → aguardando_retirada ("Finalizado" no painel): as 6 colunas da aba Pedidos. Finalizado = pronto: fica 10 min no quadro e some (`finishedOrders.ts`);
  *   5 min depois de entrar, o cliente recebe o aviso no WhatsApp (`pickupNotice.ts`).
  * - concluido ("Entregue"): a equipe marcou "Cliente retirou" na tela Retirada (ou no pedido).
  * - aguardando_feedback: não é mais usada (desde 11/11/2026); os que existiam viraram concluido.
@@ -15,6 +15,7 @@ export const ORDEM_STATUS_PEDIDO = [
   "criando_arte",
   "aguardando_producao",
   "em_producao",
+  "producao_externa",
   "aguardando_retirada",
   "aguardando_feedback",
   "concluido",
@@ -30,6 +31,7 @@ export const ORDER_STAFF_LABELS: Record<StatusPedido, string> = {
   criando_arte: "Criando arte",
   aguardando_producao: "Aguardando produção",
   em_producao: "Em produção",
+  producao_externa: "Produção Externa",
   aguardando_retirada: "Finalizado",
   aguardando_feedback: "Aguardando feedback",
   concluido: "Entregue",
@@ -42,6 +44,7 @@ export const COLUNAS_QUADRO_PEDIDOS = [
   "criando_arte",
   "aguardando_producao",
   "em_producao",
+  "producao_externa",
   "aguardando_retirada",
 ] as const satisfies readonly StatusPedido[];
 
@@ -60,9 +63,11 @@ const TRANSICOES_PERMITIDAS: Record<StatusPedido, StatusPedido[]> = {
   aguardando_pagamento: ["aguardando_arte", "aguardando_producao", "cancelado"],
   aguardando_arte: ["criando_arte", "cancelado"],
   criando_arte: ["aguardando_producao", "aguardando_arte", "cancelado"],
-  aguardando_producao: ["em_producao", "criando_arte", "cancelado"],
-  em_producao: ["aguardando_retirada", "aguardando_producao", "cancelado"],
-  aguardando_retirada: ["concluido", "em_producao", "cancelado"],
+  aguardando_producao: ["em_producao", "producao_externa", "criando_arte", "cancelado"],
+  em_producao: ["aguardando_retirada", "producao_externa", "aguardando_producao", "cancelado"],
+  // Feito fora (fornecedor/parceiro): volta a produzir na loja ou fica pronto.
+  producao_externa: ["aguardando_retirada", "em_producao", "aguardando_producao", "cancelado"],
+  aguardando_retirada: ["concluido", "em_producao", "producao_externa", "cancelado"],
   aguardando_feedback: ["concluido", "cancelado"],
   // "Cliente retirou" por engano: volta para Finalizado (pelo pedido).
   concluido: ["aguardando_retirada"],

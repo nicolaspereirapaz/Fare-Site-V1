@@ -6572,13 +6572,13 @@ aside.checkout-card .checkout-mode > label.active {
   .kb-card.is-new { animation: kb-card-glow 2.8s ease-out both; }
 }
 
-/* Quadro de pedidos com 5 etapas (até Finalizado): colunas lado a lado. */
+/* Quadro de pedidos com 6 etapas (até Finalizado): colunas lado a lado. */
 .kb-board-6 {
-  grid-template-columns: repeat(5, minmax(212px, 290px));
+  grid-template-columns: repeat(6, minmax(196px, 270px));
   gap: 12px;
 }
 .kb-toolbar-6 {
-  max-width: calc(5 * 290px + 4 * 12px);
+  max-width: calc(6 * 270px + 5 * 12px);
 }
 
 /* Cartão estreito (7 colunas em telas de ~1440 px): código e valor em linhas separadas, sem vazar da borda. */
@@ -6652,7 +6652,7 @@ aside.checkout-card .checkout-mode > label.active {
 .kb-card-tag { display: flex; margin-bottom: 6px; }
 @media (min-width: 1101px) {
   /* Pedidos e Orçamentos ocupam a mesma largura: as abas e o botão não pulam ao trocar. */
-  .kb-toolbar-3, .kb-toolbar-6 { max-width: calc(5 * 290px + 4 * 12px); }
+  .kb-toolbar-3, .kb-toolbar-6 { max-width: calc(6 * 270px + 5 * 12px); }
   .kb-board-3 { width: 100%; max-width: calc(7 * 250px + 6 * 10px); grid-template-columns: repeat(3, minmax(250px, 1fr)); }
 }
 
