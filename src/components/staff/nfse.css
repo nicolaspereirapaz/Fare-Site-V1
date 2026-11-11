@@ -1,0 +1,43 @@
+/* Emissor de NFS-e (/equipe/nfse). Usa as classes qe-* do editor de orçamentos; aqui só o que é próprio da tela. */
+.nf-layout { grid-template-columns: minmax(0, 1fr) 380px; }
+@media (max-width: 960px) { .nf-layout { grid-template-columns: 1fr; } }
+.nf-form { display: grid; gap: 16px; }
+.nf-form h2 { margin-bottom: 0; }
+.nf-ambiente { display: inline-block; margin: -14px 0 18px; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; }
+.nf-ambiente[data-amb="2"] { background: #e9ebf4; color: var(--qe-navy); }
+.nf-ambiente[data-amb="1"] { background: #fde3d8; color: var(--qe-orange-dark); }
+
+.nf-opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nf-opcoes button { border: 1.5px solid #d5d8e1; border-radius: 10px; padding: 12px 14px; background: #fff; color: var(--qe-ink); font-family: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.nf-opcoes button[aria-pressed="true"] { border-color: var(--qe-orange); background: #fff4ef; }
+.nf-opcoes small { display: block; margin-top: 3px; color: var(--qe-muted); font-weight: 500; font-size: 12px; }
+
+.nf-cliente { display: grid; gap: 12px; margin: 0; border: 1px solid var(--qe-line); border-radius: 10px; padding: 12px 14px 14px; min-width: 0; }
+.nf-cliente legend { padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--qe-muted); }
+.nf-abas { display: flex; gap: 6px; flex-wrap: wrap; }
+.nf-abas button { border: 1px solid #d5d8e1; border-radius: 999px; padding: 6px 14px; background: #fff; color: var(--qe-text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.nf-abas button[aria-selected="true"] { border-color: var(--qe-navy); background: var(--qe-navy); color: #fff; }
+.nf-campos { display: grid; gap: 10px; }
+.nf-cliente .qe-hint, .nf-cliente .qe-warn { margin: 0; }
+.nf-valor { max-width: 220px; }
+.nf-emitir { height: 44px; font-size: 15px; }
+
+.nf-erros { margin: 0; padding: 10px 12px 10px 30px; border-radius: 8px; background: #fdecea; color: #b42318; font-size: 13.5px; }
+.nf-ok { border-radius: 8px; padding: 12px 14px; background: #e7f4ee; color: #167b55; font-weight: 600; }
+.nf-ok a { color: #0f5c3f; }
+.nf-ok code { display: block; margin-top: 4px; color: var(--qe-text); font-size: 12px; font-weight: 400; word-break: break-all; }
+
+.nf-lista ul { margin: 0; padding: 0; list-style: none; }
+.nf-nota { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--qe-line-soft); }
+.nf-nota:first-child { border-top: 0; padding-top: 0; }
+.nf-nota-topo { display: flex; justify-content: space-between; gap: 8px; color: var(--qe-ink); }
+.nf-nota small { color: var(--qe-muted); font-size: 12.5px; }
+.nf-nota.is-cancelada .nf-nota-topo { color: var(--qe-faint); text-decoration: line-through; }
+.nf-nota.is-cancelada .nf-status, .nf-nota.is-incerta .nf-status { color: #b42318; font-weight: 600; }
+.nf-acoes { display: flex; gap: 14px; margin-top: 4px; font-size: 13px; }
+.nf-acoes a { color: var(--qe-lilac); font-weight: 600; text-decoration: none; }
+.nf-cancelar { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 8px; background: #f6f7fa; }
+@media (max-width: 600px) {
+  .qe-page .nf-opcoes, .qe-page .nf-campos .qe-grid-3 { grid-template-columns: 1fr; }
+  .nf-valor { max-width: none; }
+}
