@@ -8,6 +8,8 @@ import { PencilLine, Search, X } from "lucide-react";
 import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductConfigModal";
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
 import { PhotoConfigModal } from "@/components/staff/PhotoConfigModal";
+import { GraficaConfigModal } from "@/components/staff/GraficaConfigModal";
+import { graficaById, graficaFromName, type GraficaChoice, type GraficaId } from "@/components/staff/graficaItems";
 import { photoFromName, photoTablePrice, type PhotoChoice } from "@/components/staff/photoItems";
 import { AddressFields } from "@/components/staff/AddressFields";
 import { EMPTY_ADDRESS } from "@/lib/customers/address";
@@ -198,6 +200,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   const [pickerOpen, setPickerOpen] = useState(false);
   /** Configuração de foto aberta (nova ou editando um item de foto da lista). */
   const [photoModal, setPhotoModal] = useState<{ start: PhotoChoice; item?: Extract<Item, { source: "avulso" }> } | null>(null);
+  const [graficaModal, setGraficaModal] = useState<{ start: GraficaChoice; item?: Extract<Item, { source: "avulso" }> } | null>(null);
   /** Produtos marcados na busca que ainda vão ser configurados (o atual está em `modal`). */
   const [queue, setQueue] = useState<{ rest: PickedProduct[]; total: number } | null>(null);
   /** Busca e filtros da janela "Escolha o produto" continuam ao reabrir (vários produtos seguidos). */
@@ -285,11 +288,19 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
     setPhotoModal({ start: { sizeId: group === "revelacao" ? "10x15" : SIZES.find((size) => size.group === group)!.id } });
   }, []);
   const closePhotoModal = useCallback(() => setPhotoModal(null), []);
+  /** Aba Gráfica: abre a configuração com as medidas em branco. */
+  const chooseGrafica = useCallback((id: GraficaId) => {
+    setPickerOpen(false);
+    setGraficaModal({ start: { id, width: 0, height: 0 } });
+  }, []);
+  const closeGraficaModal = useCallback(() => setGraficaModal(null), []);
 
   function editItem(item: Item) {
     if (item.source === "avulso") {
       const photo = photoFromName(item.name);
-      return photo ? setPhotoModal({ start: photo, item }) : setModal({ kind: "avulso", item });
+      if (photo) return setPhotoModal({ start: photo, item });
+      const grafica = graficaFromName(item.name);
+      return grafica ? setGraficaModal({ start: grafica, item }) : setModal({ kind: "avulso", item });
     }
     const product = products[item.publicId];
     if (product) setModal({ kind: "catalogo", product, item });
@@ -429,6 +440,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
               const result = preview[item.id];
               const ok = result?.ok ? result : null;
               const photo = item.source === "avulso" ? photoFromName(item.name) : null;
+              const grafica = item.source === "avulso" ? graficaFromName(item.name) : null;
               // Foto sempre grava o preço; só é "especial" quando difere da tabela do site.
               const specialPhotoPrice = photo && item.priceOverride ? Math.abs(parseNumber(item.priceOverride) - photoTablePrice(photo.sizeId, item.quantity, professional)) > 0.004 : false;
               return (
@@ -441,6 +453,9 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
                       ) : photo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={PHOTO_PRODUCT_IMAGE[sizeById(photo.sizeId).group]} /></span>
+                      ) : grafica && !(item.source === "avulso" && item.mockup) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <span className="qe-thumb qe-thumb-md"><img alt="" src={graficaById(grafica.id).image} /></span>
                       ) : item.source === "avulso" && item.mockup ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={`/api/backoffice/mockups/${item.mockup}`} /></span>
@@ -611,7 +626,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
         </aside>
       </div>
 
-      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onPickPhoto={choosePhoto} onStateChange={setPickerState} /> : null}
+      {pickerOpen ? <ProductPickerModal initial={pickerState} onClose={closePicker} onPick={chooseProducts} onPickGrafica={chooseGrafica} onPickPhoto={choosePhoto} onStateChange={setPickerState} /> : null}
       {photoModal ? (
         <PhotoConfigModal
           pro={professional}
@@ -623,6 +638,18 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
             setPhotoModal(null);
           }}
           start={photoModal.start}
+        />
+      ) : null}
+      {graficaModal ? (
+        <GraficaConfigModal
+          item={graficaModal.item}
+          key={graficaModal.item?.id ?? "nova-grafica"}
+          onClose={closeGraficaModal}
+          onSave={(item) => {
+            setItems((list) => (list.some((entry) => entry.id === item.id) ? list.map((entry) => (entry.id === item.id ? item : entry)) : [...list, item]));
+            setGraficaModal(null);
+          }}
+          start={graficaModal.start}
         />
       ) : null}
       {created ? (

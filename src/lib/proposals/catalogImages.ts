@@ -5,6 +5,7 @@ import { groupAvailableProducts, type CatalogProduct } from "@/lib/xbz";
 import { specLine, splitSpotMeasures, tidySpecValue, xbzSpecs, type ProductSpec } from "@/lib/productSpecs";
 import { supplierOf } from "@/lib/productCodes";
 import { photoFromName } from "@/components/staff/photoItems";
+import { graficaById, graficaFromName } from "@/components/staff/graficaItems";
 import { PHOTO_PRODUCT_IMAGE, sizeById } from "@/components/fotos/catalog";
 import { getLocalCatalog } from "@/lib/xbzCatalogService";
 import type { ProductCatalogInfo } from "@/lib/backoffice/documentDetails";
@@ -20,6 +21,8 @@ export async function documentImageOf(item:QuoteCartItem):Promise<string|null>{
 export async function catalogImageOf(item:QuoteCartItem):Promise<string|null>{
  const photo=photoFromName(item.productName);
  if(photo)return PHOTO_PRODUCT_IMAGE[sizeById(photo.sizeId).group];
+ const grafica=graficaFromName(item.productName);
+ if(grafica)return graficaById(grafica.id).image;
  if(!item.slug.startsWith("brindes/"))return localProducts.find(product=>product.slug===item.slug)?.image??null;
  const {products}=await getLocalCatalog();
  const product=groupAvailableProducts(products).find(entry=>publicProductId(entry.internalCode)===item.slug.slice("brindes/".length));

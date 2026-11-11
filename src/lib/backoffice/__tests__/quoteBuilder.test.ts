@@ -70,6 +70,15 @@ describe("itens do orçamento montados no servidor", () => {
     expect(items[0].costing?.custoProduto).toBe(38);
   });
 
+  it("gráfica por m² (Banner Lona/Adesivo Vinil): nome padrão intacto e o preço calculado gravado", () => {
+    const { items, preview } = buildQuoteItems([
+      { id: "g", source: "avulso", name: "Banner Lona 150 × 80 cm", cost: 0, quantity: 2, gravacoes: [], priceOverride: 168 },
+    ], lookup, actor, NOW);
+    expect(preview[0]).toMatchObject({ ok: true, unitPrice: 168, total: 336 });
+    expect(items[0]).toMatchObject({ productName: "Banner Lona 150 × 80 cm", unitPrice: 168 });
+    expect(draftFromItem(items[0])).toMatchObject({ source: "avulso", name: "Banner Lona 150 × 80 cm", priceOverride: 168 });
+  });
+
   it("aponta o erro de cada item sem derrubar os outros; o total só soma os itens válidos", () => {
     const { preview, totals } = buildQuoteItems([
       { id: "a", source: "catalogo", publicId: "cf93", variant: "Azul", quantity: 100, gravacoes: [{ tecnica: { tipo: "dtf-uv", larguraCm: 0, alturaCm: 5 }, local: "" }] },

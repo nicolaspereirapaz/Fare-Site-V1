@@ -6,6 +6,7 @@ import { COLOR_GROUPS, colorGroupOf, colorGroupSwatch, isLightColorGroup } from 
 import { PRODUCT_CATEGORIES } from "@/lib/productCategories";
 import { brl, useDebounced, type Product } from "@/components/staff/quoteEditorShared";
 import { PHOTO_PRODUCT_IMAGE, SIZE_GROUPS, SIZES, type SizeGroup } from "@/components/fotos/catalog";
+import { GRAFICA_M2, PEDIDO_MINIMO, PRECO_M2, type GraficaId } from "@/components/staff/graficaItems";
 
 /**
  * Janela "Escolha o produto" (referência: brinde.me): busca + filtros à esquerda, grade de cards,
@@ -19,7 +20,7 @@ type Match = { cost: number; stock: number; colors: number };
 type PickerProduct = Product & { match: Match };
 type Page = { products: PickerProduct[]; total: number; page: number; pages: number; colorCounts: Record<string, number> };
 
-/** Brindes (catálogo dos fornecedores), Fotos (tabela da revelação) e Gráfica (em breve): cada um com os seus filtros. */
+/** Brindes (catálogo dos fornecedores), Fotos (tabela da revelação) e Gráfica (impressos por m²): cada um com os seus filtros. */
 export type PickerTab = "brindes" | "fotos" | "grafica";
 const TABS: [PickerTab, string][] = [["brindes", "Brindes"], ["fotos", "Fotos"], ["grafica", "Gráfica"]];
 
@@ -174,13 +175,15 @@ function ProductDetails({ product, onClose, onUse }: { product: Product; onClose
 
 /* ------------------------------------------------------------------ janela */
 
-export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onStateChange }: {
+export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onPickGrafica, onStateChange }: {
   initial: PickerState;
   onClose: () => void;
   /** Produtos marcados, na ordem do clique (a configuração abre em fila). */
   onPick: (picked: PickedProduct[]) => void;
   /** Tipo de foto escolhido na aba Fotos: abre a configuração (tamanho, papel, cópias e preço). */
   onPickPhoto: (group: SizeGroup) => void;
+  /** Produto da aba Gráfica (Banner Lona, Adesivo Vinil): abre a configuração com as medidas em cm. */
+  onPickGrafica: (id: GraficaId) => void;
   /** Guarda busca e filtros para a próxima vez que a janela abrir (adicionar vários produtos). */
   onStateChange: (state: PickerState) => void;
 }) {
@@ -309,7 +312,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onSt
         </div>
 
         {tab === "fotos" ? <PhotoPanel onPick={onPickPhoto} /> : null}
-        {tab === "grafica" ? <p className="qe-pk-empty qe-pk-soon">Gráfica &amp; Impressos: em breve (os filtros chegam junto com o catálogo).</p> : null}
+        {tab === "grafica" ? <GraficaPanel onPick={onPickGrafica} /> : null}
         {tab === "brindes" ? (
         <div className="qe-pk-body">
           <aside className={`qe-pk-side${filtersOpen ? " open" : ""}`}>
@@ -458,7 +461,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onSt
 
         {tab !== "brindes" ? (
           <footer className="qe-modal-foot qe-pk-foot">
-            <span className="qe-pk-pageinfo">{tab === "fotos" ? "Escolha o tipo; tamanho, papel e cópias vêm na próxima tela." : ""}</span>
+            <span className="qe-pk-pageinfo">{tab === "fotos" ? "Escolha o tipo; tamanho, papel e cópias vêm na próxima tela." : "Escolha o produto; largura e altura (cm) vêm na próxima tela."}</span>
             <button className="qe-btn qe-btn-secondary" onClick={onClose} type="button">Voltar</button>
           </footer>
         ) : (
@@ -512,6 +515,27 @@ function PhotoPanel({ onPick }: { onPick: (group: SizeGroup) => void }) {
           <b>{group.label}</b>
           <small>{sizeRange(group.id)}</small>
           <em>{group.id === "grande" ? "Pronto em 3 dias úteis" : "Pronto em 1 hora"}</em>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ gráfica */
+
+/** Aba Gráfica: impressos vendidos por m². Clique abre a configuração (medidas em cm, preço calculado). */
+function GraficaPanel({ onPick }: { onPick: (id: GraficaId) => void }) {
+  return (
+    <div className="qe-pk-photos">
+      {GRAFICA_M2.map((entry) => (
+        <button className="qe-pk-photo-type" key={entry.id} onClick={() => onPick(entry.id)} type="button">
+          <span className="qe-pk-photo-img">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" src={entry.image} />
+          </span>
+          <b>{entry.name}</b>
+          <small>{brl(PRECO_M2)} o m²</small>
+          <em>Pedido mínimo {brl(PEDIDO_MINIMO)}</em>
         </button>
       ))}
     </div>

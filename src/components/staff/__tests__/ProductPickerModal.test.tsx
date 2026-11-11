@@ -58,19 +58,22 @@ describe("janela de busca", () => {
   const renderPicker = () => {
     const onPick = vi.fn();
     const onPickPhoto = vi.fn();
-    render(<ProductPickerModal initial={EMPTY_PICKER} onClose={vi.fn()} onPick={onPick} onPickPhoto={onPickPhoto} onStateChange={vi.fn()} />);
-    return { onPick, onPickPhoto };
+    const onPickGrafica = vi.fn();
+    render(<ProductPickerModal initial={EMPTY_PICKER} onClose={vi.fn()} onPick={onPick} onPickGrafica={onPickGrafica} onPickPhoto={onPickPhoto} onStateChange={vi.fn()} />);
+    return { onPick, onPickPhoto, onPickGrafica };
   };
 
   it("aba Fotos: só os três tipos, como na página do cliente; clique abre a configuração do tipo", async () => {
     const user = userEvent.setup();
-    const { onPickPhoto } = renderPicker();
+    const { onPickPhoto, onPickGrafica } = renderPicker();
     await user.click(screen.getByRole("tab", { name: "Fotos" }));
     expect(screen.queryByLabelText("Buscar produto")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Ampliações/ }));
     expect(onPickPhoto).toHaveBeenCalledWith("ampliacao");
     await user.click(screen.getByRole("tab", { name: "Gráfica" }));
-    expect(screen.getByText(/em breve/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Adesivo Vinil/ })).toHaveTextContent(/R\$\s140,00 o m²/);
+    await user.click(screen.getByRole("button", { name: /Banner Lona/ }));
+    expect(onPickGrafica).toHaveBeenCalledWith("banner-lona");
   });
   const confirmButton = () => screen.getByRole("button", { name: /^Confirmar/ });
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { calcularItemOrcamento, FRETE_FORNECEDOR_PRODUTO, type Tecnica } from "@/lib/backoffice/customization";
 import { photoFromName } from "@/components/staff/photoItems";
+import { graficaFromName } from "@/components/staff/graficaItems";
 import { formatProductName } from "@/lib/text/names";
 import { isMockupFile } from "@/lib/backoffice/mockupFiles";
 import type { ItemCosting, QuoteCartItem } from "@/lib/commerce";
@@ -250,7 +251,8 @@ export function buildQuoteItems(
   return { items, preview, totals: { total, cost, margin: cents(total - cost), pending: preview.length - valid.length } };
 }
 
-const itemName = (draft: { name: string }) => (photoFromName(draft.name) ? draft.name : formatProductName(draft.name));
+// Foto e gráfica por m² têm nome padrão (é por ele que o item é reconhecido): ficam como estão.
+const itemName = (draft: { name: string }) => (photoFromName(draft.name) || graficaFromName(draft.name) ? draft.name : formatProductName(draft.name));
 
 /** Item gravado → rascunho para abrir de novo no editor. */
 /**
