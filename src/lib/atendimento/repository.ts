@@ -212,6 +212,7 @@ function toConversation(row: ConversationRow): Conversation {
     waitingSince: row.waiting_since === null ? null : String(row.waiting_since),
     customerRef: row.customer_ref ? String(row.customer_ref) : null,
     customerName: row.customer_ref ? String(row.customer_name ?? "") : null,
+    customerCompany: row.customer_ref && row.customer_company ? String(row.customer_company) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -318,8 +319,20 @@ export function setDelivery(db: DatabaseSync, messageId: string, delivery: Messa
   );
 }
 
+const hasTable = (db: DatabaseSync, name: string) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+
+/** SELECT das conversas com a empresa do cadastro ligado (painel ou conta), lida na hora para não ficar desatualizada. */
+function conversationsSelect(db: DatabaseSync) {
+  const ref = "atd_conversations.customer_ref";
+  const painel = hasTable(db, "fare_panel_customers") ? `WHEN ${ref} LIKE 'painel:%' THEN (SELECT NULLIF(company, '') FROM fare_panel_customers WHERE id = substr(${ref}, 8))` : "";
+  const conta = hasTable(db, "fare_customer_profiles")
+    ? `WHEN ${ref} LIKE 'conta:%' THEN (SELECT COALESCE(NULLIF(company_name, ''), NULLIF(trade_name, '')) FROM fare_customer_profiles WHERE user_id = substr(${ref}, 7))`
+    : "";
+  return `SELECT *, ${painel || conta ? `CASE ${painel} ${conta} END` : "NULL"} AS customer_company FROM atd_conversations`;
+}
+
 export function findConversation(db: DatabaseSync, id: string): Conversation | null {
-  const row = db.prepare("SELECT * FROM atd_conversations WHERE id = ?").get(id) as ConversationRow | undefined;
+  const row = db.prepare(`${conversationsSelect(db)} WHERE id = ?`).get(id) as ConversationRow | undefined;
   return row ? toConversation(row) : null;
 }
 
@@ -332,15 +345,15 @@ export function getConversation(db: DatabaseSync, id: string): Conversation {
 /** Conversa aberta mais recente deste número (WhatsApp manda tudo do mesmo número para a mesma conversa). */
 export function findConversationByPhone(db: DatabaseSync, channel: Channel, phone: string): Conversation | null {
   const row = db
-    .prepare("SELECT * FROM atd_conversations WHERE channel = ? AND phone = ? ORDER BY last_message_at DESC LIMIT 1")
+    .prepare(`${conversationsSelect(db)} WHERE channel = ? AND phone = ? ORDER BY last_message_at DESC LIMIT 1`)
     .get(channel, phoneDigits(phone)) as ConversationRow | undefined;
   return row ? toConversation(row) : null;
 }
 
 export function listConversations(db: DatabaseSync, options: { channel?: Channel } = {}): Conversation[] {
   const rows = (options.channel
-    ? db.prepare("SELECT * FROM atd_conversations WHERE channel = ? ORDER BY last_message_at DESC").all(options.channel)
-    : db.prepare("SELECT * FROM atd_conversations ORDER BY last_message_at DESC").all()) as ConversationRow[];
+    ? db.prepare(`${conversationsSelect(db)} WHERE channel = ? ORDER BY last_message_at DESC`).all(options.channel)
+    : db.prepare(`${conversationsSelect(db)} ORDER BY last_message_at DESC`).all()) as ConversationRow[];
   return rows.map(toConversation);
 }
 

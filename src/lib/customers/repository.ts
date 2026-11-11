@@ -340,7 +340,30 @@ export function listCustomers(database: DatabaseSync, query = "", limit = 300): 
   return allCustomers(database).map((customer) => customer.summary).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).slice(0, limit);
 }
 
-export type CustomerHistoryEntry = { kind: "quote" | "order"; id: string; status: string; totalCents: number | null; createdAt: string };
+/**
+ * Exclui um cliente cadastrado pela equipe. Conta do site não sai por aqui (é o login do cliente),
+ * e cliente com orçamento ou pedido também não (os documentos ficariam sem dono).
+ * A conversa do atendimento ligada a ele continua, só sem cadastro.
+ */
+export function deletePanelCustomer(database: DatabaseSync, ref: string) {
+  const customer = resolveCustomer(database, ref);
+  if (!customer) throw new Error("Cliente não encontrado.");
+  if (customer.kind !== "painel") throw new Error("Conta do site não pode ser excluída pela equipe.");
+  if (customerHistory(database, ref).length) throw new Error("Este cliente tem orçamentos ou pedidos, então não pode ser excluído.");
+  migrateAddresses(database);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.prepare("DELETE FROM fare_panel_customers WHERE id = ?").run(ref.slice("painel:".length));
+    database.prepare("DELETE FROM fare_customer_addresses WHERE ref = ?").run(ref);
+    if (hasTable(database, "atd_conversations")) database.prepare("UPDATE atd_conversations SET customer_ref = NULL, customer_name = NULL WHERE customer_ref = ?").run(ref);
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export type CustomerHistoryEntry ={ kind: "quote" | "order"; id: string; status: string; totalCents: number | null; createdAt: string };
 
 /** Orçamentos e pedidos do cliente (conta do site inclui os feitos no painel com o mesmo e-mail), mais novos primeiro. */
 export function customerHistory(database: DatabaseSync, ref: string): CustomerHistoryEntry[] {

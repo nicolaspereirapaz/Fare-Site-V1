@@ -47,6 +47,9 @@ export function formatPhone(phone: string) {
 }
 
 export const displayName = (conversation: Pick<Conversation, "contactName" | "phone">) => conversation.contactName || formatPhone(conversation.phone);
+/** "Adriele · Imobiliária Previsível" quando o cadastro tem empresa. */
+export const nameWithCompany = (conversation: Pick<Conversation, "contactName" | "phone" | "customerCompany">) =>
+  conversation.customerCompany ? `${displayName(conversation)} · ${conversation.customerCompany}` : displayName(conversation);
 
 export function initials(name: string) {
   const words = name.replace(/[^\p{L}\s]/gu, "").trim().split(/\s+/).filter(Boolean);

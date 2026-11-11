@@ -58,6 +58,8 @@ export type Conversation = {
   /** Cadastro do site ligado a esta conversa (ref "conta:…" ou "painel:…") e o nome dele. */
   customerRef: string | null;
   customerName: string | null;
+  /** Empresa desse cadastro, lida na hora (busca e "Cliente · Empresa" na lista). */
+  customerCompany?: string | null;
   createdAt: string;
   updatedAt: string;
 };

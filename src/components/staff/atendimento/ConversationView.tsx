@@ -47,6 +47,7 @@ import { stripWhatsApp,
   api,
   clockTime,
   displayName,
+  nameWithCompany,
   formatPhone,
   shortTime,
   WhatsAppText,
@@ -78,7 +79,7 @@ const fold = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g,
 export function matchesQuery(conversation: Conversation, query: string) {
   const words = fold(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const haystack = fold(`${conversation.contactName} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.tags.join(" ")}`);
+  const haystack = fold(`${conversation.contactName} ${conversation.customerName ?? ""} ${conversation.customerCompany ?? ""} ${conversation.phone} ${conversation.lastMessagePreview} ${conversation.tags.join(" ")}`);
   return words.every((word) => haystack.includes(word));
 }
 
@@ -218,7 +219,7 @@ export function ConversationView({
                 <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} />
                 <span className="at-item-main">
                   <span className="at-item-top">
-                    <strong>{displayName(conversation)}</strong>
+                    <strong>{nameWithCompany(conversation)}</strong>
                     <span className="at-item-time">{shortTime(conversation.lastMessageAt, now)}</span>
                   </span>
                   <span className="at-item-row">
@@ -485,7 +486,7 @@ function ChatPanel({
         <header className="at-chat-head">
           <ContactAvatar channel={conversation.channel} conversationId={conversation.id} name={displayName(conversation)} size="lg" />
           <div className="at-chat-title">
-            <h2>{displayName(conversation)}</h2>
+            <h2>{nameWithCompany(conversation)}</h2>
             <p>
               {formatPhone(conversation.phone)}
               {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}

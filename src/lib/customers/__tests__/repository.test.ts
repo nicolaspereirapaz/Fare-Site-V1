@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   accountQuoteOwners,
   createPanelCustomer,
+  deletePanelCustomer,
   DuplicateCustomerError,
   findCustomerDuplicates,
   normalizeEmail,
@@ -147,5 +148,25 @@ describe("vínculo com a conta do site", () => {
     expect(resolveCustomer(db, "conta:u1")).toMatchObject({ ownerId: "u1", name: "Ana Souza", company: "Padaria Boa Vista Ltda", phone: "(11) 98888-7777", email: "ana@padariaboavista.com.br" });
     expect(resolveCustomer(db, "conta:nao-existe")).toBeNull();
     expect(resolveCustomer(db, "qualquer")).toBeNull();
+  });
+});
+
+describe("excluir cliente", () => {
+  it("apaga cadastro da equipe e solta a conversa do atendimento", () => {
+    const panel = createPanelCustomer(db, { name: "Adriele", company: "Imobiliária Previsível", phone: "(11) 98965-3738" }, actor);
+    db.exec("CREATE TABLE atd_conversations (id TEXT PRIMARY KEY, customer_ref TEXT, customer_name TEXT)");
+    db.prepare("INSERT INTO atd_conversations VALUES ('c1', ?, 'Adriele')").run(panel.ref);
+    deletePanelCustomer(db, panel.ref);
+    expect(resolveCustomer(db, panel.ref)).toBeNull();
+    expect(db.prepare("SELECT customer_ref, customer_name FROM atd_conversations").get()).toEqual({ customer_ref: null, customer_name: null });
+  });
+
+  it("não apaga conta do site nem cliente com orçamento", () => {
+    expect(() => deletePanelCustomer(db, "conta:u1")).toThrow(/Conta do site/);
+    const panel = createPanelCustomer(db, { name: "Marcos", phone: "(11) 95555-8899" }, actor);
+    db.exec("CREATE TABLE fare_quotes (id TEXT PRIMARY KEY, user_id TEXT, status TEXT, total_cents INTEGER, created_at TEXT)");
+    db.prepare("INSERT INTO fare_quotes VALUES ('q1', ?, 'rascunho', 100, '2026-11-11')").run(panel.ref);
+    expect(() => deletePanelCustomer(db, panel.ref)).toThrow(/orçamentos ou pedidos/);
+    expect(resolveCustomer(db, panel.ref)).not.toBeNull();
   });
 });

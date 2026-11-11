@@ -5,7 +5,7 @@ import { hasBackofficeAccess, resolveUserRole } from "@/lib/backoffice/access";
 import { buildQuoteItems, draftFromItem, keepSavedPrices, parseDraftItems, type BuilderProduct } from "@/lib/backoffice/quoteBuilder";
 import { parseStaffFilters, type StaffBrowseResult, type StaffFilters, type StaffMatch } from "@/lib/backoffice/productSearch";
 import type { QuoteBilling, QuoteCustomer } from "@/lib/commerce";
-import { createPanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
+import { createPanelCustomer, deletePanelCustomer, DuplicateCustomerError, resolveCustomer, searchCustomers, updateCustomer } from "@/lib/customers/repository";
 import { formatDeliveryAddress } from "@/lib/customers/address";
 import { formatProductName } from "@/lib/text/names";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
@@ -166,6 +166,20 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       } catch (error) {
         if (error instanceof DuplicateCustomerError) return json({ error: "DUPLICATE", message: "WhatsApp, e-mail ou CPF/CNPJ já está em outro cadastro.", matches: error.matches }, 409);
         return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Dados inválidos." }, 400);
+      }
+    },
+
+    /** Excluir cliente cadastrado pela equipe (?ref=painel:…). */
+    async deleteCustomer(request: Request) {
+      const access = await staff(deps, request);
+      if (access.error) return access.error;
+      const ref = new URL(request.url).searchParams.get("ref");
+      if (!ref) return json({ error: "INVALID_REQUEST" }, 400);
+      try {
+        deletePanelCustomer(deps.database(), ref.slice(0, 120));
+        return json({ ok: true });
+      } catch (error) {
+        return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Não foi possível excluir." }, 400);
       }
     },
 

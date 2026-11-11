@@ -27,3 +27,7 @@
 .cl-head-actions:has(.cl-new) { flex-basis: 100%; justify-content: flex-start; }
 .cl-new { flex-basis: 100%; }
 .cl-page .qe-card h2 { margin-top: 0; }
+/* Excluir cliente (só cadastro da equipe) */
+.qe-client > .cl-delete { margin-left: 0; }
+.cl-delete, .cl-delete:hover { color: #b42318; }
+.cl-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #fdecea; color: #7a271a; font-size: 14px; }
