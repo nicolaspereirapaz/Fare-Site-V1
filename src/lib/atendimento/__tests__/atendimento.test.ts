@@ -20,6 +20,7 @@ import {
   returnToAi,
   runAtendimentoMigrations,
   saveQuickReply,
+  updateConversationProfile,
 } from "@/lib/atendimento/repository";
 import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
 import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
@@ -39,7 +40,8 @@ import { startOfTodaySp, teamReport } from "@/lib/atendimento/report";
 import { parseWhatsApp, stripWhatsApp } from "@/lib/atendimento/waFormat";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
 import { normalizeOutboundPhone, startWhatsAppConversation } from "@/lib/atendimento/whatsapp";
-import { createPanelCustomer, resolveCustomer } from "@/lib/customers/repository";
+import { createPanelCustomer, resolveCustomer, updateCustomer } from "@/lib/customers/repository";
+import { displayName } from "@/components/staff/atendimento/shared";
 import { createOrder } from "@/lib/orders/repository";
 import { orderCode } from "@/lib/orders/orderCode";
 
@@ -560,6 +562,18 @@ describe("cadastro do site na conversa", () => {
     expect(conversation.customerRef).toBe(maria.ref);
     expect(conversation.customerName).toBe("Maria Souza");
     expect(conversation.contactName).toBe("Maria Souza");
+  });
+
+  it("nome mostrado é sempre o do cadastro: mudou no cadastro, muda no Atendimento (e na busca de mensagens)", () => {
+    const maria = createPanelCustomer(db, { name: "Maria Souza", phone: "(11) 98888-7777" }, ana);
+    const { conversationId } = inbound("W9", "5511988887777", "mary 🌸");
+    updateConversationProfile(db, conversationId, { contactName: "mary 🌸" }); // WhatsApp trocou o nome do perfil
+    updateCustomer(db, maria.ref, { name: "Maria Aparecida Souza", phone: "(11) 98888-7777" });
+    const conversation = getConversation(db, conversationId);
+    expect(conversation.customerName).toBe("Maria Aparecida Souza");
+    expect(displayName(conversation)).toBe("Maria Aparecida Souza");
+    expect(displayName({ ...conversation, customerName: null })).toBe("mary 🌸");
+    expect(searchMessages(db, "oi")[0].contactName).toBe("Maria Aparecida Souza");
   });
 
   it("sem cadastro: mensagem recebida não cria pré-cadastro (nem ao abrir a conversa)", () => {

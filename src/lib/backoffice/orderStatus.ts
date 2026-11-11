@@ -2,8 +2,9 @@
  * Situações do PEDIDO.
  * - aguardando_pagamento: pedido feito no site, esperando o pagamento (aparece na aba Orçamentos do painel,
  *   coluna "Aguardando pagamento", junto com os orçamentos fechados).
- * - aguardando_arte → criando_arte → aguardando_producao → em_producao (ou producao_externa, feito fora
- *   da loja) → aguardando_retirada ("Finalizado" no painel): as 6 colunas da aba Pedidos. Finalizado = pronto: fica 10 min no quadro e some (`finishedOrders.ts`);
+ * - aguardando_arte → criando_arte → aguardando_producao → producao_externa (feito fora da loja) ou
+ *   em_producao → aguardando_retirada ("Finalizado" no painel): as 6 colunas da aba Pedidos, nessa ordem.
+ *   (A ordem de ORDEM_STATUS_PEDIDO é a da regra da tabela de pedidos: mudar refaz a tabela; a do quadro é a das colunas.) Finalizado = pronto: fica 10 min no quadro e some (`finishedOrders.ts`);
  *   5 min depois de entrar, o cliente recebe o aviso no WhatsApp (`pickupNotice.ts`).
  * - concluido ("Entregue"): a equipe marcou "Cliente retirou" na tela Retirada (ou no pedido).
  * - aguardando_feedback: não é mais usada (desde 11/11/2026); os que existiam viraram concluido.
@@ -43,8 +44,8 @@ export const COLUNAS_QUADRO_PEDIDOS = [
   "aguardando_arte",
   "criando_arte",
   "aguardando_producao",
-  "em_producao",
   "producao_externa",
+  "em_producao",
   "aguardando_retirada",
 ] as const satisfies readonly StatusPedido[];
 

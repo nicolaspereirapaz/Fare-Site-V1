@@ -211,7 +211,8 @@ function toConversation(row: ConversationRow): Conversation {
     unread: Number(row.unread ?? 0),
     waitingSince: row.waiting_since === null ? null : String(row.waiting_since),
     customerRef: row.customer_ref ? String(row.customer_ref) : null,
-    customerName: row.customer_ref ? String(row.customer_name ?? "") : null,
+    // Nome atual do cadastro; o guardado na ligação fica de reserva (cadastro apagado ou tabela ausente).
+    customerName: row.customer_ref ? String(row.customer_live_name ?? row.customer_name ?? "") : null,
     customerCompany: row.customer_ref && row.customer_company ? String(row.customer_company) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -322,13 +323,25 @@ export function setDelivery(db: DatabaseSync, messageId: string, delivery: Messa
 const hasTable = (db: DatabaseSync, name: string) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
 
 /** SELECT das conversas com a empresa do cadastro ligado (painel ou conta), lida na hora para não ficar desatualizada. */
-function conversationsSelect(db: DatabaseSync) {
+/** Empresa e nome lidos na hora do cadastro ligado (editar o cadastro já muda o que o Atendimento mostra). */
+export function conversationsSelect(db: DatabaseSync) {
   const ref = "atd_conversations.customer_ref";
-  const painel = hasTable(db, "fare_panel_customers") ? `WHEN ${ref} LIKE 'painel:%' THEN (SELECT NULLIF(company, '') FROM fare_panel_customers WHERE id = substr(${ref}, 8))` : "";
-  const conta = hasTable(db, "fare_customer_profiles")
-    ? `WHEN ${ref} LIKE 'conta:%' THEN (SELECT COALESCE(NULLIF(company_name, ''), NULLIF(trade_name, '')) FROM fare_customer_profiles WHERE user_id = substr(${ref}, 7))`
-    : "";
-  return `SELECT *, ${painel || conta ? `CASE ${painel} ${conta} END` : "NULL"} AS customer_company FROM atd_conversations`;
+  const painel = hasTable(db, "fare_panel_customers");
+  const perfil = hasTable(db, "fare_customer_profiles");
+  const conta = hasTable(db, "user");
+  const pick = (painelSql: string | false, contaSql: string | false) => {
+    const cases = [painelSql ? `WHEN ${ref} LIKE 'painel:%' THEN (${painelSql})` : "", contaSql ? `WHEN ${ref} LIKE 'conta:%' THEN (${contaSql})` : ""].join(" ").trim();
+    return cases ? `CASE ${cases} END` : "NULL";
+  };
+  const company = pick(
+    painel && `SELECT NULLIF(company, '') FROM fare_panel_customers WHERE id = substr(${ref}, 8)`,
+    perfil && `SELECT COALESCE(NULLIF(company_name, ''), NULLIF(trade_name, '')) FROM fare_customer_profiles WHERE user_id = substr(${ref}, 7)`,
+  );
+  const name = pick(
+    painel && `SELECT NULLIF(TRIM(name), '') FROM fare_panel_customers WHERE id = substr(${ref}, 8)`,
+    conta && `SELECT NULLIF(TRIM(name), '') FROM user WHERE id = substr(${ref}, 7)`,
+  );
+  return `SELECT *, ${company} AS customer_company, ${name} AS customer_live_name FROM atd_conversations`;
 }
 
 export function findConversation(db: DatabaseSync, id: string): Conversation | null {

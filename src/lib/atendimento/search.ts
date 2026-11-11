@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { conversationsSelect } from "@/lib/atendimento/repository";
 
 /** Sem acento e minúsculo: "Revelação" acha "revelacao". */
 export const foldText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -32,8 +33,10 @@ export function searchMessages(db: DatabaseSync, query: string, limit = 30): Mes
   if (!words.length) return [];
   const rows = db
     .prepare(
-      `SELECT m.id, m.conversation_id, TRIM(m.body || ' ' || m.transcript) AS body, m.author, m.created_at, c.contact_name, c.phone
-       FROM atd_messages m JOIN atd_conversations c ON c.id = m.conversation_id
+      // Conversa ligada a um cadastro: aparece com o nome do cadastro (o mesmo da lista de conversas).
+      `SELECT m.id, m.conversation_id, TRIM(m.body || ' ' || m.transcript) AS body, m.author, m.created_at, c.phone,
+         CASE WHEN c.customer_ref IS NOT NULL THEN COALESCE(c.customer_live_name, NULLIF(c.customer_name, ''), c.contact_name) ELSE c.contact_name END AS contact_name
+       FROM atd_messages m JOIN (${conversationsSelect(db)}) c ON c.id = m.conversation_id
        WHERE m.author <> 'sistema' AND (m.body <> '' OR m.transcript <> '') ORDER BY m.created_at DESC LIMIT 20000`,
     )
     .all() as Array<Record<string, string>>;

@@ -46,9 +46,11 @@ export function formatPhone(phone: string) {
   return phone;
 }
 
-export const displayName = (conversation: Pick<Conversation, "contactName" | "phone">) => conversation.contactName || formatPhone(conversation.phone);
+/** Nome que a equipe vê: o do cadastro, quando a conversa está ligada a um; senão o do WhatsApp ou o telefone. */
+export const displayName = (conversation: Pick<Conversation, "contactName" | "phone"> & { customerName?: string | null }) =>
+  conversation.customerName?.trim() || conversation.contactName || formatPhone(conversation.phone);
 /** "Adriele · Imobiliária Previsível" quando o cadastro tem empresa. */
-export const nameWithCompany = (conversation: Pick<Conversation, "contactName" | "phone" | "customerCompany">) =>
+export const nameWithCompany = (conversation: Pick<Conversation, "contactName" | "phone" | "customerCompany"> & { customerName?: string | null }) =>
   conversation.customerCompany ? `${displayName(conversation)} · ${conversation.customerCompany}` : displayName(conversation);
 
 export function initials(name: string) {

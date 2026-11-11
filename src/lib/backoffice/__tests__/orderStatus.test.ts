@@ -25,7 +25,7 @@ describe("situações do pedido", () => {
 
   it("o quadro de pedidos tem as 6 etapas, da arte ao Finalizado (pronto)", () => {
     expect(COLUNAS_QUADRO_PEDIDOS).toEqual([
-      "aguardando_arte", "criando_arte", "aguardando_producao", "em_producao", "producao_externa", "aguardando_retirada",
+      "aguardando_arte", "criando_arte", "aguardando_producao", "producao_externa", "em_producao", "aguardando_retirada",
     ]);
   });
 

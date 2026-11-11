@@ -12,12 +12,15 @@
 export function movePath<S extends string>(columns: readonly S[], from: S, to: S, can: (from: S, to: S) => boolean): S[] | null {
   if (!columns.includes(from) || !columns.includes(to)) return null;
   if (from === to) return [];
-  // Busca em largura; empate fica com a coluna que vem primeiro no quadro.
+  // Busca em largura; no empate vence a coluna mais perto da atual (voltar de Finalizado passa por Em produção,
+  // vizinha, e não pela Produção Externa).
   const previous = new Map<S, S>([[from, from]]);
   const queue: S[] = [from];
   while (queue.length) {
     const current = queue.shift()!;
-    for (const next of columns) {
+    const at = columns.indexOf(current);
+    const byDistance = [...columns].sort((a, b) => Math.abs(columns.indexOf(a) - at) - Math.abs(columns.indexOf(b) - at));
+    for (const next of byDistance) {
       if (previous.has(next) || !can(current, next)) continue;
       previous.set(next, current);
       if (next === to) {
