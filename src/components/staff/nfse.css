@@ -7,7 +7,7 @@
 .nf-ambiente[data-amb="2"] { background: #e9ebf4; color: var(--qe-navy); }
 .nf-ambiente[data-amb="1"] { background: #fde3d8; color: var(--qe-orange-dark); }
 
-.nf-opcoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nf-opcoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .nf-opcoes button { border: 1.5px solid #d5d8e1; border-radius: 10px; padding: 12px 14px; background: #fff; color: var(--qe-ink); font-family: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
 .nf-opcoes button[aria-pressed="true"] { border-color: var(--qe-orange); background: #fff4ef; }
 .nf-opcoes small { display: block; margin-top: 3px; color: var(--qe-muted); font-weight: 500; font-size: 12px; }

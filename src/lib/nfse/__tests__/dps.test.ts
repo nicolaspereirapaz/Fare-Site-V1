@@ -40,6 +40,12 @@ describe("montarDps", () => {
         expect(await validarXsd(xml, ambiente)).toEqual([]);
       });
 
+      it("personalização de brindes", async () => {
+        const { xml } = montarDps({ ...base, ambiente, servico: "brindes", tomador: caedu });
+        expect(xml).toContain("<cTribNac>130402</cTribNac><cTribMun>827</cTribMun>");
+        expect(await validarXsd(xml, ambiente)).toEqual([]);
+      });
+
       it("tomador CPF sem endereço", async () => {
         const { xml } = montarDps({ ...base, ambiente, tomador: { doc: "123.456.789-09", nome: "Fulano" } });
         expect(xml).toContain("<CPF>12345678909</CPF>");

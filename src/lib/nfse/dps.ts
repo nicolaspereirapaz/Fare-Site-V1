@@ -21,6 +21,14 @@ export const SERVICOS = {
     cNBS: "114082000",
     descricao: "REVELACAO DE FOTOS",
   },
+  brindes: {
+    nome: "Personalização de Brindes",
+    cTribNac: "130402",
+    cTribMun: "827",
+    // NBS 1.2101.21.00 "Serviços de impressão": personalização é impressão/gravação da marca no brinde.
+    cNBS: "121012100",
+    descricao: "PERSONALIZACAO DE BRINDES",
+  },
 } as const;
 
 export type ServicoId = keyof typeof SERVICOS;
