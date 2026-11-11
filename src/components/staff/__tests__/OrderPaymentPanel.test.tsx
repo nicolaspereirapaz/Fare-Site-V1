@@ -1,10 +1,10 @@
-import {render,screen,waitFor} from '@testing-library/react';
+import {render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
 import {OrderPaymentPanel} from '@/components/staff/OrderPaymentPanel';
 const finance={paidCents:2000,balanceCents:3000,createdBy:'Bia',internalNotes:'',deliveryDate:'2026-10-23',deliveryMode:'retirada' as const,installments:null,dueDate:null,payments:[]};
 afterEach(()=>vi.unstubAllGlobals());
-it('registra recebimento real e pede releitura do cartão',async()=>{
+it('registra recebimento real pela janela e pede releitura do cartão',async()=>{
  const onRecorded=vi.fn();vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({finance:{...finance,paidCents:5000,balanceCents:0}}),{status:200})));
  const user=userEvent.setup();render(<OrderPaymentPanel orderId="o1" status="aguardando_retirada" paymentMethod="pix" finance={finance} onRecorded={onRecorded} />);
  expect(screen.getByText(/Falta pagar/)).toHaveTextContent('30,00');
@@ -37,10 +37,25 @@ it('resposta perdida congela payload e reenvia a mesma chave sem alterar o receb
  const send=vi.fn().mockRejectedValueOnce(new TypeError('rede')).mockResolvedValueOnce(new Response(JSON.stringify({finance:{...finance,paidCents:3000,balanceCents:2000}}),{status:201}));
  vi.stubGlobal('fetch',send);const user=userEvent.setup();render(<OrderPaymentPanel orderId="o1" status="aguardando_retirada" paymentMethod="pix" finance={finance} onRecorded={()=>{}} />);
  await user.click(screen.getByRole('button',{name:'Registrar pagamento'}));
- await user.clear(screen.getByLabelText('Valor recebido (R$)'));await user.type(screen.getByLabelText('Valor recebido (R$)'), '10,00');
+ await user.clear(screen.getByLabelText('Valor recebido agora'));await user.type(screen.getByLabelText('Valor recebido agora'), '10,00');
  await user.click(screen.getByRole('button',{name:'Confirmar recebimento'}));
- await screen.findByRole('alert');expect(screen.getByLabelText('Valor recebido (R$)')).toBeDisabled();expect(screen.getByLabelText('Forma do recebimento')).toBeDisabled();
+ await screen.findByRole('alert');expect(screen.getByLabelText('Valor recebido agora')).toBeDisabled();expect(screen.getByLabelText('Forma de pagamento')).toBeDisabled();
  await user.click(screen.getByRole('button',{name:'Confirmar recebimento'}));
  await waitFor(()=>expect(send).toHaveBeenCalledTimes(2));expect(send.mock.calls[1][1].body).toBe(send.mock.calls[0][1].body);
  await waitFor(()=>expect(screen.getByText(/Falta pagar/)).toHaveTextContent('20,00'));
+});
+it('janela: sugestões de valor, saldo restante e trava acima do saldo',async()=>{
+ vi.stubGlobal('fetch',vi.fn());
+ const user=userEvent.setup();render(<OrderPaymentPanel code="PED-0007" customerName="Ana" orderId="o1" status="aguardando_retirada" paymentMethod="pix" finance={{...finance,paidCents:0,balanceCents:5000}} onRecorded={()=>{}} />);
+ await user.click(screen.getByRole('button',{name:'Registrar pagamento'}));
+ const dialog=screen.getByRole('dialog',{name:'Registrar pagamento'});
+ expect(within(dialog).getByText('Quanto o cliente pagou?')).toBeInTheDocument();
+ expect(within(dialog).getByLabelText('Valor recebido agora')).toHaveValue('50,00');
+ await user.click(within(dialog).getByRole('button',{name:/50% de sinal/}));
+ expect(within(dialog).getByLabelText('Valor recebido agora')).toHaveValue('25,00');
+ expect(within(dialog).getByLabelText('Resumo do recebimento')).toHaveTextContent(/Saldo restante\s*R\$\s25,00/);
+ await user.clear(within(dialog).getByLabelText('Valor recebido agora'));await user.type(within(dialog).getByLabelText('Valor recebido agora'),'60,00');
+ expect(within(dialog).getByRole('button',{name:'Confirmar recebimento'})).toBeDisabled();
+ await user.click(within(dialog).getByRole('button',{name:'Cancelar'}));
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(fetch).not.toHaveBeenCalled();
 });

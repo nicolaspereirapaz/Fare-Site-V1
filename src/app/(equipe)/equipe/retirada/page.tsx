@@ -60,7 +60,8 @@ function stateText(order: Order, history: Entry[]) {
   return `Ainda não está pronto (${ORDER_STAFF_LABELS[order.status]}).`;
 }
 
-async function PickupCard({ order, now }: { order: Order; now: Date }) {
+/** Uma linha da lista: pedido e cliente | itens com foto | entrega e valores | aviso e botão. */
+async function PickupRow({ order, now }: { order: Order; now: Date }) {
   const finance = getOrderFinance(database, order.id);
   const history = historyOf(order);
   const images = await Promise.all(order.items.map((item) => documentImageOf(item).catch(() => null)));
@@ -71,29 +72,26 @@ async function PickupCard({ order, now }: { order: Order; now: Date }) {
   const address = delivery ? formatDeliveryAddress(finance?.deliveryAddress) || order.customer.address || "Endereço não informado" : "";
   const total = order.totalCents ?? Math.round(order.items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
   const notice = ready ? getPickupNotice(database, order.id) : null;
+  const code = orderCode(order.id);
+  const customer = order.customer.company || order.customer.name;
   return (
-    <article className={`rt-card${ready ? " is-ready" : ""}`}>
-      <header className="rt-card-head">
-        <div>
-          <span className="rt-code">{orderCode(order.id)}</span>
-          {readyAt ? <small>Pronto em {when(readyAt)}</small> : null}
-        </div>
+    <li className={`rt-row${ready ? " is-ready" : ""}`}>
+      <div className="rt-col rt-col-who">
+        <span className="rt-code">{code}</span>
         <span className={`rt-status rt-status-${order.status}`}>{ready ? (delivery ? "Pronto para entrega" : "Pronto para retirar") : ORDER_STAFF_LABELS[order.status]}</span>
-      </header>
-
-      <div className="rt-who">
-        <b>{order.customer.company || order.customer.name}</b>
-        <span>{[order.customer.company ? order.customer.name : "", order.customer.phone || "Sem telefone"].filter(Boolean).join(" · ")}</span>
+        {readyAt ? <small className="rt-when">Pronto em {when(readyAt)}</small> : null}
+        <b className="rt-customer">{customer}</b>
+        <span className="rt-muted">{[order.customer.company ? order.customer.name : "", order.customer.phone || "Sem telefone"].filter(Boolean).join(" · ")}</span>
       </div>
 
-      <ul className="rt-items">
+      <ul className="rt-col rt-items" aria-label="Itens">
         {order.items.map((item, index) => {
           const variation = Object.values(item.selections).filter(Boolean).join(" · ");
           return (
             <li key={index}>
               <span className="rt-thumb">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {images[index] ? <img alt="" loading="lazy" src={images[index]} /> : <Package aria-hidden="true" size={22} />}
+                {images[index] ? <img alt="" loading="lazy" src={images[index]} /> : <Package aria-hidden="true" size={20} />}
               </span>
               <span className="rt-item-text">
                 <b>{item.quantity} × {item.productName}</b>
@@ -104,28 +102,30 @@ async function PickupCard({ order, now }: { order: Order; now: Date }) {
         })}
       </ul>
 
-      <ul className="rt-facts">
-        <li>{delivery ? <Truck aria-hidden="true" size={16} /> : <Store aria-hidden="true" size={16} />}<span>{delivery ? <>Entrega: {address}</> : "Retirada na loja"}</span></li>
-        {order.customer.notes ? <li><StickyNote aria-hidden="true" size={16} /><span>{order.customer.notes}</span></li> : null}
-        {finance?.internalNotes ? <li><StickyNote aria-hidden="true" size={16} /><span>Interna: {finance.internalNotes}</span></li> : null}
-      </ul>
+      <div className="rt-col rt-col-info">
+        <ul className="rt-facts">
+          <li>{delivery ? <Truck aria-hidden="true" size={15} /> : <Store aria-hidden="true" size={15} />}<span>{delivery ? <>Entrega: {address}</> : "Retirada na loja"}</span></li>
+          {order.customer.notes ? <li><StickyNote aria-hidden="true" size={15} /><span>{order.customer.notes}</span></li> : null}
+          {finance?.internalNotes ? <li><StickyNote aria-hidden="true" size={15} /><span>Interna: {finance.internalNotes}</span></li> : null}
+        </ul>
+        <dl className="rt-pay">
+          <div><dt>Total</dt><dd>{brl(total)}</dd></div>
+          {plan?.receipts.map((receipt, index) => <div key={index}><dt>{receipt.label}</dt><dd>{receipt.amount}</dd></div>)}
+          {plan?.remainder
+            ? <div className="rt-due"><dt>{plan.remainder.label}</dt><dd>{plan.remainder.amount}</dd></div>
+            : finance ? <div className="rt-paid"><dt>Situação</dt><dd>Quitado</dd></div> : null}
+        </dl>
+      </div>
 
-      <dl className="rt-pay">
-        <div><dt>Total</dt><dd>{brl(total)}</dd></div>
-        {plan?.receipts.map((receipt, index) => <div key={index}><dt>{receipt.label}</dt><dd>{receipt.amount}</dd></div>)}
-        {plan?.remainder
-          ? <div className="rt-due"><dt>{plan.remainder.label}</dt><dd>{plan.remainder.amount}</dd></div>
-          : finance ? <div className="rt-paid"><dt>Situação</dt><dd>Quitado</dd></div> : null}
-      </dl>
-
-      <p className={`rt-notice${notice?.state === "falhou" ? " is-failed" : ""}`}>
-        <MessageCircle aria-hidden="true" size={15} />
-        {ready ? avisoLabel(notice, history, now) : stateText(order, history)}
-      </p>
-
-      {ready ? <PickupActions finance={finance} orderId={order.id} paymentMethod={order.paymentMethod} status={order.status} /> : null}
-      <Link className="rt-open" href={`/equipe/pedidos/${order.id}`}>Abrir pedido <ArrowRight aria-hidden="true" size={14} /></Link>
-    </article>
+      <div className="rt-col rt-col-act">
+        <p className={`rt-notice${notice?.state === "falhou" ? " is-failed" : ""}`}>
+          <MessageCircle aria-hidden="true" size={15} />
+          <span>{ready ? avisoLabel(notice, history, now) : stateText(order, history)}</span>
+        </p>
+        {ready ? <PickupActions code={code} customerName={customer} finance={finance} orderId={order.id} paymentMethod={order.paymentMethod} /> : null}
+        <Link className="rt-open" href={`/equipe/pedidos/${order.id}`}>Abrir pedido <ArrowRight aria-hidden="true" size={14} /></Link>
+      </div>
+    </li>
   );
 }
 
@@ -155,9 +155,9 @@ export default async function PickupPage({ searchParams }: { searchParams: Promi
           <span>{orders.length}</span>
         </h2>
         {orders.length ? (
-          <div className="rt-grid">
-            {orders.map((order) => <PickupCard key={order.id} now={now} order={order} />)}
-          </div>
+          <ul className="rt-list">
+            {orders.map((order) => <PickupRow key={order.id} now={now} order={order} />)}
+          </ul>
         ) : (
           <p className="rt-empty">{q ? "Nenhum pedido encontrado. Confira o número ou tente pelo nome." : "Nenhum pedido pronto esperando o cliente agora."}</p>
         )}

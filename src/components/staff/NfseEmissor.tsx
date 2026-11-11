@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CustomerPicker } from "@/components/staff/QuoteEditor";
 import type { Customer } from "@/components/staff/quoteEditorShared";
 import { formatCep } from "@/lib/account/documents";
@@ -53,6 +53,8 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
   const [ok, setOk] = useState<{ chave: string; nNFSe?: string } | null>(null);
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [cepInfo, setCepInfo] = useState<string | null>(null);
+  /** Último CPF/CNPJ consultado: não repete a busca a cada tecla. */
+  const buscado = useRef("");
 
   const recarregar = useCallback(async () => {
     const j = await pedirJson<{ notas?: NotaLista[] }>("/api/equipe/nfse").catch(() => ({ notas: [] }));
@@ -69,6 +71,7 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
   const mostraCliente = modo === "documento" ? docValido : modo === "cadastro" && escolhido != null;
 
   function limparCliente() {
+    buscado.current = "";
     setEscolhido(null);
     setCli(VAZIO);
     setAviso(null);
@@ -109,18 +112,36 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
     setAviso(j.tomador.doc ? ORIGEM[j.origem ?? ""] ?? null : "Este cadastro não tem CPF/CNPJ. Digite abaixo para emitir no nome dele.");
   }
 
-  async function buscarDocumento() {
+  /** Digitou o CPF/CNPJ: completo, já busca (histórico do emissor; CNPJ também na Receita). */
+  function trocarDoc(bruto: string) {
+    setCli((c) => ({ ...c, doc: bruto }));
+    const doc = bruto.replace(/\D/g, "");
+    // No cadastro, CPF já vem com o nome da pessoa: só o CNPJ busca (nota no nome da empresa).
+    if (doc.length === 14 || (doc.length === 11 && modo === "documento")) void buscarDocumento(doc);
+  }
+
+  async function buscarDocumento(doc = digitos) {
+    if ((doc.length !== 11 && doc.length !== 14) || buscado.current === doc) return;
+    buscado.current = doc;
     setAviso(null);
-    if (!docValido) return;
     setBuscando(true);
-    const j = await pedirJson<{ origem: string | null; tomador: Tomador | null }>(`/api/equipe/nfse/tomador?doc=${digitos}`).catch(() => ({ origem: null, tomador: null }));
+    const j = await pedirJson<{ origem: string | null; tomador: Tomador | null }>(`/api/equipe/nfse/tomador?doc=${doc}`).catch(() => ({ origem: null, tomador: null }));
     setBuscando(false);
+    const atual = (c: Campos) => c.doc.replace(/\D/g, "") === doc;
+    if (modo === "cadastro") {
+      if (!j.tomador) return setAviso("CNPJ não encontrado na Receita: preencha os dados.");
+      const t = paraCampos(j.tomador);
+      // Empresa do cliente do cadastro: nome e endereço da Receita; telefone e e-mail do cadastro, se tiver.
+      setCli((c) => (atual(c) ? { ...t, doc: c.doc, email: c.email || t.email, fone: c.fone || t.fone } : c));
+      return setAviso(ORIGEM[j.origem ?? ""] ?? null);
+    }
     if (j.tomador) {
-      setCli(paraCampos(j.tomador));
+      const t = paraCampos(j.tomador);
+      setCli((c) => (atual(c) ? { ...t, doc: c.doc } : c));
       setAviso(ORIGEM[j.origem ?? ""] ?? null);
     } else {
-      setCli({ ...VAZIO, doc: cli.doc });
-      setAviso(digitos.length === 11 ? "CPF novo: preencha o nome (endereço é opcional)." : "CNPJ não encontrado: preencha os dados.");
+      setCli((c) => (atual(c) ? { ...VAZIO, doc: c.doc } : c));
+      setAviso(doc.length === 11 ? "CPF novo: preencha o nome (endereço é opcional)." : "CNPJ não encontrado: preencha os dados.");
     }
   }
 
@@ -190,7 +211,7 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
             </div>
           ) : null}
           {modo === "documento" ? (
-            <label className="qe-field"><span>CPF ou CNPJ</span><input autoFocus inputMode="numeric" onBlur={buscarDocumento} onChange={(e) => setCli({ ...cli, doc: e.target.value })} placeholder="Só números ou com pontos" value={cli.doc} /></label>
+            <label className="qe-field"><span>CPF ou CNPJ</span><input autoFocus inputMode="numeric" onBlur={() => void buscarDocumento()} onChange={(e) => trocarDoc(e.target.value)} placeholder="Só números ou com pontos" value={cli.doc} /></label>
           ) : null}
           {modo === "nenhum" ? <p className="qe-hint">A nota sai sem cliente identificado (consumidor final).</p> : null}
           {buscando ? <p className="qe-hint">Buscando dados…</p> : null}
@@ -198,7 +219,9 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
 
           {mostraCliente ? (
             <div className="nf-campos">
-              {modo === "cadastro" ? campo("doc", "CPF ou CNPJ", { inputMode: "numeric", required: true }) : null}
+              {modo === "cadastro" ? (
+                <label className="qe-field"><span>CPF ou CNPJ</span><input inputMode="numeric" onChange={(e) => trocarDoc(e.target.value)} placeholder="CNPJ completo preenche os dados da empresa" required value={cli.doc} /></label>
+              ) : null}
               {campo("nome", digitos.length === 14 ? "Razão social" : "Nome", { required: true })}
               <div className="qe-grid-3">
                 <label className="qe-field">

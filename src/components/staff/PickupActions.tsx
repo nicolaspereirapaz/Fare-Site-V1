@@ -3,20 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatCurrency, messageFor } from "@/components/backofficeShared";
-import { OrderPaymentPanel } from "@/components/staff/OrderPaymentPanel";
-import type { StatusPedido } from "@/lib/backoffice/orderStatus";
+import { RecordPaymentDialog } from "@/components/staff/RecordPaymentDialog";
 import { dueAtPickupCents } from "@/lib/orders/paymentPlan";
 import type { OrderFinance } from "@/lib/orders/payments";
 import type { PaymentMethod } from "@/lib/orders/repository";
 
-/** Tela Retirada: "Cliente retirou" (ou "Entregue"), travado enquanto falta receber o que se paga na retirada. */
-export function PickupActions({ orderId, status, paymentMethod, finance }: {
-  orderId: string; status: StatusPedido; paymentMethod: PaymentMethod; finance: OrderFinance | null;
+/**
+ * Tela Retirada: um botão só. Falta pagar: "Registrar pagamento" (abre a janela de recebimento);
+ * pago: vira "Cliente retirou" ("Entregue" na entrega).
+ */
+export function PickupActions({ orderId, code, customerName, paymentMethod, finance: initialFinance }: {
+  orderId: string; code: string; customerName: string; paymentMethod: PaymentMethod; finance: OrderFinance | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [confirmed, setConfirmed] = useState<OrderFinance | null>(null);
+  // Logo depois do recebimento a tela ainda não recarregou: vale o financeiro confirmado.
+  const finance = confirmed && initialFinance && confirmed.paidCents > initialFinance.paidCents ? confirmed : initialFinance;
   const due = dueAtPickupCents(finance);
+  const delivery = finance?.deliveryMode === "entrega";
 
   async function handOver() {
     setBusy(true);
@@ -39,11 +46,20 @@ export function PickupActions({ orderId, status, paymentMethod, finance }: {
 
   return (
     <div className="rt-actions">
-      {due > 0 ? <p className="rt-lock">Falta receber {formatCurrency(due / 100)}. Registre o pagamento para liberar a {finance?.deliveryMode === "entrega" ? "entrega" : "retirada"}.</p> : null}
-      {due > 0 && finance ? <OrderPaymentPanel compact finance={finance} onRecorded={() => router.refresh()} orderId={orderId} paymentMethod={paymentMethod} status={status} /> : null}
-      <button className="rt-done" disabled={busy || due > 0} onClick={handOver} type="button">
-        {busy ? "Salvando…" : finance?.deliveryMode === "entrega" ? "Entregue" : "Cliente retirou"}
-      </button>
+      {due > 0 && finance ? (
+        <>
+          <p className="rt-lock">Falta receber {formatCurrency(due / 100)}</p>
+          <button className="rt-done rt-pay-button" onClick={() => setPaying(true)} type="button">Registrar pagamento</button>
+          {paying ? (
+            <RecordPaymentDialog code={code} customerName={customerName} finance={finance} onClose={() => setPaying(false)} orderId={orderId} paymentMethod={paymentMethod}
+              onRecorded={(next) => { setConfirmed(next); setPaying(false); router.refresh(); }} />
+          ) : null}
+        </>
+      ) : (
+        <button className="rt-done" disabled={busy} onClick={handOver} type="button">
+          {busy ? "Salvando…" : delivery ? "Entregue" : "Cliente retirou"}
+        </button>
+      )}
       {error ? <p className="qe-error" role="alert">{error}</p> : null}
     </div>
   );

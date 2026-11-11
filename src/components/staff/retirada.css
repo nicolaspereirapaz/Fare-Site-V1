@@ -1,4 +1,5 @@
-/* Tela Retirada: acha o pedido no balcão, confere os itens (com foto) e marca "Cliente retirou". */
+/* Tela Retirada: lista dos pedidos prontos; acha pelo número/nome/empresa, confere os itens (com foto),
+   registra o pagamento (janela) e marca "Cliente retirou". */
 .rt-page { --rt-green: #167b55; --rt-green-dark: #0f5a3e; --rt-green-soft: #e3f3ea; --rt-red: #a12a2a; --rt-red-soft: #fdecec; }
 
 .rt-hero .qe-title { margin-bottom: 4px; }
@@ -12,63 +13,64 @@
 .rt-search button:hover { background: var(--qe-orange-dark); }
 .rt-clear { padding: 0 6px; color: var(--qe-muted); font-size: 13px; white-space: nowrap; }
 
-.rt-section { display: flex; align-items: center; gap: 8px; margin: 28px 0 14px; font: 600 17px var(--font-outfit), sans-serif; color: var(--qe-ink); }
+.rt-section { display: flex; align-items: center; gap: 8px; margin: 28px 0 12px; font: 600 17px var(--font-outfit), sans-serif; color: var(--qe-ink); }
 .rt-section span { min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--qe-line); color: var(--qe-text); font-size: 13px; text-align: center; }
 .rt-empty { margin: 0; padding: 36px 20px; border: 1px dashed #d5d8e1; border-radius: 14px; background: #fff; color: var(--qe-muted); text-align: center; }
 
-/* Cartões lado a lado; um por linha no celular */
-.rt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 16px; align-items: start; }
-.rt-card { display: grid; gap: 14px; padding: 18px; border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(29,36,71,.06), 0 0 0 1px rgba(29,36,71,.05); border-top: 4px solid var(--qe-line); }
-.rt-card.is-ready { border-top-color: var(--rt-green); }
+/* Lista: uma linha por pedido, em 4 colunas; no celular as colunas empilham */
+.rt-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.rt-row { display: grid; grid-template-columns: minmax(170px, .8fr) minmax(0, 1.5fr) minmax(200px, 1fr) minmax(190px, .8fr); gap: 20px; align-items: start; padding: 16px 18px; border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(29,36,71,.06), 0 0 0 1px rgba(29,36,71,.05); border-left: 4px solid var(--qe-line); }
+.rt-row.is-ready { border-left-color: var(--rt-green); }
+.rt-col { min-width: 0; }
 
-.rt-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.rt-card-head > div { display: grid; gap: 2px; }
-.rt-code { font: 700 20px/1.1 var(--font-outfit), sans-serif; color: var(--qe-ink); letter-spacing: -.01em; }
-.rt-card-head small { color: var(--qe-muted); font-size: 12.5px; }
-.rt-status { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; background: #e9ebf3; color: #1d2447; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.rt-col-who { display: grid; gap: 3px; justify-items: start; }
+.rt-code { font: 700 19px/1.1 var(--font-outfit), sans-serif; color: var(--qe-ink); letter-spacing: -.01em; }
+.rt-when { color: var(--qe-muted); font-size: 12px; }
+.rt-customer { margin-top: 6px; font-size: 15px; color: var(--qe-ink); overflow-wrap: anywhere; }
+.rt-muted { color: var(--qe-muted); font-size: 13px; overflow-wrap: anywhere; }
+.rt-status { margin-top: 2px; padding: 3px 9px; border-radius: 999px; background: #e9ebf3; color: #1d2447; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .rt-status-aguardando_retirada { background: var(--rt-green-soft); color: var(--rt-green-dark); }
 .rt-status-concluido { background: #eeeff1; color: #3f4248; }
 
-.rt-who { display: grid; gap: 2px; }
-.rt-who b { font-size: 16px; color: var(--qe-ink); }
-.rt-who span { color: var(--qe-muted); }
-
 /* Itens com a foto do produto (mockup da equipe ou catálogo) */
-.rt-items { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.rt-items li { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; background: #f7f7f9; }
-.rt-thumb { display: grid; place-items: center; flex-shrink: 0; width: 64px; height: 64px; overflow: hidden; border-radius: 8px; background: #fff; color: var(--qe-faint); box-shadow: 0 0 0 1px var(--qe-line); }
-.rt-thumb img { width: 100%; height: 100%; object-fit: contain; }
-.rt-item-text { display: grid; gap: 2px; min-width: 0; }
+.rt-items { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rt-items li { display: flex; align-items: center; gap: 10px; }
+.rt-thumb { display: grid; place-items: center; flex-shrink: 0; width: 52px; height: 52px; overflow: hidden; border-radius: 8px; background: #f7f7f9; color: var(--qe-faint); box-shadow: 0 0 0 1px var(--qe-line); }
+.rt-thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.rt-item-text { display: grid; gap: 1px; min-width: 0; }
 .rt-item-text b { color: var(--qe-ink); font-weight: 600; overflow-wrap: anywhere; }
-.rt-item-text small { color: var(--qe-muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.rt-item-text small { color: var(--qe-muted); font-size: 12px; overflow-wrap: anywhere; }
 
-.rt-facts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; color: var(--qe-text); }
-.rt-facts li { display: flex; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.rt-col-info { display: grid; gap: 10px; }
+.rt-facts { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--qe-text); }
+.rt-facts li { display: flex; align-items: flex-start; gap: 7px; overflow-wrap: anywhere; }
 .rt-facts svg { flex-shrink: 0; margin-top: 2px; color: var(--qe-lilac); }
-
-.rt-pay { display: grid; gap: 4px; margin: 0; padding: 12px 14px; border-radius: 10px; background: #f7f7f9; }
-.rt-pay div { display: flex; justify-content: space-between; gap: 12px; }
+.rt-pay { display: grid; gap: 3px; margin: 0; padding: 9px 12px; border-radius: 9px; background: #f7f7f9; font-size: 13px; }
+.rt-pay div { display: flex; justify-content: space-between; gap: 10px; }
 .rt-pay dt { color: var(--qe-muted); }
 .rt-pay dd { margin: 0; font-weight: 600; white-space: nowrap; color: var(--qe-ink); }
 .rt-pay .rt-due dt, .rt-pay .rt-due dd { color: var(--rt-red); font-weight: 700; }
 .rt-pay .rt-paid dd { color: var(--rt-green); }
 
-.rt-notice { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--qe-lilac); }
+.rt-col-act { display: grid; gap: 8px; }
+.rt-notice { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12.5px; color: var(--qe-lilac); }
+.rt-notice svg { flex-shrink: 0; margin-top: 2px; }
 .rt-notice.is-failed { color: var(--rt-red); font-weight: 600; }
-
-.rt-actions { display: grid; gap: 8px; }
-.rt-lock { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--rt-red-soft); color: var(--rt-red); font-weight: 600; font-size: 13px; }
-.rt-actions .kb-payment-panel { width: 100%; }
-.rt-actions .kb-edit-quote { justify-self: start; }
-.rt-done, .rt-actions .kb-final { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--rt-green); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
-.rt-done { width: 100%; }
-.rt-done:hover, .rt-actions .kb-final:hover { background: var(--rt-green-dark); }
-.rt-done:disabled, .rt-actions .kb-final:disabled { background: #c9cbd1; cursor: not-allowed; }
-
+.rt-actions { display: grid; gap: 6px; }
+.rt-lock { margin: 0; color: var(--rt-red); font-weight: 700; font-size: 13px; }
+.rt-done { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--rt-green); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.rt-done:hover { background: var(--rt-green-dark); }
+.rt-done.rt-pay-button { background: var(--qe-orange); }
+.rt-done.rt-pay-button:hover { background: var(--qe-orange-dark); }
+.rt-done:disabled { background: #c9cbd1; cursor: not-allowed; }
 .rt-open { display: inline-flex; align-items: center; gap: 4px; justify-self: start; color: var(--qe-lilac); font-size: 13px; font-weight: 600; text-decoration: none; }
 .rt-open:hover { text-decoration: underline; }
 
+@media (max-width: 1000px) {
+  .rt-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
 @media (max-width: 640px) {
   .qe-page.rt-page { padding: 20px 16px 48px; }
   .rt-search button { padding: 0 14px; }
+  .rt-row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 14px; }
 }

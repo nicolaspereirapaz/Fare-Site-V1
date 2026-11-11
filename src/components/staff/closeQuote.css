@@ -46,3 +46,13 @@
 }
 
 .cq-delivery .qe-address { margin-top: 12px; }
+
+/* Registrar pagamento (pedido já existente): 2 ou 3 sugestões. */
+.rp-tiles-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.rp-tiles-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.rp-dialog { max-width:760px; }
+@media(max-width:620px) { .rp-tiles-3 { grid-template-columns:1fr; } }
+/* Janela aberta dentro de uma página .qe-page (Retirada): os campos da página não valem aqui. */
+.qe-page .cq-dialog .cq-field input,.qe-page .cq-dialog .cq-field select { height:auto; min-height:46px; padding:9px 11px; border:1px solid transparent; background-color:#f2f2f3; font-size:16px; }
+.qe-page .cq-dialog .cq-money input { padding-left:38px; }
+.qe-page .cq-dialog .cq-field input[aria-invalid=true] { border-color:#a12a2a; background-color:#fff8f8; }
