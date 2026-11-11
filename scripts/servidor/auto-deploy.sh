@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy automático no Azure: roda a cada 2 min (farefoto-deploy.timer).
+# Deploy automático no servidor (Google Cloud): roda a cada 2 min (farefoto-deploy.timer).
 # Se o GitHub (master) tem commit novo: build numa cópia; só troca o site se o build passar.
 # Log: /home/fare/deploy.log   Forçar: FORCE=1 ~/auto-deploy.sh
 set -euo pipefail

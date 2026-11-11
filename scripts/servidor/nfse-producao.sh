@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Libera o emissor de NFS-e da equipe em produção (notas reais), na VM do Google (fare-site).
-# Roda uma vez, no PC da loja (Git Bash): bash scripts/azure/nfse-producao.sh
+# Roda uma vez, no PC da loja (Git Bash): bash scripts/servidor/nfse-producao.sh
 #  1. copia o certificado A1 para /srv/fare/nfse/certificado.pfx (só o usuário do site lê);
 #  2. grava NFSE_* (senha, ambiente 1 = produção) em /srv/fare/.env.local, sem mostrar a senha;
 #  3. instala as fontes da Microsoft (Arial) para o PDF da nota (aceita a licença das fontes);
