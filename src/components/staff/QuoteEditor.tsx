@@ -161,7 +161,8 @@ export function CustomerPicker({ onPick, startCreating = false, onCancel }: { on
 
 /* ------------------------------------------------------------------ editor */
 
-export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: string; orderId?: string; mode?: "quote" | "order" }) {
+/** initialCustomer: documento novo já com o cliente (ex.: aberto pelo atendimento). */
+export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer = null }: { quoteId?: string; orderId?: string; mode?: "quote" | "order"; initialCustomer?: Customer | null }) {
   const router = useRouter();
   /** Editando pedido já criado: pagamento e entrega ficam na página do pedido. */
   const editingOrder = Boolean(orderId);
@@ -170,7 +171,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote" }: { quoteId?: st
   const [paidOnServer, setPaidOnServer] = useState(0);
   const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paid: "", paidAt: todayInBrazil() }));
   const [paymentChoice, setPaymentChoice] = useState<ClosingChoice>(null);
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<Customer | null>(initialCustomer);
   const [fixedCustomer, setFixedCustomer] = useState<{ name: string; company: string; phone: string; notes: string } | null>(null);
   const [fixedCustomerRef, setFixedCustomerRef] = useState<string | null>(null);
   const [fixedProfessional, setFixedProfessional] = useState(false);

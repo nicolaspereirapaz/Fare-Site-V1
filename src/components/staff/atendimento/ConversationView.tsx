@@ -1207,6 +1207,9 @@ function CustomerPanel({
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Novo orçamento/pedido já abre com o cadastro desta conversa.
+  const linkedRef = customers?.[0]?.ref;
+  const withCustomer = linkedRef ? `?cliente=${encodeURIComponent(linkedRef)}` : "";
 
   async function create() {
     setSaving(true);
@@ -1303,10 +1306,10 @@ function CustomerPanel({
       </section>
 
       <section className="at-card at-card-actions">
-        <Link className="at-btn at-btn-primary at-btn-block" href="/equipe/orcamentos/novo">
+        <Link className="at-btn at-btn-primary at-btn-block" href={`/equipe/orcamentos/novo${withCustomer}`}>
           <FileText aria-hidden="true" size={16} /> Novo orçamento
         </Link>
-        <Link className="at-btn at-btn-block" href="/equipe/pedidos/novo">
+        <Link className="at-btn at-btn-block" href={`/equipe/pedidos/novo${withCustomer}`}>
           <ClipboardList aria-hidden="true" size={16} /> Novo pedido
         </Link>
       </section>
