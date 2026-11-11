@@ -7,13 +7,13 @@ import { LogOut } from "lucide-react";
 import { staffAuthClient } from "@/lib/staff/client";
 
 // Pedidos e Orçamentos são abas do Quadro; o menu não repete as abas.
-const NAV = [["quadro", "/equipe", "Quadro"], ["atendimento", "/equipe/atendimento", "Atendimento"], ["clientes", "/equipe/clientes", "Clientes"], ["nfse", "/equipe/nfse", "Emissor de NFS-e"]] as const;
+const NAV = [["quadro", "/equipe", "Quadro"], ["atendimento", "/equipe/atendimento", "Atendimento"], ["retirada", "/equipe/retirada", "Retirada"], ["clientes", "/equipe/clientes", "Clientes"], ["nfse", "/equipe/nfse", "Emissor de NFS-e"]] as const;
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", vendedor: "Vendedor" };
 
 /** Barra do topo da área da equipe: marca, quem está logado e Sair. Sem nada da loja. */
 /** current: item do menu da página aberta (destaca e marca aria-current). */
-export function StaffTopbar({ name, role, current }: { name: string; role: string; current?: "quadro" | "atendimento" | "clientes" | "nfse" }) {
+export function StaffTopbar({ name, role, current }: { name: string; role: string; current?: "quadro" | "atendimento" | "retirada" | "clientes" | "nfse" }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 

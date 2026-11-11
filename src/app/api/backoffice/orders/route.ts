@@ -4,6 +4,7 @@ import { readStaffSession } from "@/lib/staff/server";
 import { createListBackofficeOrdersHandler } from "@/lib/backoffice/access";
 import { listAllOrders, listOrderStatusHistory } from "@/lib/orders/repository";
 import { getOrderFinance } from "@/lib/orders/payments";
+import { getPickupNotice } from "@/lib/orders/pickupNotice";
 import { isProfessional } from "@/lib/professional";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 function staffName(actorId: string): string {
   if (actorId === "temporary-open-admin") return "Acesso temporário — sem autenticação";
   if (actorId === "teste") return "Teste";
+  if (actorId === "sistema") return "Sistema";
   const row = staffDatabase.prepare("SELECT name FROM user WHERE id = ?").get(actorId) as { name: string } | undefined;
   return row?.name ?? "Equipe";
 }
@@ -27,4 +29,5 @@ export const GET = createListBackofficeOrdersHandler(
   })),
   (order) => getOrderFinance(database, order.id),
   (order) => isProfessional(database, order.userId),
+  (order) => (order.status === "aguardando_retirada" ? getPickupNotice(database, order.id) : null),
 );

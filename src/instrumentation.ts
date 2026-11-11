@@ -9,4 +9,7 @@ export async function register() {
     imageOf: documentImageOf, detailsOf: documentDetailsOf, renderQuote: renderProposalHtml, renderOrder: renderOrderHtml,
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL || process.env.FARE_SITE_URL || "https://www.farefoto.com.br",
   });
+  // Pedido em Finalizado há 5 min: avisa o cliente no WhatsApp que está pronto.
+  const { startPickupNotices } = await import("@/lib/orders/pickupNotice");
+  startPickupNotices(database);
 }

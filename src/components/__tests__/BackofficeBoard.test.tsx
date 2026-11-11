@@ -69,14 +69,14 @@ describe("painel: aba Pedidos", () => {
     vi.unstubAllGlobals();
   });
 
-  it("mostra as 6 etapas, cada uma numa coluna delimitada", async () => {
+  it("mostra as 5 etapas, cada uma numa coluna delimitada", async () => {
     stubOrdersApi([ORDER]);
     render(<BackofficeBoard canCancel={false} />);
     await screen.findByText("Cliente Teste");
 
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual([
-      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Aguardando retirada", "Aguardando feedback", "Finalizado",
+      "Aguardando arte", "Criando arte", "Aguardando produção", "Em produção", "Finalizado",
     ]);
     const column = screen.getByRole("region", { name: "Aguardando arte" });
     expect(column).toHaveClass("kb-column");
@@ -95,12 +95,13 @@ describe("painel: aba Pedidos", () => {
     expect(within(card).queryByText("Sem dados de faturamento")).not.toBeInTheDocument();
   });
 
-  it("pedido aguardando pagamento, cancelado ou finalizado sem data/há mais de 24 h não aparece no quadro de pedidos", async () => {
+  it("pedido aguardando pagamento, cancelado, entregue ou finalizado sem data/há mais de 10 min não aparece no quadro de pedidos", async () => {
     stubOrdersApi([
       ORDER,
       { ...ORDER, id: "o2", customerName: "Ainda não pagou", status: "aguardando_pagamento" },
-      { ...ORDER, id: "o3", customerName: "Já terminou", status: "concluido" },
-      { ...ORDER, id: "o5", customerName: "Terminou ontem cedo", status: "concluido", history: [{ status: "concluido", at: new Date(Date.now() - 25 * 3_600_000).toISOString(), by: "Bia" }] },
+      { ...ORDER, id: "o3", customerName: "Já terminou", status: "concluido", history: [{ status: "concluido", at: new Date().toISOString(), by: "Bia" }] },
+      { ...ORDER, id: "o5", customerName: "Ficou pronto cedo", status: "aguardando_retirada", history: [{ status: "aguardando_retirada", at: new Date(Date.now() - 11 * 60_000).toISOString(), by: "Bia" }] },
+      { ...ORDER, id: "o6", customerName: "Pronto sem data", status: "aguardando_retirada" },
       { ...ORDER, id: "o4", customerName: "Desistiu", status: "cancelado" },
     ]);
     render(<BackofficeBoard canCancel={false} />);
@@ -108,7 +109,8 @@ describe("painel: aba Pedidos", () => {
 
     expect(screen.queryByText("Ainda não pagou")).not.toBeInTheDocument();
     expect(screen.queryByText("Já terminou")).not.toBeInTheDocument();
-    expect(screen.queryByText("Terminou ontem cedo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ficou pronto cedo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pronto sem data")).not.toBeInTheDocument();
     expect(screen.queryByText("Desistiu")).not.toBeInTheDocument();
   });
 
@@ -131,17 +133,24 @@ describe("painel: aba Pedidos", () => {
     (await cardOf('Cliente Teste')).focus();await user.keyboard('{Enter}');expect(push).toHaveBeenCalledWith('/equipe/pedidos/order-1');
   });
 
-  it("finalizado há menos de 24 h fica na coluna Finalizado, com o tempo que falta", async () => {
-    stubOrdersApi([{ ...ORDER, status: "concluido", history: [{ status: "concluido", at: new Date(Date.now() - 2 * 3_600_000).toISOString(), by: "Bia" }] }]);
+  it("finalizado há menos de 10 min fica na coluna Finalizado, com o tempo que falta e o aviso do WhatsApp", async () => {
+    stubOrdersApi([
+      { ...ORDER, status: "aguardando_retirada", history: [{ status: "aguardando_retirada", at: new Date(Date.now() - 2 * 60_000 - 1000).toISOString(), by: "Bia" }] },
+      { ...ORDER, id: "o7", customerName: "Já avisado", status: "aguardando_retirada", history: [{ status: "aguardando_retirada", at: new Date(Date.now() - 6 * 60_000).toISOString(), by: "Bia" }], pickupNotice: { state: "enviado", detail: null, at: new Date().toISOString() } } as typeof ORDER,
+      { ...ORDER, id: "o8", customerName: "Sem telefone", status: "aguardando_retirada", history: [{ status: "aguardando_retirada", at: new Date(Date.now() - 6 * 60_000).toISOString(), by: "Bia" }], pickupNotice: { state: "falhou", detail: "Pedido sem telefone do cliente.", at: new Date().toISOString() } } as typeof ORDER,
+    ]);
     render(<BackofficeBoard canCancel={false} />);
     const column = await screen.findByRole("region", { name: "Finalizado" });
     const card = (await within(column).findByText("Cliente Teste")).closest("article") as HTMLElement;
-    expect(within(card).getByText("Sai do quadro em 22 h")).toBeInTheDocument();
+    expect(within(card).getByText("Sai em 8 min")).toBeInTheDocument();
+    expect(within(card).getByText("Aviso no WhatsApp em 3 min")).toBeInTheDocument();
+    expect(within(column).getByText("Cliente avisado no WhatsApp")).toBeInTheDocument();
+    expect(within(column).getByText("Aviso não enviado: Pedido sem telefone do cliente.")).toHaveClass("is-failed");
   });
 
-  it("finalizar fica na consulta, não altera o estilo/ações do cartão",async()=>{
-    stubOrdersApi([{...ORDER,status:'aguardando_feedback'}]);render(<BackofficeBoard canCancel/>);
-    const card=await cardOf('Cliente Teste');expect(within(card).queryByRole('button',{name:/Finalizar pedido/})).not.toBeInTheDocument();
+  it("entregar fica na tela Retirada/no pedido, não no cartão",async()=>{
+    stubOrdersApi([{...ORDER,status:'aguardando_retirada',history:[{status:'aguardando_retirada',at:new Date().toISOString(),by:'Bia'}]}]);render(<BackofficeBoard canCancel/>);
+    const card=await cardOf('Cliente Teste');expect(within(card).queryByRole('button',{name:/Cliente retirou|Entregue/})).not.toBeInTheDocument();
   });
 
   it("abrir detalhes não muda o status nem envia pagamento",async()=>{

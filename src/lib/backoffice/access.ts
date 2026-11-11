@@ -6,6 +6,8 @@ import type { QuoteBilling, QuoteCartItem } from "@/lib/commerce";
 import { orderCode } from "@/lib/orders/orderCode";
 import type { Order } from "@/lib/orders/repository";
 import type { OrderFinance } from "@/lib/orders/payments";
+import { dueAtPickupCents } from "@/lib/orders/paymentPlan";
+import type { PickupNotice } from "@/lib/orders/pickupNotice";
 
 export type BackofficeSession = { user: { id: string; role?: unknown } };
 
@@ -46,6 +48,8 @@ export type BackofficeOrderSummary = {
   updatedAt: string;
   history: OrderHistoryEntry[];
   finance?: OrderFinance | null;
+  /** Aviso de pedido pronto no WhatsApp (pedido em Finalizado). */
+  pickupNotice?: PickupNotice | null;
 };
 
 export function resolveUserRole(user: { role?: unknown } | null | undefined): UserRole {
@@ -78,7 +82,7 @@ function calculateOrderSummaryTotal(items: Order["items"]): number {
   return cents / 100;
 }
 
-function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [], finance: OrderFinance | null = null, professional = false): BackofficeOrderSummary {
+function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [], finance: OrderFinance | null = null, professional = false, pickupNotice: PickupNotice | null = null): BackofficeOrderSummary {
   return {
     id: order.id,
     code: orderCode(order.id),
@@ -101,6 +105,7 @@ function toBackofficeOrderSummary(order: Order, history: OrderHistoryEntry[] = [
     history,
     ...(finance ? { finance } : {}),
     ...(professional ? { professional: true } : {}),
+    ...(pickupNotice ? { pickupNotice } : {}),
   };
 }
 
@@ -120,6 +125,7 @@ export function createListBackofficeOrdersHandler(
   listHistory: ListOrderHistory = () => [],
   readFinance: (order: Order) => OrderFinance | null = () => null,
   isProfessionalOrder: (order: Order) => boolean = () => false,
+  readPickupNotice: (order: Order) => PickupNotice | null = () => null,
 ) {
   return async function listBackofficeOrders(request: Request): Promise<Response> {
     const session = await getSession({ headers: request.headers });
@@ -135,7 +141,7 @@ export function createListBackofficeOrdersHandler(
     const orders = listOrders();
 
     return Response.json({
-      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order), readFinance(order), isProfessionalOrder(order))),
+      orders: orders.map((order) => toBackofficeOrderSummary(order, listHistory(order), readFinance(order), isProfessionalOrder(order), readPickupNotice(order))),
       counts: buildStatusCounts(orders),
     });
   };
@@ -182,6 +188,12 @@ export function createUpdateBackofficeOrderStatusHandler(
     const finance = readFinance(order);
     if (finance && order.status === "aguardando_pagamento" && nextStatus === "aguardando_arte" && finance.paidCents <= 0) {
       return Response.json({ error: "INVALID_TRANSITION", message: "Registre um recebimento para liberar a arte." }, { status: 409 });
+    }
+    // "Cliente retirou"/"Entregue": só depois de receber o que falta pagar na retirada.
+    const due = nextStatus === "concluido" ? dueAtPickupCents(finance) : 0;
+    if (due > 0) {
+      const amount = (due / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      return Response.json({ error: "INVALID_TRANSITION", message: `Falta receber ${amount}. Registre o pagamento antes de entregar o pedido.` }, { status: 409 });
     }
     // "Pagamento recebido" num pedido de fotos: não há arte, segue direto para "Aguardando produção".
     if (order.status === "aguardando_pagamento" && nextStatus === "aguardando_arte" && isPhotoOrder(order)) {

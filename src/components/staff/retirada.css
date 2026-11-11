@@ -1,0 +1,28 @@
+/* Tela Retirada: busca o pedido no balcão e marca "Cliente retirou". */
+.rt-page { max-width: 820px; }
+.rt-list { display: grid; gap: 14px; }
+.rt-card.qe-card + .rt-card.qe-card { margin-top: 0; }
+.rt-card { display: grid; gap: 10px; border-left: 4px solid transparent; }
+.rt-card.is-ready { border-left-color: #167b55; }
+.rt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.rt-card .rt-head h2 { margin: 0; }
+.rt-status { padding: 3px 10px; border-radius: 999px; background: var(--navy-soft); color: var(--navy-dark); font-size: .82rem; font-weight: 600; }
+.rt-status-aguardando_retirada { background: #e3f3ea; color: #0f5a3e; }
+.rt-status-concluido { background: #eeeff1; color: #3f4248; }
+.rt-customer { display: grid; gap: 2px; margin: 0; }
+.rt-customer span, .rt-line, .rt-items small { color: var(--muted); }
+.rt-items { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.rt-line { margin: 0; overflow-wrap: anywhere; }
+.rt-money { display: grid; gap: 4px; margin: 0; }
+.rt-money div { display: flex; justify-content: space-between; gap: 12px; }
+.rt-money dt { color: var(--muted); }
+.rt-money dd { margin: 0; font-weight: 600; white-space: nowrap; }
+.rt-due dt, .rt-due dd { color: #a12a2a; }
+.rt-notice { margin: 0; font-size: .9rem; color: var(--navy); }
+.rt-actions { display: grid; gap: 8px; justify-items: start; }
+.rt-lock { margin: 0; color: #a12a2a; font-weight: 600; }
+.rt-open { justify-self: start; font-size: .9rem; }
+.rt-done, .rt-actions .kb-final { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border: 0; border-radius: 8px; background: #167b55; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.rt-done:hover, .rt-actions .kb-final:hover { background: #0f5a3e; }
+.rt-done:disabled, .rt-actions .kb-final:disabled { background: #c9cbd1; cursor: not-allowed; }
+.rt-actions .kb-payment-panel { width: 100%; }

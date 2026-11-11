@@ -280,6 +280,21 @@ export function runOrderMigrations(database: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS fare_order_status_history_order_idx
       ON fare_order_status_history (order_id, ordinal ASC);
   `);
+  migrateFeedbackOrders(database);
+}
+
+/** "Aguardando feedback" saiu do quadro em 11/11/2026: os pedidos que estavam lá viram "Entregue" (concluido). */
+function migrateFeedbackOrders(database: DatabaseSync) {
+  if (!database.prepare("SELECT 1 FROM fare_orders WHERE status = 'aguardando_feedback' LIMIT 1").get()) return;
+  orderTransaction(database, () => {
+    const now = new Date().toISOString();
+    const rows = database.prepare("SELECT id FROM fare_orders WHERE status = 'aguardando_feedback'").all() as Array<{ id: string }>;
+    for (const { id } of rows) {
+      database.prepare("UPDATE fare_orders SET status = 'concluido', updated_at = ? WHERE id = ?").run(now, id);
+      database.prepare(`INSERT INTO fare_order_status_history (id, order_id, previous_status, next_status, actor_id, created_at)
+        VALUES (?, ?, 'aguardando_feedback', 'concluido', 'sistema', ?)`).run(randomUUID(), id, now);
+    }
+  });
 }
 
 function calculateOrderTotal(items: QuoteCartItem[], discount: QuoteDiscount | null = null): number | null {

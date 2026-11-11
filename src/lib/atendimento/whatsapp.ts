@@ -140,7 +140,15 @@ export async function startWhatsAppConversation(
   input: { phone: string; name?: string },
   fetcher: typeof fetch = fetch,
 ): Promise<Conversation> {
-  const phone = normalizeOutboundPhone(input.phone);
+  const conversation = await whatsAppConversationFor(db, normalizeOutboundPhone(input.phone), fetcher);
+  const name = (input.name ?? "").trim().slice(0, 80);
+  if (name && !conversation.contactName) updateConversationProfile(db, conversation.id, { contactName: name });
+  openForStaff(db, conversation.id, staff);
+  return linkConversationCustomer(db, conversation.id, name, true);
+}
+
+/** Conversa do WhatsApp com o número (já normalizado): a ponte confere se tem WhatsApp e dá o destino. */
+export async function whatsAppConversationFor(db: DatabaseSync, phone: string, fetcher: typeof fetch = fetch): Promise<Conversation> {
   const bridge = bridgeConfig();
   if (!bridge) throw new AtendimentoError("INVALID_REQUEST", "WhatsApp não configurado neste site.");
   let response: Response;
@@ -158,11 +166,7 @@ export async function startWhatsAppConversation(
   if (!response.ok) throw new AtendimentoError("INVALID_REQUEST", "O WhatsApp da loja não está conectado.");
   const found = (await response.json()) as { chatId?: string; phone?: string };
   if (!found.chatId) throw new AtendimentoError("INVALID_REQUEST", "Esse número não tem WhatsApp.");
-  const conversation = ensureWhatsAppConversation(db, found.chatId, found.phone || phone);
-  const name = (input.name ?? "").trim().slice(0, 80);
-  if (name && !conversation.contactName) updateConversationProfile(db, conversation.id, { contactName: name });
-  openForStaff(db, conversation.id, staff);
-  return linkConversationCustomer(db, conversation.id, name, true);
+  return ensureWhatsAppConversation(db, found.chatId, found.phone || phone);
 }
 
 /** Citação para o WhatsApp: id da mensagem citada, se foi nossa e o texto (a ponte monta a resposta "citando"). */

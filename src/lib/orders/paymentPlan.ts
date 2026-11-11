@@ -17,3 +17,11 @@ export function paymentPlan(finance: Pick<OrderFinance, "payments" | "balanceCen
   const remainder = finance.balanceCents > 0 ? { label: `Falta pagar · ${when}`, amount: brl(finance.balanceCents) } : null;
   return { receipts, remainder };
 }
+
+/**
+ * Quanto o cliente precisa pagar antes de levar o pedido (0 = nada). Saldo com vencimento combinado
+ * (boleto, faturamento) não trava a retirada; sem vencimento, o saldo é pago na retirada/entrega.
+ */
+export function dueAtPickupCents(finance: Pick<OrderFinance, "balanceCents" | "dueDate"> | null | undefined): number {
+  return finance && finance.balanceCents > 0 && !finance.dueDate ? finance.balanceCents : 0;
+}

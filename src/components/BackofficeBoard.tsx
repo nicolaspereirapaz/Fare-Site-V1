@@ -20,11 +20,12 @@ import {
   messageFor,
 } from "@/components/backofficeShared";
 import { movePath } from "@/lib/backoffice/boardMoves";
-import { horasNoQuadro, visivelNoQuadroDePedidos } from "@/lib/backoffice/finishedOrders";
+import { avisoLabel, minutosNoQuadro, visivelNoQuadroDePedidos } from "@/lib/backoffice/finishedOrders";
 import type { PaymentMethod } from "@/lib/orders/repository";
 import { QuotesBoard } from "@/components/BackofficeQuotesBoard";
 import "@/components/staff/fotos/kanbanFotos.css";
 import type { OrderFinance } from "@/lib/orders/payments";
+import type { PickupNotice } from "@/lib/orders/pickupNotice";
 
 export type BackofficeOrder = {
   id: string;
@@ -48,6 +49,8 @@ export type BackofficeOrder = {
   updatedAt: string;
   history?: OrderHistoryEntry[];
   finance?: OrderFinance | null;
+  /** Aviso de pedido pronto no WhatsApp (só em Finalizado). */
+  pickupNotice?: PickupNotice | null;
 };
 
 /** Nomes das situações no painel interno. */
@@ -82,7 +85,7 @@ export type BackofficeBoardProps = {
 type BoardColumn = (typeof COLUNAS_QUADRO_PEDIDOS)[number];
 const isBoardColumn = (status: string): status is BoardColumn => (COLUNAS_QUADRO_PEDIDOS as readonly string[]).includes(status);
 
-/** Quadro de pedidos: Aguardando arte | … | Aguardando feedback | Finalizado (fica 24 h e some). */
+/** Quadro de pedidos: Aguardando arte | … | Em produção | Finalizado (fica 10 min e some; segue na tela Retirada). */
 function OrdersBoard({ freshOrderId, onFreshShown, search = "" }: { freshOrderId?: string; onFreshShown: () => void; search?: string }) {
   const router = useRouter();
   const [freshId, setFreshId] = useState(freshOrderId);
@@ -195,8 +198,12 @@ function OrdersBoard({ freshOrderId, onFreshShown, search = "" }: { freshOrderId
         {order.professional ? <span className="kb-tag kb-tag-pro">Cliente profissional</span> : null}
       </>
     ) : undefined,
-    meta: order.status === "concluido"
-      ? `Sai do quadro em ${horasNoQuadro(order.history, now)} h`
+    // Finalizado: como está o aviso ao cliente (falha em vermelho) e quando o cartão sai do quadro.
+    tag: order.status === "aguardando_retirada"
+      ? <span className={`kb-notice${order.pickupNotice?.state === "falhou" ? " is-failed" : ""}`}>{avisoLabel(order.pickupNotice, order.history, now)}</span>
+      : undefined,
+    meta: order.status === "aguardando_retirada"
+      ? `Sai em ${minutosNoQuadro(order.history, now)} min`
       : order.finance?.paymentOnPickup ? 'Pagamento na retirada'
       : `Pago em ${formatDay(order.history?.find((entry) => entry.from === "aguardando_pagamento" || entry.status === "aguardando_arte")?.at ?? order.createdAt)}`,
   });

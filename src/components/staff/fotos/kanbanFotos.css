@@ -6,3 +6,7 @@
 .pf-order-banner strong { color: var(--orange-dark); }
 .pf-order-banner code { border-radius: 6px; background: #fff; padding: 2px 7px; font-size: .82rem; overflow-wrap: anywhere; }
 .pf-order-banner a { margin-left: auto; color: var(--navy); font-weight: 700; text-decoration: underline; }
+
+/* Finalizado: aviso de pedido pronto no WhatsApp (falha em vermelho). */
+.kb-notice { color: var(--muted); }
+.kb-notice.is-failed { color: #a12a2a; font-weight: 600; }

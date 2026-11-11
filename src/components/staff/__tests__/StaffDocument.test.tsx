@@ -59,11 +59,11 @@ describe('consulta completa com snapshot do editor',()=>{
   await user.click(screen.getByRole('button',{name:'Cancelar pedido'}));expect(confirm).toHaveBeenCalled();
   expect(vi.mocked(fetch).mock.calls.some(([,init])=>init?.method==='PATCH')).toBe(false);
  });
- it('Finalizar pedido usa a transição real para concluido',async()=>{
-  const user=userEvent.setup();let current={...doc,status:'aguardando_feedback'};
+ it('Cliente retirou usa a transição real para concluido',async()=>{
+  const user=userEvent.setup();let current={...doc,status:'aguardando_retirada'};
   vi.mocked(fetch).mockImplementation(async(_url,init)=>{if(init?.method==='PATCH'){current={...current,status:JSON.parse(String(init.body)).status};return Response.json({});}return Response.json({document:current});});
   render(<StaffDocumentPage kind="order" id="order1" canCancel={false}/>);
-  await user.click(await screen.findByRole('button',{name:'Finalizar pedido'}));
+  await user.click(await screen.findByRole('button',{name:/^(Cliente retirou|Entregue)$/}));
   await waitFor(()=>expect(current.status).toBe('concluido'));
  });
  it('laser não inventa dimensões; campos do produto são somente leitura',()=>{
