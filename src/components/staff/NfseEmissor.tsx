@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { CustomerPicker } from "@/components/staff/QuoteEditor";
 import type { Customer } from "@/components/staff/quoteEditorShared";
+import { formatCep } from "@/lib/account/documents";
 import { centavos, SERVICOS, type ServicoId, type Tomador } from "@/lib/nfse/dps";
 import { MOTIVOS_CANCELAMENTO, type MotivoCancelamento } from "@/lib/nfse/evento";
 import type { NotaLista } from "@/lib/nfse/db";
@@ -25,6 +26,13 @@ function paraCampos(t: Tomador): Campos {
   return { ...VAZIO, ...Object.fromEntries(Object.entries(t).filter(([, v]) => v != null && v !== "")) } as Campos;
 }
 
+/** Endereço pelo CEP (ViaCEP). Diferente do lookupCep do cadastro, traz o código IBGE da cidade, que a nota exige. */
+async function enderecoPorCep(cep: string) {
+  const r = await fetch(`https://viacep.com.br/ws/${cep.replace(/\D/g, "")}/json/`).catch(() => null);
+  const j = r?.ok ? ((await r.json().catch(() => null)) as { erro?: unknown; logradouro?: string; bairro?: string; localidade?: string; uf?: string; ibge?: string } | null) : null;
+  return j && !j.erro && j.ibge ? j : null;
+}
+
 async function pedirJson<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { cache: "no-store", ...init });
   return (await r.json()) as T;
@@ -44,6 +52,7 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
   const [erros, setErros] = useState<string[]>([]);
   const [ok, setOk] = useState<{ chave: string; nNFSe?: string } | null>(null);
   const [cancelando, setCancelando] = useState<string | null>(null);
+  const [cepInfo, setCepInfo] = useState<string | null>(null);
 
   const recarregar = useCallback(async () => {
     const j = await pedirJson<{ notas?: NotaLista[] }>("/api/equipe/nfse").catch(() => ({ notas: [] }));
@@ -63,6 +72,20 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
     setEscolhido(null);
     setCli(VAZIO);
     setAviso(null);
+    setCepInfo(null);
+  }
+
+  async function trocarCep(bruto: string) {
+    const cep = formatCep(bruto);
+    setCli((c) => ({ ...c, cep }));
+    setCepInfo(null);
+    if (cep.length !== 9) return;
+    setCepInfo("Buscando endereço…");
+    const e = await enderecoPorCep(cep);
+    if (!e) return setCepInfo("CEP não encontrado; preencha abaixo.");
+    setCepInfo(`${e.localidade}/${e.uf}`);
+    // CEP geral da cidade vem sem rua/bairro: não apaga o que já foi digitado.
+    setCli((c) => (c.cep === cep ? { ...c, cMun: e.ibge!, logradouro: e.logradouro || c.logradouro, bairro: e.bairro || c.bairro } : c));
   }
 
   function trocarModo(m: Modo) {
@@ -178,8 +201,12 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
               {modo === "cadastro" ? campo("doc", "CPF ou CNPJ", { inputMode: "numeric", required: true }) : null}
               {campo("nome", digitos.length === 14 ? "Razão social" : "Nome", { required: true })}
               <div className="qe-grid-3">
-                {campo("cep", "CEP", { inputMode: "numeric" })}
-                {campo("cMun", "Código IBGE da cidade", { inputMode: "numeric", title: "Jundiaí = 3525904. Preenchido sozinho pelo cadastro ou pela Receita." })}
+                <label className="qe-field">
+                  <span>CEP</span>
+                  <input autoComplete="postal-code" inputMode="numeric" onChange={(e) => void trocarCep(e.target.value)} placeholder="00000-000" value={cli.cep} />
+                  {cepInfo ? <small className="qe-fhint">{cepInfo}</small> : null}
+                </label>
+                {campo("cMun", "Código IBGE da cidade", { inputMode: "numeric", title: "Jundiaí = 3525904. Preenchido sozinho pelo CEP, pelo cadastro ou pela Receita." })}
                 {campo("numero", "Número")}
               </div>
               {campo("logradouro", "Rua")}
