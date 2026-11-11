@@ -35,7 +35,8 @@ export type PhotoOrder = {
   code: string;
   userId: string;
   customerNumber: string;
-  customer: { name: string; phone: string; company: string | null };
+  /** address: endereço de entrega em uma linha (receber em casa pelo site). */
+  customer: { name: string; phone: string; company: string | null; address?: string };
   delivery: "retirada" | "entrega";
   lines: PhotoOrderLine[];
   totalCents: number;

@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Clock, Home, MessageCircle, Minus, Pencil, Plus, Store, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { fetchMyProfile, formatPhoneBR, saveMyContact } from "@/lib/account/profileClient";
+import { formatCep } from "@/lib/account/documents";
+import { fetchMyProfile, formatPhoneBR, lookupCep, saveMyContact } from "@/lib/account/profileClient";
+import { EMPTY_ADDRESS, formatDeliveryAddress, type DeliveryAddress } from "@/lib/customers/address";
 import { requestCheckout } from "@/lib/requestCheckout";
 import {
   clearPhotoOrder, deadline, groupOf, minimumIssues, paperLabel, PHOTO_PRODUCT_IMAGE, photoPayload, realLabel, setPhotos, summarize, usePhotoState,
@@ -25,10 +27,7 @@ type Delivery = "retirada" | "entrega";
 type PhotoOrderResult = { code: string; url: string; summary: string[] };
 
 /** Só o que o servidor precisa para montar os arquivos: o arquivo enviado e as escolhas do editor. */
-const DELIVERY_TEXT: Record<Delivery, string> = {
-  retirada: "Entrega: vou retirar na loja.",
-  entrega: "Entrega: quero receber em casa (taxa combinada no WhatsApp).",
-};
+const DELIVERY_TEXT = { retirada: "Entrega: vou retirar na loja." };
 
 /**
  * Quantidade digitável no carrinho. Aceita só números; confirma com Enter ou ao sair do campo.
@@ -83,6 +82,9 @@ export function CartView() {
   const pro = useProfessional();
   const photoOrder = summarize(photoState.inCart ? photoState.photos : [], pro);
   const [delivery, setDelivery] = useState<Delivery>("retirada");
+  /** Receber em casa: endereço para a equipe calcular o frete (o CEP preenche rua, bairro e cidade). */
+  const [address, setAddress] = useState<DeliveryAddress>(EMPTY_ADDRESS);
+  const [cepInfo, setCepInfo] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
@@ -106,6 +108,7 @@ export function CartView() {
       setName(profile.name);
       setPhone(profile.phone);
       setCompany(profile.tradeName || profile.companyName);
+      if (profile.address.cep) setAddress({ ...EMPTY_ADDRESS, ...profile.address });
       setAccount(profile.phone ? "ok" : "sem-telefone");
     });
     return () => {
@@ -117,6 +120,23 @@ export function CartView() {
     setDelivery(next);
     setCheckoutError(null);
   }
+
+  async function changeCep(raw: string) {
+    const cep = formatCep(raw);
+    setAddress((current) => ({ ...current, cep }));
+    setCepInfo(null);
+    if (cep.length !== 9) return;
+    setCepInfo("Buscando endereço…");
+    const found = await lookupCep(cep);
+    setCepInfo(found ? null : "CEP não encontrado; preencha abaixo.");
+    // CEP geral da cidade vem sem rua/bairro: não apaga o que já foi digitado.
+    if (found) setAddress((current) => (current.cep === cep ? { ...current, ...Object.fromEntries(Object.entries(found).filter(([, text]) => text)) } : current));
+  }
+
+  const setAddressField = (key: keyof DeliveryAddress) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const text = key === "state" ? event.target.value.toUpperCase() : event.target.value;
+    setAddress((current) => ({ ...current, [key]: text }));
+  };
 
   function removePhotoLine(sizeId: string, paper: string) {
     setPhotos(photoState.photos.filter((photo) => !(photo.sizeId === sizeId && photo.paper === paper)));
@@ -149,7 +169,7 @@ export function CartView() {
         const response = await fetch("/api/fotos/pedidos", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ customer: { name, phone, company }, delivery, photos: photos.map(photoPayload) }),
+          body: JSON.stringify({ customer: { name, phone, company }, delivery, ...(delivery === "entrega" ? { address } : {}), photos: photos.map(photoPayload) }),
         });
         if (response.status === 401) {
           // As fotos ficam guardadas e voltam depois do login.
@@ -170,7 +190,10 @@ export function CartView() {
       }
 
       // 3) Com brindes: registra o orçamento; o pedido de fotos vai junto nas observações.
-      const notes = [DELIVERY_TEXT[delivery], ...(photoOrder ? ["", ...photoOrder.summary] : [])].join("\n");
+      const deliveryNote = delivery === "entrega"
+        ? `Entrega: quero receber em casa.\nEndereço: ${formatDeliveryAddress(address)}\nPor favor, calcule o frete.`
+        : DELIVERY_TEXT.retirada;
+      const notes = [deliveryNote, ...(photoOrder ? ["", ...photoOrder.summary] : [])].join("\n");
       idempotencyKey.current ??= typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -345,9 +368,26 @@ export function CartView() {
             <label className={delivery === "entrega" ? "active" : ""}>
               <input checked={delivery === "entrega"} name="entrega" onChange={() => changeDelivery("entrega")} type="radio" />
               <Home aria-hidden="true" size={20} />
-              <span><strong>Receber em casa</strong><small>Entrega na região. Taxa combinada no WhatsApp.</small></span>
+              <span><strong>Receber em casa</strong><small>Informe o endereço: calculamos o frete e mandamos o total no WhatsApp.</small></span>
             </label>
           </fieldset>
+
+          {delivery === "entrega" ? (
+            <fieldset className="checkout-address">
+              <legend>Endereço de entrega</legend>
+              <label>
+                <span>CEP</span>
+                <input autoComplete="postal-code" inputMode="numeric" onChange={(event) => void changeCep(event.target.value)} placeholder="00000-000" required value={address.cep} />
+                {cepInfo ? <small>{cepInfo}</small> : null}
+              </label>
+              <label className="checkout-address-wide"><span>Rua</span><input autoComplete="address-line1" onChange={setAddressField("street")} required value={address.street} /></label>
+              <label><span>Número</span><input onChange={setAddressField("number")} required value={address.number} /></label>
+              <label><span>Complemento</span><input onChange={setAddressField("complement")} placeholder="Apto, bloco" value={address.complement} /></label>
+              <label><span>Bairro</span><input onChange={setAddressField("district")} required value={address.district} /></label>
+              <label><span>Cidade</span><input autoComplete="address-level2" onChange={setAddressField("city")} required value={address.city} /></label>
+              <label><span>UF</span><input autoComplete="address-level1" maxLength={2} onChange={setAddressField("state")} required value={address.state} /></label>
+            </fieldset>
+          ) : null}
 
           {account === "ok" ? (
             <p className="checkout-contact">

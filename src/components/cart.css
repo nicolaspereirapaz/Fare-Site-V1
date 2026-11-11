@@ -19,3 +19,9 @@
 
 /* Imagem do produto sempre quadrada (fotos e brindes), alinhada ao topo do card */
 .cart-item .cart-item-image { align-self: start; aspect-ratio: 1; min-height: 0; height: auto; }
+
+/* Receber em casa: endereço (o CEP preenche rua, bairro e cidade) para a equipe calcular o frete */
+.checkout-address { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 0; border: 0; padding: 0; min-width: 0; }
+.checkout-address legend { margin-bottom: 8px; padding: 0; color: #fff; font-weight: 700; }
+.checkout-address .checkout-address-wide { grid-column: 1 / -1; }
+.checkout-address small { color: rgba(255, 255, 255, .8); font-size: .8rem; font-weight: 500; }

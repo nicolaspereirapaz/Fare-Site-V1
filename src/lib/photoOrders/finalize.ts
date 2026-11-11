@@ -9,6 +9,7 @@ import {
   FILTERS, ZOOM, deadline, groupOf, minimumIssues, paperLabel, realLabel, sizeById, summarize, type Fit, type Paper, type Photo,
 } from "@/components/fotos/catalog";
 import { buildWhatsAppUrl } from "@/lib/commerce";
+import { formatDeliveryAddress, parseDeliveryAddress, type DeliveryAddress } from "@/lib/customers/address";
 import { FARE_FOTO_WHATSAPP, FARE_FOTO_WHATSAPP_PRO } from "@/lib/constants";
 import { orderCode } from "@/lib/orders/orderCode";
 import { createOrder } from "@/lib/orders/repository";
@@ -23,6 +24,8 @@ import { readUpload, removeUpload, type PhotoUpload } from "./uploads";
 export type PhotoOrderInput = {
   customer: { name: string; phone: string; company?: string | null };
   delivery: "retirada" | "entrega";
+  /** Receber em casa pelo site: endereço (CEP, rua…) para a equipe calcular o frete. */
+  address?: unknown;
   photos: Array<PhotoEdits & { uploadId: string; paper: Paper; copies: number }>;
 };
 
@@ -80,7 +83,28 @@ function validate(input: PhotoOrderInput) {
   if (name.length < 2) throw new PhotoOrderError("Informe seu nome.");
   if (phone.replace(/\D/g, "").length < 10) throw new PhotoOrderError("Informe um WhatsApp para retorno.");
   if (input.delivery !== "retirada" && input.delivery !== "entrega") throw new PhotoOrderError("Escolha retirar ou receber.");
-  return { customer: { name, phone, company: input.customer.company?.trim() || null }, delivery: input.delivery, photos: validatePhotos(input.photos) };
+  const address = input.delivery === "entrega" && input.address !== undefined ? deliveryAddress(input.address) : null;
+  return { customer: { name, phone, company: input.customer.company?.trim() || null, ...(address ? { address } : {}) }, delivery: input.delivery, photos: validatePhotos(input.photos) };
+}
+
+/** Endereço completo de entrega, em uma linha (vai na mensagem do WhatsApp e no pedido). */
+function deliveryAddress(raw: unknown) {
+  let address: DeliveryAddress | null;
+  try {
+    address = parseDeliveryAddress(raw);
+  } catch {
+    throw new PhotoOrderError("CEP inválido.");
+  }
+  if (!address?.cep || !address.street || !address.number || !address.district || !address.city || !address.state) {
+    throw new PhotoOrderError("Preencha o endereço de entrega: CEP, rua, número, bairro e cidade.");
+  }
+  return formatDeliveryAddress(address);
+}
+
+/** "Retirar na loja." ou "Receber em casa: <endereço>. Calcular o frete." */
+export function deliveryText(order: Pick<PhotoOrder, "delivery" | "customer">) {
+  if (order.delivery === "retirada") return "Retirar na loja.";
+  return order.customer.address ? `Receber em casa: ${order.customer.address}. Calcular o frete.` : "Receber em casa (taxa combinada no WhatsApp).";
 }
 
 /** Faz um trabalho por vez em `limit` filas (renderizar centenas de fotos sem travar o servidor). */
@@ -108,12 +132,11 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
   const { uploads, summary } = await readPhotos(data.photos, professional);
 
   const id = randomUUID();
-  const deliveryText = data.delivery === "retirada" ? "Retirar na loja." : "Receber em casa (taxa combinada no WhatsApp).";
   // Pedido do quadro (aba Pedidos, "Aguardando pagamento"): uma linha por tamanho + papel, preço da tabela.
   const boardOrder = createOrder(database, {
     userId: user.id,
     idempotencyKey: `fotos-${id}`,
-    customer: { name: data.customer.name, phone: data.customer.phone, ...(data.customer.company ? { company: data.customer.company } : {}), notes: `Pedido de fotos pelo site. ${deliveryText}` },
+    customer: { name: data.customer.name, phone: data.customer.phone, ...(data.customer.company ? { company: data.customer.company } : {}), ...(data.customer.address ? { address: data.customer.address } : {}), notes: `Pedido de fotos pelo site. ${deliveryText(data)}` },
     paymentMethod: "pix",
     items: summary.sizes.flatMap((group) => group.papers.map((line) => ({
       id: `${group.size.id}-${line.paper}`,
@@ -388,7 +411,9 @@ function photoOrderMessage(order: PhotoOrder, prazo: string) {
     `Cliente: ${order.customer.name}`,
     `Telefone: ${order.customer.phone}`,
     "",
-    order.delivery === "retirada" ? "Entrega: vou retirar na loja." : "Entrega: quero receber em casa (taxa combinada no WhatsApp).",
+    order.delivery === "retirada" ? "Entrega: vou retirar na loja." : order.customer.address
+      ? `Entrega: quero receber em casa.\nEndereço: ${order.customer.address}\nPor favor, calcule o frete.`
+      : "Entrega: quero receber em casa (taxa combinada no WhatsApp).",
     "",
     ...photoOrderSummaryLines(order, prazo),
     "",
@@ -426,7 +451,7 @@ async function photoOrderHtml(order: PhotoOrder, prazo: string) {
     discount: null,
     total: order.totalCents / 100,
     terms: [
-      { title: order.delivery === "retirada" ? "Retirada" : "Entrega", text: order.delivery === "retirada" ? "Na loja. Avisamos pelo WhatsApp quando ficar pronto." : "Em casa. Taxa combinada no WhatsApp." },
+      { title: order.delivery === "retirada" ? "Retirada" : "Entrega", text: order.delivery === "retirada" ? "Na loja. Avisamos pelo WhatsApp quando ficar pronto." : order.customer.address ? `Em casa: ${order.customer.address}. Frete calculado pela equipe no WhatsApp.` : "Em casa. Taxa combinada no WhatsApp." },
       { title: "Prazo", text: prazo },
       { title: "Pagamento", text: "Combinado no WhatsApp." },
     ],

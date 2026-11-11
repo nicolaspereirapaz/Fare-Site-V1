@@ -97,6 +97,21 @@ describe("pedido de fotos", () => {
       expect(existsSync(path.join(order.folder, "10x15 Fosco", "foto-01 (1 copia).jpg"))).toBe(true);
     });
 
+    it("receber em casa pelo site: endereço vai na mensagem pedindo o frete; endereço incompleto é recusado", async () => {
+      const sent = await upload("casa.jpg", 1800, 1200);
+      const input = {
+        customer: { name: "Bia Lima", phone: "(11) 98888-1111" },
+        delivery: "entrega" as const,
+        photos: [{ ...edits, uploadId: sent.id, sizeId: "10x15", paper: "brilho" as const, copies: 1 }],
+      };
+      await expect(createPhotoOrder(database, { id: "casa" }, { ...input, address: { cep: "13201-010", street: "Rua Barão de Jundiaí" } }))
+        .rejects.toThrow("Preencha o endereço de entrega");
+      const address = { cep: "13201010", street: "Rua Barão de Jundiaí", number: "508", district: "Centro", city: "Jundiaí", state: "sp" };
+      const { order, whatsappUrl } = await createPhotoOrder(database, { id: "casa" }, { ...input, address });
+      expect(order.customer.address).toBe("Rua Barão de Jundiaí, 508 — Centro — Jundiaí/SP — CEP 13201-010");
+      expect(decodeURIComponent(whatsappUrl)).toContain("Endereço: Rua Barão de Jundiaí, 508 — Centro — Jundiaí/SP — CEP 13201-010\nPor favor, calcule o frete.");
+    });
+
     it("fotos retrô: folha cinza 10,2 × 15,2 com o cartão branco; Instax junta 2 cópias por folha", async () => {
       const [polaroid, instaxA, instaxB] = [await upload("p.jpg", 1200, 1200), await upload("a.jpg", 1200, 1600), await upload("b.jpg", 1200, 1600)];
       const { order } = await createPhotoOrder(database, { id: "cliente-retro" }, {

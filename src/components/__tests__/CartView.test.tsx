@@ -171,6 +171,11 @@ describe("CartView", () => {
   });
 
   it("com brindes, registra o orçamento e leva a entrega escolhida na mensagem", async () => {
+    // Endereço do cadastro já preenche "Receber em casa".
+    fetchMyProfile.mockResolvedValue({
+      ...EMPTY_PROFILE, name: "Ana", email: "ana@x.com", phone: "(11) 99999-9999", complete: false,
+      address: { cep: "13201-010", street: "Rua Barão de Jundiaí", number: "508", complement: "", district: "Centro", city: "Jundiaí", state: "SP" },
+    });
     const user = userEvent.setup();
     render(<CartView />);
 
@@ -186,6 +191,7 @@ describe("CartView", () => {
       customer: { name: "Ana", phone: "(11) 99999-9999", notes: expect.stringContaining("receber em casa") },
       idempotencyKey: expect.stringMatching(/^[A-Za-z0-9_-]{8,128}$/),
     });
+    expect(payload.customer.notes).toContain("Endereço: Rua Barão de Jundiaí, 508 — Centro — Jundiaí/SP — CEP 13201-010\nPor favor, calcule o frete.");
     expect(push).toHaveBeenCalledWith("/entrar?callbackURL=/carrinho");
   });
 
