@@ -918,6 +918,8 @@ describe("mensagens rápidas", () => {
     expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("{pix}");
     expect(replies.find((reply) => reply.shortcut === "pix")?.body).not.toContain("retirada");
     expect(replies.some((reply) => reply.shortcut === "chavepix")).toBe(false);
+    expect(replies.find((reply) => reply.shortcut === "pg")?.body).toMatch(/^💰 Para confirmar seu pedido envie o comprovante\./);
+    expect(replies.find((reply) => reply.shortcut === "aprovacao")?.body).toMatch(/^Segue arte para aprovação:/);
   });
 
   it("banco antigo: /pix perde a retirada (mesmo editado) e /chavepix some", () => {

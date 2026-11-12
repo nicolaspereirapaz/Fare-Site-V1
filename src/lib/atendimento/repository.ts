@@ -648,11 +648,26 @@ const GREETING_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "bod
   { shortcut: "ajudar", title: "Como posso ajudar?", body: "Como posso ajudar?" },
 ];
 
+/** "PAGAMENTO" e "Segue Arte" do sistema antigo de WhatsApp, com o texto igual. */
+const ORDER_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
+  {
+    shortcut: "pg",
+    title: "Pagamento",
+    body: "💰 Para confirmar seu pedido envie o comprovante.\n\n📎Seu pedido ficará registrado no nome apresentado no PIX\n\n📍 Retirada na loja mediante apresentação do comprovante PIX.",
+  },
+  {
+    shortcut: "aprovacao",
+    title: "Segue arte para aprovação",
+    body: "Segue arte para aprovação:\n\n⚠️ Importante: Após a aprovação da arte, a produção será iniciada. Não nos responsabilizamos por possíveis erros de ortografia, digitação ou informações no material aprovado. Por favor, revise tudo com atenção antes de confirmar.",
+  },
+];
+
 /** Cada leva de mensagens iniciais entra uma única vez; apagar/editar depois é decisão da equipe. */
 const QUICK_REPLY_SEEDS: Array<[string, Array<Pick<QuickReply, "shortcut" | "title" | "body">>]> = [
   ["quick_replies_seeded", DEFAULT_QUICK_REPLIES],
   ["quick_replies_seed_pix", PIX_QUICK_REPLIES],
   ["quick_replies_seed_saudacao", GREETING_QUICK_REPLIES],
+  ["quick_replies_seed_pg_aprovacao", ORDER_QUICK_REPLIES],
 ];
 
 function seedQuickReplies(db: DatabaseSync) {
