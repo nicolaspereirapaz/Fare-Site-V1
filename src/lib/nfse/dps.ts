@@ -23,8 +23,10 @@ export const SERVICOS = {
   },
   brindes: {
     nome: "Personalização de Brindes",
-    cTribNac: "130402",
-    cTribMun: "827",
+    // 13.05.01 "composição gráfica, inclusive confecção de impressos gráficos" (2% em Jundiaí): brinde personalizado sob encomenda.
+    // O 13.04.02/827 de antes não existe na lista nacional (E0310). Municipal 001: Jundiaí tem 001–006, todos 2%, sem descrição no ADN.
+    cTribNac: "130501",
+    cTribMun: "001",
     // NBS 1.2101.21.00 "Serviços de impressão": personalização é impressão/gravação da marca no brinde.
     cNBS: "121012100",
     descricao: "PERSONALIZACAO DE BRINDES",

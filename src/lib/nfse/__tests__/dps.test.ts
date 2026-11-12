@@ -42,7 +42,7 @@ describe("montarDps", () => {
 
       it("personalização de brindes", async () => {
         const { xml } = montarDps({ ...base, ambiente, servico: "brindes", tomador: caedu });
-        expect(xml).toContain("<cTribNac>130402</cTribNac><cTribMun>827</cTribMun>");
+        expect(xml).toContain("<cTribNac>130501</cTribNac><cTribMun>001</cTribMun>");
         expect(await validarXsd(xml, ambiente)).toEqual([]);
       });
 
