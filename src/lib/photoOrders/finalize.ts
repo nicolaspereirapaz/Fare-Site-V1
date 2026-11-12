@@ -31,9 +31,12 @@ export type PhotoOrderInput = {
 
 export class PhotoOrderError extends Error {}
 
-/** Nome de pasta que o Windows aceita (sem \ / : * ? " < > | e sem ponto/espaço no fim). */
+/**
+ * Nome de pasta que o Windows aceita (sem \ / : * ? " < > | e sem ponto/espaço no fim).
+ * Sem emoji nem caractere fora do BMP: o tar.exe do oraculo não grava esses nomes e a cópia para o D:\Digital trava.
+ */
 export const safeFolderName = (value: string) =>
-  value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "").slice(0, 80) || "Cliente";
+  value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/[\p{Extended_Pictographic}\u{10000}-\u{10FFFF}\uFE0E\uFE0F\u200D]/gu, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "").slice(0, 80) || "Cliente";
 
 /** "Ana Maria da Silva" → "Ana Silva" (primeiro e último nome). */
 export function firstAndLastName(name: string) {

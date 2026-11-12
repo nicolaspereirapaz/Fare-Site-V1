@@ -44,6 +44,10 @@ describe("pedido de fotos", () => {
     expect(firstAndLastName("Ana Maria da Silva")).toBe("Ana Silva");
     expect(firstAndLastName("  Bruno ")).toBe("Bruno");
     expect(safeFolderName('Ana: "Silva"? / Teste.')).toBe("Ana Silva Teste");
+    // Emoji do nome do WhatsApp travava a cópia para o oraculo (tar.exe do Windows 10).
+    expect(safeFolderName("Thayy🤎")).toBe("Thayy");
+    expect(safeFolderName("Ana ❤️ Silva 𝓐 Lú 1º")).toBe("Ana Silva Lú 1º");
+    expect(safeFolderName("👩‍👧🤎")).toBe("Cliente");
   });
 
   describe("montagem", () => {
