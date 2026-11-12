@@ -420,8 +420,9 @@ function ChatPanel({
         );
         if (!active) return;
         if (data.messages.length) {
-          lastSeq.current = data.messages[data.messages.length - 1].seq;
-          setMessages((list) => (first ? data.messages : [...list, ...data.messages]));
+          lastSeq.current = Math.max(lastSeq.current, ...data.messages.map((message) => message.seq));
+          // Histórico antigo do WhatsApp pode chegar depois: mantém em ordem de data.
+          setMessages((list) => (first ? data.messages : byDate([...list, ...data.messages])));
         }
         if (data.customers) setCustomers(data.customers);
         setAiThinking(Boolean(data.aiThinking));
@@ -668,10 +669,14 @@ function DeliveryMark({ message, onResend }: { message: Message; onResend: (id: 
   return null;
 }
 
+const byDate = (list: Message[]) => list.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.seq - b.seq));
+
 function dayLabelFor(message: Message, previous?: Message) {
-  const day = new Date(message.createdAt).toDateString();
-  const showDay = !previous || new Date(previous.createdAt).toDateString() !== day;
-  return showDay ? new Date(message.createdAt).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : null;
+  const date = new Date(message.createdAt);
+  const showDay = !previous || new Date(previous.createdAt).toDateString() !== date.toDateString();
+  // Ano só quando não é o atual (histórico antigo).
+  const year = date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {};
+  return showDay ? date.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", ...year }) : null;
 }
 
 function AuthorLabel({ message }: { message: Message }) {

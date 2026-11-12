@@ -86,7 +86,8 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
       if (conversation.status !== "ia") return created;
       const messages = listMessages(db, conversationId);
       if (messages.filter((message) => !isInternal(message.author)).at(-1)?.author !== "cliente") return created;
-      const lastSeq = messages.at(-1)?.seq ?? 0;
+      // Maior seq (a lista vem em ordem de data; histórico importado tem seq alto e data antiga).
+      const lastSeq = messages.reduce((max, message) => Math.max(max, message.seq), 0);
 
       const result = await brain({ conversation, messages, registeredName: registeredNameFor(db, conversation) });
 

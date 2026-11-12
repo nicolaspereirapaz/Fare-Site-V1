@@ -13,6 +13,7 @@ import {
   getMessage,
   mediaFileOf,
   messageByExternalId,
+  oldestWhatsAppConversation,
   phoneDigits,
   phoneReplied,
   setDelivery,
@@ -60,6 +61,8 @@ export type InboundWhatsApp = {
   media?: StoredMediaRef;
   /** Id no WhatsApp da mensagem que o cliente citou ao responder. */
   quotedId?: string;
+  /** Histórico antigo pedido ao celular (historico: true): data original da mensagem, em ISO. */
+  sentAt?: string;
 };
 
 export type StoredMediaRef = { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
@@ -78,11 +81,43 @@ export function parseInbound(body: Record<string, unknown>, media?: StoredMediaR
     fromPhone: body.fromPhone === true,
     media,
     quotedId: str(body.quotedId, 200) || undefined,
+    sentAt: body.historico === true ? historyDate(body.sentAt) : undefined,
   };
+  if (body.historico === true && !inbound.sentAt) throw new AtendimentoError("INVALID_REQUEST", "Mensagem do histórico sem data.");
   if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || (!inbound.text && !media)) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
   }
   return inbound;
+}
+
+/** Data do histórico: ISO válida, de 2009 (início do WhatsApp) até agora. */
+function historyDate(value: unknown) {
+  const time = typeof value === "string" ? Date.parse(value) : NaN;
+  return time >= Date.UTC(2009, 0, 1) && time <= Date.now() + 60_000 ? new Date(time).toISOString() : undefined;
+}
+
+/**
+ * Mensagem antiga do WhatsApp (histórico pedido ao celular): entra com a data original na primeira conversa
+ * do contato, sem IA, sem "não lidas" e sem mudar o status. Contato que não está no painel fica de fora.
+ */
+export function importWhatsAppHistory(db: DatabaseSync, inbound: InboundWhatsApp): { conversationId: string | null; duplicate: boolean } {
+  if (!inbound.sentAt) throw new AtendimentoError("INVALID_REQUEST", "Mensagem do histórico sem data.");
+  const existing = messageByExternalId(db, inbound.externalId);
+  if (existing) return { conversationId: existing.conversationId, duplicate: true };
+  const conversation = oldestWhatsAppConversation(db, inbound.chatId, inbound.phone);
+  if (!conversation) return { conversationId: null, duplicate: false };
+  addMessage(db, {
+    conversationId: conversation.id,
+    author: inbound.fromPhone ? "vendedor" : "cliente",
+    authorName: inbound.fromPhone ? PHONE_AUTHOR : conversation.contactName,
+    body: inbound.text,
+    externalId: inbound.externalId,
+    delivery: inbound.fromPhone ? "enviada" : undefined,
+    media: inbound.media,
+    replyToId: inbound.quotedId ? (messageByExternalId(db, inbound.quotedId)?.id ?? null) : null,
+    historyAt: inbound.sentAt,
+  });
+  return { conversationId: conversation.id, duplicate: false };
 }
 
 /** Conversa do contato no WhatsApp (cria se for a primeira mensagem). */

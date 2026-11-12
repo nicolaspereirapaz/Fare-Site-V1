@@ -1,6 +1,6 @@
 import { AtendimentoError } from "@/lib/atendimento/repository";
 import { atendimentoDb, json, respondInBackground } from "@/lib/atendimento/server";
-import { parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,12 @@ export async function POST(request: Request) {
   }
   try {
     const db = atendimentoDb();
-    const result = receiveWhatsAppMessage(db, parseInbound(body));
+    const inbound = parseInbound(body);
+    if (inbound.sentAt) {
+      const imported = importWhatsAppHistory(db, inbound);
+      return json({ ok: true, ...imported }, imported.conversationId && !imported.duplicate ? 201 : 200);
+    }
+    const result = receiveWhatsAppMessage(db, inbound);
     if (!result.duplicate && !result.fromPhone) respondInBackground(db, result.conversationId);
     return json({ ok: true, ...result }, result.duplicate ? 200 : 201);
   } catch (error) {

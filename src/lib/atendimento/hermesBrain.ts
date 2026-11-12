@@ -52,9 +52,13 @@ export function toWhatsAppFormat(text: string) {
     .trim();
 }
 
+/** Últimas mensagens que a IA lê: a conversa pode ter anos de histórico importado do WhatsApp. */
+const AI_CONTEXT_MESSAGES = 80;
+
 const toServiceMessages = (messages: Message[]) =>
   messages
     .filter((message) => !isInternal(message.author))
+    .slice(-AI_CONTEXT_MESSAGES)
     .map((message) => ({
       author: message.author,
       text: message.media

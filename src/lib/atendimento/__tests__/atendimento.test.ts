@@ -21,6 +21,7 @@ import {
   runAtendimentoMigrations,
   saveQuickReply,
   updateConversationProfile,
+  whatsAppHistoryAnchors,
 } from "@/lib/atendimento/repository";
 import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, sendStaffMessages, signedText } from "@/lib/atendimento/service";
 import { PIX_CARD_TEXT, STORE_PIX } from "@/lib/atendimento/types";
@@ -30,7 +31,7 @@ import os from "node:os";
 import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
-import { deliverToWhatsApp, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { deliverToWhatsApp, importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, redoThumbs, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
@@ -457,6 +458,59 @@ describe("WhatsApp pela ponte", () => {
     const ok = fakeBridge();
     await deliverToWhatsApp(db, listMessages(db, id), bridge, ok.fetcher);
     expect(ok.sent).toHaveLength(0);
+  });
+});
+
+describe("histórico antigo do WhatsApp", () => {
+  const chatId = "5511955554444@s.whatsapp.net";
+  const old = (externalId: string, text: string, sentAt: string, extra: Record<string, unknown> = {}) =>
+    parseInbound({ externalId, chatId, phone: "5511955554444", text, historico: true, sentAt, ...extra });
+
+  it("entra com a data original, no topo, sem IA, sem não lidas e sem mudar a conversa", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, parseInbound({ externalId: "NOVA", chatId, phone: "5511955554444", text: "oi de novo" }));
+    finishConversation(db, id, ana);
+    const before = getConversation(db, id);
+    const brain = vi.fn(async () => ({ reply: "não deveria" }));
+
+    expect(importWhatsAppHistory(db, old("V1", "quanto custa?", "2024-03-01T12:00:00Z"))).toEqual({ conversationId: id, duplicate: false });
+    expect(importWhatsAppHistory(db, old("V2", "R$ 30", "2024-03-01T12:05:00Z", { fromPhone: true })).duplicate).toBe(false);
+    expect(importWhatsAppHistory(db, old("V2", "R$ 30", "2024-03-01T12:05:00Z", { fromPhone: true })).duplicate).toBe(true);
+
+    const list = listMessages(db, id).filter((message) => message.author !== "sistema");
+    expect(list.map((message) => [message.body, message.author, message.authorName, message.createdAt])).toEqual([
+      ["quanto custa?", "cliente", before.contactName, "2024-03-01T12:00:00.000Z"],
+      ["R$ 30", "vendedor", "Celular", "2024-03-01T12:05:00.000Z"],
+      ["oi de novo", "cliente", before.contactName, expect.any(String)],
+    ]);
+    const after = getConversation(db, id);
+    expect([after.status, after.unread, after.lastMessageAt, after.lastMessagePreview]).toEqual([before.status, before.unread, before.lastMessageAt, before.lastMessagePreview]);
+    expect(await runAi(db, id, brain)).toEqual([]);
+    expect(brain).not.toHaveBeenCalled();
+  });
+
+  it("contato que não está no painel fica de fora (não cria conversa)", () => {
+    expect(importWhatsAppHistory(db, old("X1", "oi", "2023-01-01T00:00:00Z"))).toEqual({ conversationId: null, duplicate: false });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM atd_conversations WHERE phone = '5511955554444'").get()).toEqual({ n: 0 });
+  });
+
+  it("histórico precisa de data válida", () => {
+    expect(() => old("D1", "oi", "")).toThrow(AtendimentoError);
+    expect(() => old("D2", "oi", "2001-01-01T00:00:00Z")).toThrow(AtendimentoError);
+    expect(old("D3", "oi", "2024-05-05T10:00:00-03:00").sentAt).toBe("2024-05-05T13:00:00.000Z");
+    expect(parseInbound({ externalId: "D4", chatId, phone: "5511955554444", text: "oi", sentAt: "2024-01-01T00:00:00Z" }).sentAt).toBeUndefined();
+  });
+
+  it("âncoras: a mensagem mais antiga com id do WhatsApp de cada contato", () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, parseInbound({ externalId: "A2", chatId, phone: "5511955554444", text: "oi" }));
+    importWhatsAppHistory(db, old("A1", "antiga", "2022-06-01T10:00:00Z", { fromPhone: true }));
+    expect(whatsAppHistoryAnchors(db).find((anchor) => anchor.phone === "5511955554444")).toEqual({
+      chatId,
+      phone: "5511955554444",
+      externalId: "A1",
+      fromMe: true,
+      timestampMs: Date.parse("2022-06-01T10:00:00Z"),
+    });
+    expect(getConversation(db, id).channel).toBe("whatsapp");
   });
 });
 

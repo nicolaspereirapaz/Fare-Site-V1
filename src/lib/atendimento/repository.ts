@@ -371,10 +371,45 @@ export function listConversations(db: DatabaseSync, options: { channel?: Channel
   return rows.map(toConversation);
 }
 
+/** Em ordem de data: o histórico antigo do WhatsApp entra depois (seq maior), mas com a data original. */
 export function listMessages(db: DatabaseSync, conversationId: string, afterSeq = 0): Message[] {
   return (db
-    .prepare("SELECT * FROM atd_messages WHERE conversation_id = ? AND seq > ? ORDER BY seq")
+    .prepare("SELECT * FROM atd_messages WHERE conversation_id = ? AND seq > ? ORDER BY created_at, seq")
     .all(conversationId, afterSeq) as ConversationRow[]).map(toMessage);
+}
+
+/** Primeira conversa do contato no WhatsApp: é nela que entra o histórico antigo. Não cria. */
+export function oldestWhatsAppConversation(db: DatabaseSync, waChatId: string, phone: string): Conversation | null {
+  const row = db
+    .prepare("SELECT id FROM atd_conversations WHERE channel = 'whatsapp' AND (wa_chat_id = ? OR phone = ?) ORDER BY created_at LIMIT 1")
+    .get(waChatId, phoneDigits(phone)) as ConversationRow | undefined;
+  return row ? getConversation(db, String(row.id)) : null;
+}
+
+/**
+ * Para a ponte pedir o histórico antigo ao celular: por contato, a mensagem mais antiga que o site conhece
+ * (com id do WhatsApp). O celular devolve as anteriores a ela.
+ */
+export function whatsAppHistoryAnchors(db: DatabaseSync) {
+  const rows = db
+    .prepare(
+      `SELECT c.wa_chat_id, c.phone, m.external_id, m.author, m.created_at FROM atd_messages m JOIN atd_conversations c ON c.id = m.conversation_id
+       WHERE c.channel = 'whatsapp' AND c.wa_chat_id IS NOT NULL AND m.external_id IS NOT NULL AND m.external_id <> '' ORDER BY m.created_at, m.seq`,
+    )
+    .all() as ConversationRow[];
+  const byPhone = new Map<string, { chatId: string; phone: string; externalId: string; fromMe: boolean; timestampMs: number }>();
+  for (const row of rows) {
+    const phone = String(row.phone);
+    if (byPhone.has(phone)) continue;
+    byPhone.set(phone, {
+      chatId: String(row.wa_chat_id),
+      phone,
+      externalId: String(row.external_id),
+      fromMe: row.author !== "cliente",
+      timestampMs: Date.parse(String(row.created_at)),
+    });
+  }
+  return [...byPhone.values()];
 }
 
 export function addMessage(
@@ -389,11 +424,13 @@ export function addMessage(
     delivery?: Message["delivery"];
     media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean };
     replyToId?: string | null;
+    /** Histórico antigo do WhatsApp: data original, e a conversa (última mensagem, não lidas) não muda. */
+    historyAt?: string;
   },
 ): Message {
   const body = input.body.trim();
   if (!body && !input.media) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia.");
-  const at = nowIso();
+  const at = input.historyAt ?? nowIso();
   const id = randomUUID();
   const delivered = isInternal(input.author) ? "" : (input.deliveredText ?? body);
   db.prepare(
@@ -420,7 +457,9 @@ export function addMessage(
       id,
     );
   }
-  if (!isInternal(input.author)) {
+  if (input.historyAt) {
+    // Histórico: não mexe na conversa.
+  } else if (!isInternal(input.author)) {
     // "Não lidas" só conta o que a equipe precisa ler: enquanto a IA atende, ela mesma responde.
     db.prepare(
       `UPDATE atd_conversations SET last_message_at = ?, last_message_preview = ?, last_message_author = ?, updated_at = ?,

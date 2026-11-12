@@ -25,7 +25,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
   return json({
     conversation: { id: conversation.id, phone: conversation.phone, contactName: conversation.contactName },
     messages,
-    lastSeq: all.at(-1)?.seq ?? since,
+    lastSeq: all.reduce((max, message) => Math.max(max, message.seq), since),
     typing: isAiThinking(id),
     aiMode: activeBrain().mode,
   });

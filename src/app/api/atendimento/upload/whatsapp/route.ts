@@ -1,8 +1,8 @@
-import { AtendimentoError, messageByExternalId } from "@/lib/atendimento/repository";
+import { AtendimentoError, messageByExternalId, oldestWhatsAppConversation } from "@/lib/atendimento/repository";
 import { existsSync } from "node:fs";
-import { mediaPath, saveMedia } from "@/lib/atendimento/media";
+import { mediaPath, mediaRetentionDays, pruneOldMedia, saveMedia } from "@/lib/atendimento/media";
 import { atendimentoDb, json, respondInBackground, transcribeInBackground } from "@/lib/atendimento/server";
-import { ensureWhatsAppConversation, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { ensureWhatsAppConversation, importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
 import type { MediaKind } from "@/lib/atendimento/types";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
 
@@ -29,7 +29,9 @@ export async function POST(request: Request) {
     const check = parseInbound(meta, { file: "-", kind: "documento", mime: "", name: "", size: 0, hasThumb: false });
     const existing = messageByExternalId(db, check.externalId);
     if (existing) return json({ ok: true, conversationId: existing.conversationId, duplicate: true }, 200);
-    const conversation = ensureWhatsAppConversation(db, check.chatId, check.phone);
+    // Histórico antigo: só de contato que já está no painel (não cria conversa nem grava o arquivo à toa).
+    const conversation = check.sentAt ? oldestWhatsAppConversation(db, check.chatId, check.phone) : ensureWhatsAppConversation(db, check.chatId, check.phone);
+    if (!conversation) return json({ ok: true, conversationId: null, duplicate: false }, 200);
     const kind = typeof meta.kind === "string" && KINDS.has(meta.kind as MediaKind) ? (meta.kind as MediaKind) : undefined;
     const stored = await saveMedia(request.body, {
       conversationId: conversation.id,
@@ -39,6 +41,13 @@ export async function POST(request: Request) {
     });
     const media = { ...stored, hasThumb: existsSync(mediaPath(stored.file, true)) };
     const inbound = parseInbound(meta, media);
+    if (inbound.sentAt) {
+      const imported = importWhatsAppHistory(db, inbound);
+      // Mais velha que o prazo das mídias: fica só a miniatura, como as outras (sem esperar a limpeza de 6 em 6 h).
+      const days = mediaRetentionDays();
+      if (days && Date.parse(inbound.sentAt) < Date.now() - days * 24 * 60 * 60 * 1000) await pruneOldMedia(db, days);
+      return json({ ok: true, ...imported }, 201);
+    }
     const result = receiveWhatsAppMessage(db, inbound);
     const audioId = !result.duplicate && media.kind === "audio" ? messageByExternalId(db, inbound.externalId)?.id : undefined;
     if (!result.duplicate && !result.fromPhone) respondInBackground(db, result.conversationId, { transcribeFirst: audioId });
