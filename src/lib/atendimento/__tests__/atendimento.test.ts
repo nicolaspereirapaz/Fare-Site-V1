@@ -22,7 +22,8 @@ import {
   saveQuickReply,
   updateConversationProfile,
 } from "@/lib/atendimento/repository";
-import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, signedText } from "@/lib/atendimento/service";
+import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, sendStaffMessages, signedText } from "@/lib/atendimento/service";
+import { PIX_CARD_TEXT, STORE_PIX } from "@/lib/atendimento/types";
 import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
 import { mkdtempSync, existsSync as fileExists, rmSync as removeDir } from "node:fs";
 import os from "node:os";
@@ -381,6 +382,42 @@ describe("WhatsApp pela ponte", () => {
     expect(listMessages(db, id).at(-1)?.delivery).toBe("enviada");
     await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
     expect(ok.sent).toHaveLength(2); // já enviada: não manda de novo
+  });
+
+  it("/pix: texto do sistema antigo e, depois, o cartão do Pix; ponte sem a rota nova manda a chave em texto", async () => {
+    const pix = listQuickReplies(db).find((reply) => reply.shortcut === "pix")!;
+    expect(pix.body.endsWith("Segue os nossos dados para pagamento:\n{pix}")).toBe(true);
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("P1", "quero pagar"));
+    const sent = sendStaffMessages(db, id, ana, pix.body, { sign: false });
+    expect(sent.map((message) => message.body)).toEqual([pix.body.replace("{pix}", "").trim(), PIX_CARD_TEXT]);
+    const ok = fakeBridge();
+    await deliverToWhatsApp(db, sent, bridge, ok.fetcher);
+    expect(ok.sent.map((entry) => entry.url)).toEqual(["http://ponte.local/fare/painel/enviar", "http://ponte.local/fare/painel/enviar-pix"]);
+    expect(ok.sent[1].body).toEqual({ chatId: "5511977776666@s.whatsapp.net", ...STORE_PIX });
+    expect(listMessages(db, id).at(-1)).toMatchObject({ body: PIX_CARD_TEXT, delivery: "enviada" });
+
+    const [card] = sendStaffMessages(db, id, ana, "{pix}", { sign: true });
+    const old = fakeBridge(404);
+    await deliverToWhatsApp(db, [card], bridge, old.fetcher);
+    expect(old.sent.map((entry) => [entry.url, entry.body.text])).toEqual([
+      ["http://ponte.local/fare/painel/enviar-pix", undefined],
+      ["http://ponte.local/fare/painel/enviar", STORE_PIX.key],
+    ]);
+  });
+
+  it("/pix antigo vira o novo só se a equipe não mudou o texto", () => {
+    const previous =
+      "*Pagamento via Pix*\nChave Pix (CNPJ): *50.344.377/0001-36*\n\nVou te mandar a chave sozinha na próxima mensagem para você copiar. Depois de pagar, envie o comprovante por aqui, por favor.";
+    const pixBody = () => listQuickReplies(db).find((reply) => reply.shortcut === "pix")!.body;
+    const rerun = (body: string) => {
+      db.prepare("UPDATE atd_quick_replies SET body = ? WHERE shortcut = 'pix'").run(body);
+      db.prepare("DELETE FROM atd_meta WHERE key = 'quick_replies_pix_card'").run();
+      runAtendimentoMigrations(db);
+    };
+    rerun(previous);
+    expect(pixBody().endsWith("{pix}")).toBe(true);
+    rerun("Meu Pix do meu jeito");
+    expect(pixBody()).toBe("Meu Pix do meu jeito");
   });
 
   it("resposta digitada no celular entra como \"Celular\", para a IA e não é reenviada", async () => {
@@ -876,9 +913,9 @@ describe("notas internas e etiquetas", () => {
 });
 
 describe("mensagens rápidas", () => {
-  it("inclui Pix com a chave CNPJ e a chave sozinha para copiar", () => {
+  it("inclui Pix (texto + cartão com a chave) e a chave sozinha para copiar", () => {
     const replies = listQuickReplies(db);
-    expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("50.344.377/0001-36");
+    expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("{pix}");
     expect(replies.find((reply) => reply.shortcut === "chavepix")?.body).toBe("50344377000136");
   });
 

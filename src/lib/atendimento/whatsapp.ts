@@ -20,7 +20,7 @@ import {
 } from "@/lib/atendimento/repository";
 import { recordCustomerMessage } from "@/lib/atendimento/service";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
-import type { Conversation, MediaKind, Message } from "@/lib/atendimento/types";
+import { PIX_CARD_TEXT, STORE_PIX, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /**
  * Ligação com o WhatsApp pela ponte Baileys (modo painel).
@@ -201,7 +201,18 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
     try {
       const stored = current.media ? mediaFileOf(db, current.id) : null;
       const quote = quoteFor(db, current);
-      const response = stored
+      const sendJson = (route: string, payload: object) =>
+        fetcher(`${config.url}/fare/painel/${route}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-fare-token": config.token },
+          body: JSON.stringify({ chatId: conversation.waChatId, ...payload }),
+          signal: AbortSignal.timeout(30_000),
+        });
+      const isPix = !stored && current.body === PIX_CARD_TEXT;
+      let response = isPix ? await sendJson("enviar-pix", STORE_PIX) : null;
+      // Ponte sem o cartão do Pix (404): manda a chave em texto, para o cliente copiar.
+      if (response?.status === 404) response = await sendJson("enviar", { text: STORE_PIX.key, ref: message.id });
+      response ??= stored
         ? // Foto/arquivo: corpo bruto + dados nos cabeçalhos (codificados: cabeçalho HTTP só aceita ASCII).
           await fetcher(`${config.url}/fare/painel/enviar-midia`, {
             method: "POST",
@@ -218,12 +229,7 @@ export async function deliverToWhatsApp(db: DatabaseSync, messages: Message[], c
             body: new Uint8Array(await readFile(mediaPath(stored.file))),
             signal: AbortSignal.timeout(180_000),
           })
-        : await fetcher(`${config.url}/fare/painel/enviar`, {
-            method: "POST",
-            headers: { "content-type": "application/json", "x-fare-token": config.token },
-            body: JSON.stringify({ chatId: conversation.waChatId, text: current.deliveredText, ref: message.id, ...(quote ? { quote } : {}) }),
-            signal: AbortSignal.timeout(30_000),
-          });
+        : await sendJson("enviar", { text: current.deliveredText, ref: message.id, ...(quote ? { quote } : {}) });
       const data = (await response.json().catch(() => ({}))) as { messageId?: string; error?: string };
       if (!response.ok) throw new Error(data.error || `Ponte respondeu ${response.status}`);
       setDelivery(db, message.id, "enviada", { externalId: data.messageId ?? null });

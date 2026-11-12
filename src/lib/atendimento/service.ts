@@ -20,7 +20,7 @@ import {
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isInternal, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isInternal, PIX_CARD_TEXT, PIX_TOKEN, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 import { openDocumentForPhone } from "@/lib/atendimento/customer";
 import { foldText } from "@/lib/atendimento/search";
 
@@ -204,6 +204,22 @@ export function sendStaffMessage(
     deliveredText: options.sign ? signedText(staff.name, body) : body,
     replyToId: options.replyToId,
   });
+}
+
+/** Mensagem do vendedor com {pix}: o texto (se houver) e, depois, o cartão do Pix como outra mensagem. */
+export function sendStaffMessages(
+  db: DatabaseSync,
+  conversationId: string,
+  staff: StaffActor,
+  text: string,
+  options: { sign: boolean; replyToId?: string | null },
+): Message[] {
+  if (!text.includes(PIX_TOKEN)) return [sendStaffMessage(db, conversationId, staff, text, options)];
+  const rest = text.replaceAll(PIX_TOKEN, "").trim();
+  const sent = rest ? [sendStaffMessage(db, conversationId, staff, rest, options)] : [];
+  if (!rest) openForStaff(db, conversationId, staff);
+  sent.push(addMessage(db, { conversationId, author: "vendedor", authorName: staff.name, body: PIX_CARD_TEXT, deliveredText: PIX_CARD_TEXT }));
+  return sent;
 }
 
 /** O primeiro nome aparece, como palavra, em alguma mensagem escrita (ou transcrita) pelo cliente. */

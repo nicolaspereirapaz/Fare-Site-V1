@@ -110,6 +110,13 @@ export type MessageMedia = {
   pruned?: boolean;
 };
 
+/** Pix da loja (chave CNPJ aprovada por Nicolas). */
+export const STORE_PIX = { key: "50344377000136", keyType: "CNPJ", name: "Fare Foto" } as const;
+/** {pix} na mensagem do vendedor sai à parte, depois do texto: o cartão do Pix com o botão "Copiar chave Pix" do WhatsApp. */
+export const PIX_TOKEN = "{pix}";
+/** Como o cartão do Pix aparece no painel (e o que a ponte reconhece para mandar o cartão). */
+export const PIX_CARD_TEXT = `💠 Pix · chave ${STORE_PIX.keyType} ${STORE_PIX.key} · ${STORE_PIX.name}`;
+
 export type QuickReply = {
   id: string;
   /** Atalho sem a barra: "pix" é usado digitando /pix. */

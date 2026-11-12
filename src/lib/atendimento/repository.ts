@@ -11,6 +11,7 @@ import {
   isInternal,
   type MediaKind,
   type Message,
+  PIX_TOKEN,
   type QuickReply,
 } from "@/lib/atendimento/types";
 
@@ -627,20 +628,32 @@ const DEFAULT_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body
   { shortcut: "obrigado", title: "Agradecimento", body: "Obrigado pelo contato! Qualquer coisa, é só chamar por aqui." },
 ];
 
-/** Pix aprovado por Nicolas: chave CNPJ. /chavepix manda só a chave, para o cliente copiar com um toque. */
+/** Texto do /pix antes do cartão do Pix: só é trocado se a equipe não tiver mudado. */
+const PREVIOUS_PIX_BODY =
+  "*Pagamento via Pix*\nChave Pix (CNPJ): *50.344.377/0001-36*\n\nVou te mandar a chave sozinha na próxima mensagem para você copiar. Depois de pagar, envie o comprovante por aqui, por favor.";
+/** /pix = mensagem do sistema antigo de WhatsApp + {pix} (cartão com o botão "Copiar chave Pix"). /chavepix manda só a chave. */
+const PIX_REPLY = {
+  shortcut: "pix",
+  title: "Pagamento por Pix",
+  body: `📍Fare Foto - R. do Rosário, 68 Centro, Jundiaí - SP, 13201-014\n\n⚠️ O pedido é confirmado após o envio do comprovante\n\n📦 Para retirada, apresente o comprovante de pagamento e informe o tipo de serviço encomendado.\n\nSegue os nossos dados para pagamento:\n${PIX_TOKEN}`,
+};
 const PIX_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
-  {
-    shortcut: "pix",
-    title: "Pagamento por Pix",
-    body: "*Pagamento via Pix*\nChave Pix (CNPJ): *50.344.377/0001-36*\n\nVou te mandar a chave sozinha na próxima mensagem para você copiar. Depois de pagar, envie o comprovante por aqui, por favor.",
-  },
+  PIX_REPLY,
   { shortcut: "chavepix", title: "Chave Pix (só a chave, para copiar)", body: "50344377000136" },
+];
+
+/** Saudações do sistema antigo de WhatsApp; {saudacao} e {nome} são preenchidos no painel (quickReplyFill.ts). */
+const GREETING_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
+  { shortcut: "bem", title: "Tudo bem?", body: "{saudacao}, {nome}, tudo bem?" },
+  { shortcut: "sim", title: "Tudo sim e você?", body: "{saudacao}, {nome}, tudo sim e você?" },
+  { shortcut: "ajudar", title: "Como posso ajudar?", body: "Como posso ajudar?" },
 ];
 
 /** Cada leva de mensagens iniciais entra uma única vez; apagar/editar depois é decisão da equipe. */
 const QUICK_REPLY_SEEDS: Array<[string, Array<Pick<QuickReply, "shortcut" | "title" | "body">>]> = [
   ["quick_replies_seeded", DEFAULT_QUICK_REPLIES],
   ["quick_replies_seed_pix", PIX_QUICK_REPLIES],
+  ["quick_replies_seed_saudacao", GREETING_QUICK_REPLIES],
 ];
 
 function seedQuickReplies(db: DatabaseSync) {
@@ -650,6 +663,11 @@ function seedQuickReplies(db: DatabaseSync) {
     const at = nowIso();
     for (const reply of replies) insert.run(randomUUID(), reply.shortcut, reply.title, reply.body, at);
     db.prepare("INSERT INTO atd_meta (key, value) VALUES (?, ?)").run(key, at);
+  }
+  if (!db.prepare("SELECT value FROM atd_meta WHERE key = 'quick_replies_pix_card'").get()) {
+    const at = nowIso();
+    db.prepare("UPDATE atd_quick_replies SET body = ?, updated_at = ? WHERE shortcut = 'pix' AND body = ?").run(PIX_REPLY.body, at, PREVIOUS_PIX_BODY);
+    db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_pix_card', ?)").run(at);
   }
 }
 

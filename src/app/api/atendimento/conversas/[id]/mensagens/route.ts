@@ -1,5 +1,5 @@
 import { atendimentoDb, deliverInBackground, json, readJson, text, withStaff } from "@/lib/atendimento/server";
-import { addNote, sendQuickReplyMedia, sendStaffMessage } from "@/lib/atendimento/service";
+import { addNote, sendQuickReplyMedia, sendStaffMessages } from "@/lib/atendimento/service";
 import { getConversation } from "@/lib/atendimento/repository";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +16,10 @@ export const POST = withStaff(async (staff, request, context: RouteContext<"/api
   const options = { sign: body.sign !== false, replyToId: text(body.replyTo, 80) || null };
   // Mensagem rápida com anexo: o anexo vai com o texto como legenda.
   const quickReplyId = text(body.quickReplyId, 80);
-  const message = quickReplyId
-    ? await sendQuickReplyMedia(db, id, staff, quickReplyId, text(body.text), options)
-    : sendStaffMessage(db, id, staff, text(body.text), options);
-  deliverInBackground(db, [message]);
-  return json({ message, conversation: getConversation(db, id) }, 201);
+  const messages = quickReplyId
+    ? [await sendQuickReplyMedia(db, id, staff, quickReplyId, text(body.text), options)]
+    : sendStaffMessages(db, id, staff, text(body.text), options);
+  deliverInBackground(db, messages);
+  // Devolve a primeira: o painel busca as seguintes (ex.: cartão do Pix) na próxima atualização.
+  return json({ message: messages[0], conversation: getConversation(db, id) }, 201);
 });

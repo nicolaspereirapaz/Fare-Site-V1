@@ -101,7 +101,7 @@ export function QuickRepliesDialog({ quickReplies, onClose, onChanged }: { quick
                 Texto que vai para o cliente
                 <textarea maxLength={2000} onChange={(event) => setDraft({ ...draft, body: event.target.value })} required rows={5} value={draft.body} />
               </label>
-              <p className="at-muted">Use *asteriscos* para negrito, como no WhatsApp.</p>
+              <p className="at-muted">Use *asteriscos* para negrito, como no WhatsApp. {"{saudacao}"} vira Bom dia/Boa tarde/Boa noite, {"{nome}"} o primeiro nome do cliente e {"{pix}"} manda o Pix com o botão de copiar.</p>
               <div className="at-qr-attach">
                 <span>Anexo (opcional) — vai junto, com o texto como legenda:</span>
                 {draft.file ? (

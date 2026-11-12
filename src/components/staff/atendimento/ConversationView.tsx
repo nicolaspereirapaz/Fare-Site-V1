@@ -36,6 +36,7 @@ import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recor
 import { useAiEnabled } from "@/components/staff/atendimento/aiStatus";
 import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
 import { groupMessages } from "@/lib/atendimento/albums";
+import { fillQuickReply } from "@/lib/atendimento/quickReplyFill";
 import { foldText, type MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
@@ -944,13 +945,14 @@ function Composer({
     : [];
 
   function choose(reply: QuickReply) {
-    setText(reply.body);
+    const body = fillQuickReply(reply.body, conversation.customerName?.trim() || conversation.contactName);
+    setText(body);
     setQuickMedia(reply.media ? reply : null);
     setPickerOpen(false);
     setHighlight(0);
     window.requestAnimationFrame(() => {
       input.current?.focus();
-      input.current?.setSelectionRange(reply.body.length, reply.body.length);
+      input.current?.setSelectionRange(body.length, body.length);
     });
   }
 
