@@ -19,7 +19,7 @@
 .nf-abas button[aria-selected="true"] { border-color: var(--qe-navy); background: var(--qe-navy); color: #fff; }
 .nf-campos { display: grid; gap: 10px; }
 .nf-cliente .qe-hint, .nf-cliente .qe-warn { margin: 0; }
-.nf-valor { max-width: 220px; }
+.nf-linha { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 10px 12px; align-items: start; }
 .nf-emitir { height: 44px; font-size: 15px; }
 
 .nf-erros { margin: 0; padding: 10px 12px 10px 30px; border-radius: 8px; background: #fdecea; color: #b42318; font-size: 13.5px; }
@@ -39,5 +39,5 @@
 .nf-cancelar { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 8px; background: #f6f7fa; }
 @media (max-width: 600px) {
   .qe-page .nf-opcoes, .qe-page .nf-campos .qe-grid-3 { grid-template-columns: 1fr; }
-  .nf-valor { max-width: none; }
+  .nf-linha { grid-template-columns: 1fr; }
 }

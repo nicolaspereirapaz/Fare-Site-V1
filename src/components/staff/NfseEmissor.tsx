@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { CustomerPicker } from "@/components/staff/QuoteEditor";
 import type { Customer } from "@/components/staff/quoteEditorShared";
 import { formatCep } from "@/lib/account/documents";
-import { centavos, SERVICOS, type ServicoId, type Tomador } from "@/lib/nfse/dps";
+import { centavos, horaBrasilia, SERVICOS, type ServicoId, type Tomador } from "@/lib/nfse/dps";
 import { MOTIVOS_CANCELAMENTO, type MotivoCancelamento } from "@/lib/nfse/evento";
 import type { NotaLista } from "@/lib/nfse/db";
 
@@ -43,6 +43,8 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
   const [servico, setServico] = useState<ServicoId>("impressao");
   const [descricao, setDescricao] = useState<string>(SERVICOS.impressao.descricao);
   const [valor, setValor] = useState("");
+  /** AAAA-MM-DD; vazio = hoje. */
+  const [competencia, setCompetencia] = useState("");
   const [modo, setModo] = useState<Modo>("cadastro");
   const [escolhido, setEscolhido] = useState<Customer | null>(null);
   const [cli, setCli] = useState<Campos>(VAZIO);
@@ -153,7 +155,8 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
     if (valorCentavos == null) return setErros(["Valor inválido. Use, por exemplo, 39,90."]);
     if (modo !== "nenhum" && !docValido) return setErros(["Informe o CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente, ou escolha \"Sem cliente\"."]);
     if (modo !== "nenhum" && !cli.nome.trim()) return setErros(["Preencha o nome do cliente."]);
-    if (ambiente === 1 && !window.confirm(`Emitir NOTA FISCAL DE VERDADE de ${brl(valorCentavos)}${modo === "nenhum" ? " sem cliente" : ` para ${cli.nome}`}?`)) return;
+    const dia = competencia ? ` com competência em ${competencia.split("-").reverse().join("/")}` : "";
+    if (ambiente === 1 && !window.confirm(`Emitir NOTA FISCAL DE VERDADE de ${brl(valorCentavos)}${modo === "nenhum" ? " sem cliente" : ` para ${cli.nome}`}${dia}?`)) return;
 
     const tomador = modo === "nenhum" ? undefined : { ...Object.fromEntries(Object.entries(cli).map(([k, v]) => [k, v.trim() || undefined])), doc: digitos };
     setEnviando(true);
@@ -161,11 +164,12 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
       const j = await pedirJson<{ ok: true; chave: string; nNFSe?: string } | { ok: false; erros: string[] }>("/api/equipe/nfse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ servico, descricao, valorCentavos, tomador }),
+        body: JSON.stringify({ servico, descricao, valorCentavos, tomador, competencia }),
       });
       if (j.ok) {
         setOk({ chave: j.chave, nNFSe: j.nNFSe });
         setValor("");
+        setCompetencia("");
         limparCliente();
         setDescricao(SERVICOS[servico].descricao);
       } else setErros(j.erros);
@@ -245,7 +249,14 @@ export function NfseEmissor({ ambiente }: { ambiente: 1 | 2 }) {
         </fieldset>
 
         <label className="qe-field"><span>Descrição do serviço</span><textarea maxLength={2000} onChange={(e) => setDescricao(e.target.value)} required rows={2} value={descricao} /></label>
-        <label className="qe-field nf-valor"><span>Valor (R$)</span><input inputMode="decimal" onChange={(e) => setValor(e.target.value)} placeholder="0,00" required value={valor} /></label>
+        <div className="nf-linha">
+          <label className="qe-field"><span>Valor (R$)</span><input inputMode="decimal" onChange={(e) => setValor(e.target.value)} placeholder="0,00" required value={valor} /></label>
+          <label className="qe-field">
+            <span>Data de competência</span>
+            <input max={horaBrasilia(new Date()).dCompet} onChange={(e) => setCompetencia(e.target.value)} type="date" value={competencia} />
+            <small className="qe-fhint">Dia do serviço. Em branco: hoje.</small>
+          </label>
+        </div>
 
         {erros.length ? <ul className="nf-erros" role="alert">{erros.map((m) => <li key={m}>{m}</li>)}</ul> : null}
         {ok ? (

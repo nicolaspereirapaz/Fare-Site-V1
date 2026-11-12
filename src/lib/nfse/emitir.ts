@@ -1,9 +1,13 @@
-import { idDps, montarDps, SERVICOS, so, type ServicoId, type Tomador } from "./dps";
+import { erroCompetencia, idDps, montarDps, SERVICOS, so, type ServicoId, type Tomador } from "./dps";
 import { liberarNumero, marcarCancelada, marcarEmitida, marcarIncerta, reservarNumero, salvarCliente, xmlDaNota } from "./db";
 import { montarCancelamento, MOTIVOS_CANCELAMENTO, type MotivoCancelamento } from "./evento";
 import { ambiente, assinar, consultarDps, enviarDps, enviarEvento } from "./sefin";
 
-export type Pedido = { servico: ServicoId; descricao: string; valorCentavos: number; tomador?: Tomador };
+/** competencia: AAAA-MM-DD; vazia = dia da emissão. */
+export type Pedido = { servico: ServicoId; descricao: string; valorCentavos: number; tomador?: Tomador; competencia?: string };
+
+/** 1 min para trás: a Sefin rejeita emissão "no futuro" se o relógio do PC estiver adiantado (E0008). */
+const agoraEmissao = () => new Date(Date.now() - 60_000);
 
 export type Resultado =
   | { ok: true; chave: string; nNFSe?: string; numeroDps: number }
@@ -16,6 +20,10 @@ export function validarPedido(p: Partial<Pedido>): string[] {
   if (!p.descricao?.trim()) erros.push("Preencha a descrição.");
   else if (p.descricao.length > 2000) erros.push("Descrição muito longa (máx. 2000 caracteres).");
   if (!Number.isInteger(p.valorCentavos) || (p.valorCentavos ?? 0) <= 0) erros.push("Valor inválido.");
+  if (p.competencia != null && p.competencia !== "") {
+    const erro = typeof p.competencia === "string" ? erroCompetencia(p.competencia, agoraEmissao()) : "Data de competência inválida.";
+    if (erro) erros.push(erro);
+  }
   if (p.tomador) {
     const doc = so(p.tomador.doc ?? "");
     if (doc.length !== 11 && doc.length !== 14) erros.push("CPF/CNPJ do cliente deve ter 11 ou 14 dígitos.");
@@ -40,8 +48,8 @@ export async function emitir(p: Pedido, emitidaPor?: string): Promise<Resultado>
   );
   const { id, xml } = montarDps({
     ambiente: amb, serie, numero: reserva.numero,
-    // 1 min para trás: a Sefin rejeita emissão "no futuro" se o relógio do PC estiver adiantado (E0008).
-    emissao: new Date(Date.now() - 60_000),
+    emissao: agoraEmissao(),
+    competencia: p.competencia || undefined,
     servico: p.servico, descricao: p.descricao, valorCentavos: p.valorCentavos, tomador,
     pTotTribSN: pTot ? Number(pTot.replace(",", ".")) : undefined,
   });

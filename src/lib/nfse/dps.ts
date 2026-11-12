@@ -59,6 +59,8 @@ export type DadosDps = {
   tomador?: Tomador;
   /** % aproximado de tributos do Simples; sem ele vai 0,00 nos totais (como o Emissor web). */
   pTotTribSN?: number;
+  /** Data de competência (AAAA-MM-DD), o dia a que o serviço se refere. Sem ela: o dia da emissão. */
+  competencia?: string;
 };
 
 export const so = (s: string) => s.replace(/\D/g, "");
@@ -84,6 +86,13 @@ export function horaBrasilia(d: Date) {
   return { dhEmi: `${local}-03:00`, dCompet: local.slice(0, 10) };
 }
 
+/** Competência digitada: data real e não depois do dia da emissão (a Sefin recusa competência no futuro). */
+export function erroCompetencia(competencia: string, emissao: Date): string | null {
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(competencia) && new Date(`${competencia}T12:00:00Z`).toISOString().startsWith(competencia);
+  if (!ok) return "Data de competência inválida.";
+  return competencia > horaBrasilia(emissao).dCompet ? "A data de competência não pode ser depois de hoje." : null;
+}
+
 /** "DPS" + município(7) + tipo de inscrição(1: CPF, 2: CNPJ) + inscrição(14) + série(5) + número(15). */
 export function idDps(serie: string, numero: number) {
   return `DPS${PRESTADOR.cMun}2${PRESTADOR.cnpj}${serie.padStart(5, "0")}${String(numero).padStart(15, "0")}`;
@@ -102,7 +111,8 @@ function tomadorXml(t: Tomador) {
 
 export function montarDps(d: DadosDps) {
   const s = SERVICOS[d.servico];
-  const { dhEmi, dCompet } = horaBrasilia(d.emissao);
+  const { dhEmi, dCompet: hoje } = horaBrasilia(d.emissao);
+  const dCompet = d.competencia || hoje;
   const id = idDps(d.serie, d.numero);
   // Produção ainda usa o leiaute v1.01 de fev/2026 (sem finNFSe, xDescServ antes do cNBS), igual à nota do Emissor web de 10/11/2026.
   // A produção restrita já usa o leiaute da reforma (out/2026). Quando a produção migrar, apagar este desvio.

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { centavos, idDps, montarDps } from "../dps";
+import { centavos, erroCompetencia, idDps, montarDps } from "../dps";
 import { validarXsd } from "./xsd";
 
 const base = {
@@ -73,6 +73,24 @@ describe("montarDps", () => {
     expect(centavos("0")).toBeNull();
     expect(centavos("abc")).toBeNull();
     expect(centavos("1,234")).toBeNull();
+  });
+
+  it("data de competência escolhida vai no dCompet; sem ela, o dia da emissão", async () => {
+    expect(montarDps(base).xml).toContain("<dCompet>2026-11-10</dCompet>");
+    const { xml } = montarDps({ ...base, competencia: "2026-10-31" });
+    expect(xml).toContain("<dCompet>2026-10-31</dCompet>");
+    expect(xml).toContain("<dhEmi>2026-11-10T12:00:00-03:00</dhEmi>");
+    expect(await validarXsd(xml, 2)).toEqual([]);
+  });
+
+  it("competência: só data real e até o dia da emissão (horário de Brasília)", () => {
+    // 01:30 UTC de 11/11 ainda é 10/11 em Brasília.
+    const emissao = new Date("2026-11-11T01:30:00Z");
+    expect(erroCompetencia("2026-11-10", emissao)).toBeNull();
+    expect(erroCompetencia("2026-10-01", emissao)).toBeNull();
+    expect(erroCompetencia("2026-11-11", emissao)).toMatch(/depois de hoje/);
+    expect(erroCompetencia("2026-02-30", emissao)).toMatch(/inválida/);
+    expect(erroCompetencia("10/11/2026", emissao)).toMatch(/inválida/);
   });
 
   it("série com 5 dígitos no Id", () => {
