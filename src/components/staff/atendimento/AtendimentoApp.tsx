@@ -11,18 +11,18 @@ import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesD
 import { NewConversationDialog } from "@/components/staff/atendimento/NewConversationDialog";
 import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import { AiEnabledContext } from "@/components/staff/atendimento/aiStatus";
-import { api, displayName, playChime, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
+import { api, displayName, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
 import type { ConversationStatus } from "@/lib/atendimento/types";
 
 type View = "conversas" | "quadro";
 
 const noSubscribe = () => () => undefined;
 
-/** Notificação do computador (se o vendedor permitiu); clicar abre a conversa. */
+/** Notificação do computador (se o vendedor permitiu), sem som; clicar abre a conversa. */
 function notifyDesktop(items: Array<{ conversation: Conversation; title: string }>, onOpen: (id: string) => void) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   for (const { conversation, title } of items) {
-    const notification = new Notification(title, { body: conversation.lastMessagePreview || conversation.handoffReason || "", tag: `atendimento-${conversation.id}` });
+    const notification = new Notification(title, { body: conversation.lastMessagePreview || conversation.handoffReason || "", tag: `atendimento-${conversation.id}`, silent: true });
     notification.onclick = () => {
       window.focus();
       onOpen(conversation.id);
@@ -93,7 +93,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
           (conversation) => conversation.unread > (previousUnread.get(conversation.id) ?? 0) && (document.hidden || selectedRef.current !== conversation.id),
         );
         if (withNews.length) {
-          playChime();
           notifyDesktop(withNews.map((conversation) => ({ conversation, title: `${displayName(conversation)} mandou mensagem` })), openFromAlert);
         }
       }
@@ -170,7 +169,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
     if (typeof Notification === "undefined") return;
     const permission = await Notification.requestPermission();
     setAskedPermission(permission);
-    if (permission === "granted") playChime();
   }
 
   return (

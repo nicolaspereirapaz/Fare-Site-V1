@@ -112,29 +112,3 @@ function renderNodes(nodes: WaNode[]): ReactNode[] {
     return <code className="at-mono" key={index}>{children}</code>;
   });
 }
-
-/** Bipe curto (sem arquivo de áudio) para avisar que um cliente pediu vendedor. */
-export function playChime() {
-  try {
-    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const context = new AudioCtx();
-    const notes = [880, 1320];
-    notes.forEach((frequency, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequency;
-      const start = context.currentTime + index * 0.16;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(start);
-      oscillator.stop(start + 0.3);
-    });
-    window.setTimeout(() => void context.close(), 1000);
-  } catch {
-    // navegador sem áudio: segue sem som
-  }
-}
