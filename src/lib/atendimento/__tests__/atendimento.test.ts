@@ -913,10 +913,22 @@ describe("notas internas e etiquetas", () => {
 });
 
 describe("mensagens rápidas", () => {
-  it("inclui Pix (texto + cartão com a chave) e a chave sozinha para copiar", () => {
+  it("inclui Pix (texto + cartão com a chave), sem retirada e sem /chavepix", () => {
     const replies = listQuickReplies(db);
     expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("{pix}");
-    expect(replies.find((reply) => reply.shortcut === "chavepix")?.body).toBe("50344377000136");
+    expect(replies.find((reply) => reply.shortcut === "pix")?.body).not.toContain("retirada");
+    expect(replies.some((reply) => reply.shortcut === "chavepix")).toBe(false);
+  });
+
+  it("banco antigo: /pix perde a retirada (mesmo editado) e /chavepix some", () => {
+    const pickup = "\n\n📦 Para retirada, apresente o comprovante de pagamento e informe o tipo de serviço encomendado.";
+    db.prepare("UPDATE atd_quick_replies SET body = ? WHERE shortcut = 'pix'").run(`Oi!${pickup}\n\nPague aqui:\n{pix}`);
+    db.prepare("INSERT INTO atd_quick_replies (id, shortcut, title, body, updated_at) VALUES ('old-key', 'chavepix', 'Chave Pix', '50344377000136', '2026-11-12')").run();
+    db.prepare("DELETE FROM atd_meta WHERE key = 'quick_replies_pix_sem_retirada'").run();
+    runAtendimentoMigrations(db);
+    const replies = listQuickReplies(db);
+    expect(replies.find((reply) => reply.shortcut === "pix")?.body).toBe("Oi!\n\nPague aqui:\n{pix}");
+    expect(replies.some((reply) => reply.shortcut === "chavepix")).toBe(false);
   });
 
   it("Pix entra uma vez mesmo em banco que já tinha a primeira lista, e não volta se apagado", () => {

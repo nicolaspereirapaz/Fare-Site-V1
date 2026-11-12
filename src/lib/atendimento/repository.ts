@@ -631,16 +631,15 @@ const DEFAULT_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body
 /** Texto do /pix antes do cartão do Pix: só é trocado se a equipe não tiver mudado. */
 const PREVIOUS_PIX_BODY =
   "*Pagamento via Pix*\nChave Pix (CNPJ): *50.344.377/0001-36*\n\nVou te mandar a chave sozinha na próxima mensagem para você copiar. Depois de pagar, envie o comprovante por aqui, por favor.";
-/** /pix = mensagem do sistema antigo de WhatsApp + {pix} (cartão com o botão "Copiar chave Pix"). /chavepix manda só a chave. */
+/** Parágrafo da retirada que saiu do /pix em 12/11/2026. */
+const PIX_PICKUP_LINE = "\n\n📦 Para retirada, apresente o comprovante de pagamento e informe o tipo de serviço encomendado.";
+/** /pix = mensagem do sistema antigo de WhatsApp (sem a retirada) + {pix} (cartão com o botão "Copiar chave Pix"). */
 const PIX_REPLY = {
   shortcut: "pix",
   title: "Pagamento por Pix",
-  body: `📍Fare Foto - R. do Rosário, 68 Centro, Jundiaí - SP, 13201-014\n\n⚠️ O pedido é confirmado após o envio do comprovante\n\n📦 Para retirada, apresente o comprovante de pagamento e informe o tipo de serviço encomendado.\n\nSegue os nossos dados para pagamento:\n${PIX_TOKEN}`,
+  body: `📍Fare Foto - R. do Rosário, 68 Centro, Jundiaí - SP, 13201-014\n\n⚠️ O pedido é confirmado após o envio do comprovante\n\nSegue os nossos dados para pagamento:\n${PIX_TOKEN}`,
 };
-const PIX_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
-  PIX_REPLY,
-  { shortcut: "chavepix", title: "Chave Pix (só a chave, para copiar)", body: "50344377000136" },
-];
+const PIX_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [PIX_REPLY];
 
 /** Saudações do sistema antigo de WhatsApp; {saudacao} e {nome} são preenchidos no painel (quickReplyFill.ts). */
 const GREETING_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
@@ -668,6 +667,13 @@ function seedQuickReplies(db: DatabaseSync) {
     const at = nowIso();
     db.prepare("UPDATE atd_quick_replies SET body = ?, updated_at = ? WHERE shortcut = 'pix' AND body = ?").run(PIX_REPLY.body, at, PREVIOUS_PIX_BODY);
     db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_pix_card', ?)").run(at);
+  }
+  // Pedido do dono (12/11/2026): /pix sem a retirada e sem o /chavepix.
+  if (!db.prepare("SELECT value FROM atd_meta WHERE key = 'quick_replies_pix_sem_retirada'").get()) {
+    const at = nowIso();
+    db.prepare("UPDATE atd_quick_replies SET body = replace(body, ?, ''), updated_at = ? WHERE shortcut = 'pix' AND instr(body, ?) > 0").run(PIX_PICKUP_LINE, at, PIX_PICKUP_LINE);
+    db.prepare("DELETE FROM atd_quick_replies WHERE shortcut = 'chavepix'").run();
+    db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_pix_sem_retirada', ?)").run(at);
   }
 }
 
