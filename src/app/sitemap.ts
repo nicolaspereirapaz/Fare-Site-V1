@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SEGMENTS } from "@/data/brindesSegmentos";
 import { publicProductId } from "@/lib/publicCatalog";
 import { siteUrl } from "@/lib/siteUrl";
 import { groupAvailableProducts } from "@/lib/xbz";
@@ -6,7 +7,7 @@ import { getLocalCatalog } from "@/lib/xbzCatalogService";
 
 export const dynamic = "force-dynamic";
 
-const PAGES = ["/", "/produtos/revelacao-de-fotos", "/brindes", "/brindes/fim-de-ano", "/grafica", "/campanhas/outubro-rosa", "/privacidade"];
+const PAGES = ["/", "/produtos/revelacao-de-fotos", "/brindes", "/brindes/fim-de-ano", ...SEGMENTS.map((segment) => `/brindes/segmentos/${segment.slug}`), "/grafica", "/campanhas/outubro-rosa", "/privacidade"];
 
 /** Páginas da loja + cada brinde à venda (o catálogo muda: lista montada na hora). */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
