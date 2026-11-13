@@ -1267,6 +1267,17 @@ img {
   padding: 20px;
 }
 
+/* Legend de fieldset fica em cima da borda e ignora o padding; o float a traz para dentro do bloco. */
+fieldset.catalog-filter-group > legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+
+fieldset.catalog-filter-group > legend + * {
+  clear: both;
+}
+
 .catalog-category-options {
   display: grid;
   gap: 5px;
