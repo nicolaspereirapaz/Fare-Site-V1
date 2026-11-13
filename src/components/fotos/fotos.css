@@ -440,6 +440,7 @@
 .fp-replace { position: relative; display: inline-flex; align-items: center; gap: 5px; justify-self: start; width: fit-content; padding: 2px 0; font-size: 0.8125rem; font-weight: 600; color: var(--navy); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .fp-replace:hover { color: var(--orange); }
 .fp-replace:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; border-radius: 4px; }
+.fp-duplicate { border: 0; background: none; font-family: inherit; }
 /* Fotos retrô: uma tabela por modelo, lado a lado; empilha quando não cabe */
 .fp-retro-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .fp-retro-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px; background: var(--navy); color: #fff; }

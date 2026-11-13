@@ -168,6 +168,14 @@ export function photoLinkView(database: DatabaseSync, token: string): PhotoLinkV
   };
 }
 
+/** Página da equipe do documento do link (orçamento que virou pedido → o pedido). Só para quem tem sessão da equipe. */
+export function photoLinkStaffUrl(database: DatabaseSync, token: string) {
+  const link = findLink(database, token);
+  const doc = link && loadDocument(database, link);
+  if (!doc) return null;
+  return doc.kind === "order" ? `/equipe/pedidos/${doc.id}` : `/equipe/orcamentos/${doc.id}`;
+}
+
 /** Total do documento em centavos com as linhas novas (null = algum item "sob consulta"). */
 function documentTotal(items: QuoteCartItem[], discount: QuoteDiscount | null) {
   if (items.some((item) => item.unitPrice === null)) return null;

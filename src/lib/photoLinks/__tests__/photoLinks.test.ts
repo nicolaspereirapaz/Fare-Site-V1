@@ -12,7 +12,7 @@ const root = mkdtempSync(path.join(tmpdir(), "fare-link-"));
 vi.stubEnv("FARE_ORDERS_DIR", path.join(root, "Pedidos"));
 vi.stubEnv("FARE_PHOTO_UPLOADS_DIR", path.join(root, "envios"));
 
-const { createPhotoLink, photoLinkView, submitPhotoLink } = await import("@/lib/photoLinks/links");
+const { createPhotoLink, photoLinkStaffUrl, photoLinkView, submitPhotoLink } = await import("@/lib/photoLinks/links");
 const { saveUpload } = await import("@/lib/photoOrders/uploads");
 const { createManualQuote, findQuoteById } = await import("@/lib/quotes/repository");
 const { createOrder, findOrderById } = await import("@/lib/orders/repository");
@@ -92,5 +92,34 @@ describe("link das fotos", () => {
     expect(saved.totalCents).toBe(12000);
     expect(existsSync(path.join(root, "Pedidos", dayFolder(), `Caio Reis - ${orderCode(order.id)}`))).toBe(true);
     expect(photoLinkView(database, "nao-existe-este-link-aqui-123")).toBeNull();
+  });
+
+  it("equipe: endereço do documento do link (pedido ou orçamento); link inválido não tem", () => {
+    const order = createOrder(database, {
+      userId: "cliente-e", idempotencyKey: "o-equipe", customer, paymentMethod: "pix", items: [item("f", "Revelação 10 × 15 cm", 5, 3)],
+    });
+    const quote = createManualQuote(database, {
+      ownerId: "cliente-e", customer, createdBy: "Equipe", internalNotes: "", idempotencyKey: "q-equipe", items: [item("f", "Revelação 10 × 15 cm", 5, 3)],
+    });
+    expect(photoLinkStaffUrl(database, createPhotoLink(database, "order", order.id, "Equipe"))).toBe(`/equipe/pedidos/${order.id}`);
+    expect(photoLinkStaffUrl(database, createPhotoLink(database, "quote", quote.id, "Equipe"))).toBe(`/equipe/orcamentos/${quote.id}`);
+    expect(photoLinkStaffUrl(database, "nao-existe-este-link-aqui-123")).toBeNull();
+  });
+
+  it("mesma foto duplicada em dois tamanhos: uma linha por tamanho e um original por foto", async () => {
+    const order = createOrder(database, {
+      userId: "cliente-d", idempotencyKey: "o-dup", customer: { name: "Davi Souza", phone: "(11) 95555-4444" }, paymentMethod: "pix",
+      items: [item("f", "Revelação 10 × 15 cm", 2, 3)],
+    });
+    const token = createPhotoLink(database, "order", order.id, "Equipe");
+    const same = await upload();
+    await submitPhotoLink(database, token, [
+      { ...edits, uploadId: same, sizeId: "10x15", paper: "brilho", copies: 2 },
+      { ...edits, uploadId: same, sizeId: "20x30", paper: "brilho", copies: 1 },
+    ]);
+    const byName = Object.fromEntries(findOrderById(database, order.id)!.items.map((entry) => [entry.productName, entry]));
+    expect(byName["Revelação 10 × 15 cm · papel Brilho"]).toMatchObject({ quantity: 2 });
+    expect(byName["Ampliação 20 × 30 cm · papel Brilho"]).toMatchObject({ quantity: 1 });
+    expect(readdirSync(path.join(root, "Pedidos", dayFolder(), `Davi Souza - ${orderCode(order.id)}`, "Originais"))).toHaveLength(2);
   });
 });

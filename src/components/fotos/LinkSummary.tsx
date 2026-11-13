@@ -14,6 +14,8 @@ export type PhotoLinkProps = {
   reopen: () => Promise<{ missing: number; restoredEdits: boolean }>;
   /** Equipe ("Editar fotos"): abre direto no editor. */
   autoEdit: boolean;
+  /** Página da equipe do documento; só vem com sessão da equipe (modo equipe). */
+  staffUrl: string | null;
 };
 
 /**
@@ -23,13 +25,14 @@ export type PhotoLinkProps = {
 export function LinkStatus({ link }: { link: PhotoLinkProps }) {
   const { view } = link;
   const canEdit = view.editable && (link.done || Boolean(view.previous));
-  const [busy, setBusy] = useState(() => link.autoEdit && canEdit);
+  // Depois de enviar, esta tela monta de novo: aí não reabre sozinha (senão o "?editar=1" volta direto ao editor).
+  const [busy, setBusy] = useState(() => link.autoEdit && canEdit && !link.done);
   const [error, setError] = useState<string | null>(null);
   const received = link.done || Boolean(view.submittedAt);
 
-  const { reopen, autoEdit } = link;
+  const { reopen, autoEdit, done } = link;
   useEffect(() => {
-    if (!autoEdit || !canEdit) return;
+    if (!autoEdit || !canEdit || done) return;
     let active = true;
     reopen().catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Não foi possível abrir as fotos."); })
       .finally(() => { if (active) setBusy(false); });
@@ -53,6 +56,24 @@ export function LinkStatus({ link }: { link: PhotoLinkProps }) {
           <p>{view.kindLabel === "pedido"
             ? `O pedido ${view.code} já entrou em produção ou foi encerrado. Para mudar algo, fale com a loja pelo WhatsApp.`
             : `O orçamento ${view.code} já foi fechado ou encerrado. Para mudar algo, fale com a loja pelo WhatsApp.`}</p>
+        </div>
+      </div></section>
+    );
+  }
+
+  if (link.staffUrl) {
+    const where = `${view.kindLabel} ${view.code}`;
+    return (
+      <section className="fp fp-page"><div className="container-shell">
+        <div className="fp-link-done">
+          <CheckCircle2 aria-hidden="true" size={40} />
+          <h1 className="fp-h1">{busy ? `Abrindo as fotos do ${where}…` : link.done ? `Fotos salvas no ${where}` : `Fotos do ${where}`}</h1>
+          <p>{view.customerName ? `${view.customerName}. ` : ""}Preço por tamanho, desconto e pagamento: no {view.kindLabel}.</p>
+          <a className="button button-primary" href={link.staffUrl}>Abrir {view.kindLabel} (preço e pagamento)</a>
+          {canEdit && !busy ? (
+            <button className="button" onClick={edit} type="button"><Pencil aria-hidden="true" size={17} /> Editar fotos de novo</button>
+          ) : null}
+          {error ? <p className="fp-help fp-link-error" role="alert">{error}</p> : null}
         </div>
       </div></section>
     );
@@ -124,7 +145,7 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
 
   return (
     <aside className="fp-summary fp-summary-sticky fp-link-summary">
-      <h2>{view.kindLabel === "pedido" ? "Seu pedido" : "Seu orçamento"} <span>{view.code}</span></h2>
+      <h2>{link.staffUrl ? `${view.kindLabel === "pedido" ? "Pedido" : "Orçamento"}${view.customerName ? ` · ${view.customerName}` : ""}` : view.kindLabel === "pedido" ? "Seu pedido" : "Seu orçamento"} <span>{view.code}</span></h2>
       {view.others.map((item) => (
         <div className="fp-summary-row fp-link-line" key={item.id}>
           <span>
@@ -147,12 +168,12 @@ export function LinkSummary({ link, photos, summary }: { link: PhotoLinkProps; p
       <div className="fp-summary-total"><span>Total</span><strong>{onRequest ? "a combinar" : brl(priced.totalCents / 100)}</strong></div>
       {belowMinimum.map((text) => <p className="fp-help fp-link-error" key={text} role="status">{text}</p>)}
       <button className="button button-primary button-large" disabled={sending || !photos.length || uploading > 0 || failed || belowMinimum.length > 0} onClick={send} type="button">
-        <Send aria-hidden="true" size={18} /> {sending ? "Enviando…" : uploading ? `Enviando fotos (faltam ${uploading})…` : resend ? "Enviar alterações" : "Enviar para a loja"}
+        <Send aria-hidden="true" size={18} /> {sending ? (link.staffUrl ? "Salvando… (pode levar um minuto)" : "Enviando…") : uploading ? `Enviando fotos (faltam ${uploading})…` : link.staffUrl ? `Salvar fotos no ${view.kindLabel}` : resend ? "Enviar alterações" : "Enviar para a loja"}
       </button>
       {resend ? <p className="fp-help">Substitui as fotos enviadas antes por estas.</p> : null}
       {failed ? <p className="fp-help fp-link-error">Alguma foto não subiu. Toque em “Tentar de novo” nela ou remova.</p> : null}
       {error ? <p className="fp-help fp-link-error" role="alert">{error}</p> : null}
-      <p className="fp-help">O valor final é confirmado pela loja.</p>
+      <p className="fp-help">{link.staffUrl ? `Preço por tamanho, desconto e pagamento: no ${view.kindLabel}, depois de salvar.` : "O valor final é confirmado pela loja."}</p>
     </aside>
   );
 }

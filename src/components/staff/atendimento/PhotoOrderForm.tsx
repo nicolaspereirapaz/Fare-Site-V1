@@ -2,12 +2,15 @@
 
 import { Printer } from "lucide-react";
 import { useMemo, useState } from "react";
-import { brl, paperLabel, pricing, SIZE_GROUPS, SIZES, type Fit, type Paper } from "@/components/fotos/catalog";
+import { brl, paperLabel, pricing, sizeById, SIZE_GROUPS, SIZES, type Paper } from "@/components/fotos/catalog";
 import { api, type Conversation, type LinkedCustomer } from "@/components/staff/atendimento/shared";
 
-type Created = { code: string; orderId: string | null; photos: number; totalCents: number; prazo: string };
+type Created = { code: string; orderId: string | null; photos: number; totalCents: number; prazo: string; linkUrl: string | null };
 
-/** Formulário do pedido de revelação com as fotos escolhidas na janela de mídias. */
+/**
+ * Pedido de revelação com as fotos escolhidas na janela de mídias: cria o pedido e abre o link das fotos em modo
+ * equipe (outra aba), onde se escolhem os tamanhos (foto a foto, ou duplicada em outro tamanho), cópias e edição.
+ */
 export function PhotoOrderForm({
   conversation,
   customers,
@@ -22,31 +25,34 @@ export function PhotoOrderForm({
   const [customerRef, setCustomerRef] = useState(customers?.[0]?.ref ?? "");
   const [sizeId, setSizeId] = useState("10x15");
   const [paper, setPaper] = useState<Paper>("brilho");
-  const [copies, setCopies] = useState(1);
-  const [fit, setFit] = useState<Fit>("preencher");
   const [delivery, setDelivery] = useState<"retirada" | "entrega">("retirada");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
 
-  const total = messageIds.length * copies;
   const price = useMemo(() => {
     try {
-      return pricing(sizeId, total);
+      return pricing(sizeId, messageIds.length);
     } catch {
       return null;
     }
-  }, [sizeId, total]);
+  }, [sizeId, messageIds.length]);
 
   async function create() {
+    // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois do await).
+    const tab = window.open("about:blank", "_blank");
     setBusy(true);
     setError(null);
     try {
-      setCreated(await api<Created>(`/api/atendimento/conversas/${conversation.id}/pedido-fotos`, {
+      const order = await api<Created>(`/api/atendimento/conversas/${conversation.id}/pedido-fotos`, {
         method: "POST",
-        body: { messageIds, sizeId, paper, copies, fit, delivery, customerRef },
-      }));
+        body: { messageIds, sizeId, paper, delivery, customerRef },
+      });
+      if (tab && order.linkUrl) tab.location.href = order.linkUrl;
+      else tab?.close();
+      setCreated(order);
     } catch (createError) {
+      tab?.close();
       setError(createError instanceof Error ? createError.message : "Não foi possível criar o pedido.");
     } finally {
       setBusy(false);
@@ -56,10 +62,16 @@ export function PhotoOrderForm({
   if (created) {
     return (
       <div className="at-order-form is-done" role="status">
-        <strong>Pedido {created.code} criado</strong> — {created.photos} foto(s), {brl(created.totalCents / 100)}. {created.prazo}
+        <strong>Pedido {created.code} criado</strong> — {created.photos} foto(s).{" "}
+        {created.linkUrl ? "O editor abriu em outra aba: lá você escolhe os tamanhos, edita as fotos e salva. Preço, desconto e pagamento ficam no pedido." : created.prazo}
         <span className="at-order-actions">
+          {created.linkUrl ? (
+            <a className="at-btn at-btn-primary" href={created.linkUrl} rel="noopener" target="_blank">
+              Abrir editor
+            </a>
+          ) : null}
           {created.orderId ? (
-            <a className="at-btn at-btn-primary" href={`/equipe/pedidos/${created.orderId}`} rel="noopener" target="_blank">
+            <a className={`at-btn${created.linkUrl ? "" : " at-btn-primary"}`} href={`/equipe/pedidos/${created.orderId}`} rel="noopener" target="_blank">
               Abrir pedido
             </a>
           ) : null}
@@ -108,7 +120,7 @@ export function PhotoOrderForm({
           </select>
         </label>
         <label>
-          Tamanho
+          Tamanho inicial
           <select onChange={(event) => setSizeId(event.target.value)} value={sizeId}>
             {SIZE_GROUPS.map((group) => (
               <optgroup key={group.id} label={group.label}>
@@ -129,17 +141,6 @@ export function PhotoOrderForm({
           </select>
         </label>
         <label>
-          Cópias de cada
-          <input inputMode="numeric" min={1} onChange={(event) => setCopies(Math.max(1, Number(event.target.value.replace(/\D/g, "")) || 1))} type="number" value={copies} />
-        </label>
-        <label title="Preencher: a foto ocupa o papel todo (corta as sobras). Encaixar: a foto inteira aparece (pode sobrar borda branca).">
-          Ajuste
-          <select onChange={(event) => setFit(event.target.value as Fit)} value={fit}>
-            <option value="preencher">Preencher (corta sobras)</option>
-            <option value="encaixar">Encaixar (foto inteira)</option>
-          </select>
-        </label>
-        <label>
           Entrega
           <select onChange={(event) => setDelivery(event.target.value as "retirada" | "entrega")} value={delivery}>
             <option value="retirada">Retirar na loja</option>
@@ -148,7 +149,7 @@ export function PhotoOrderForm({
         </label>
       </div>
       <p className="at-muted">
-        {total} cópia(s){price && price.unit ? ` · ${brl(price.unit)} cada (${price.tier}) · total ${brl(price.total)}` : ""}. Cada foto sai na orientação dela; para recorte ou ajuste foto a foto, edite depois no pedido.
+        Todas começam em {sizeById(sizeId).label.replace(" cm", "")}{price && price.unit ? ` (${brl(price.unit)} cada)` : ""}. No editor você troca o tamanho foto a foto, duplica uma foto para outro tamanho, muda as cópias e edita. O valor atualiza na hora.
       </p>
       {error ? <p className="at-form-error" role="alert">{error}</p> : null}
       <span className="at-order-actions">
@@ -156,7 +157,7 @@ export function PhotoOrderForm({
           Cancelar
         </button>
         <button className="at-btn at-btn-primary" disabled={busy || !customerRef} type="submit">
-          {busy ? "Criando pedido… (pode levar um minuto)" : "Criar pedido"}
+          {busy ? "Criando pedido… (pode levar um minuto)" : "Criar e abrir editor"}
         </button>
       </span>
     </form>

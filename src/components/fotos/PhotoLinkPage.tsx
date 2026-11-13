@@ -26,7 +26,7 @@ const toPhoto = (photo: ReopenedPhoto): Photo => ({
  * envio atual: depois de um reenvio (do cliente ou da equipe), o que estava guardado no navegador não volta mais.
  * `autoEdit` (?editar=1, botão "Editar fotos" da equipe): já abre as fotos enviadas no editor.
  */
-export function PhotoLinkPage({ token, view, autoEdit = false }: { token: string; view: PhotoLinkView; autoEdit?: boolean }) {
+export function PhotoLinkPage({ token, view, autoEdit = false, staffUrl = null }: { token: string; view: PhotoLinkView; autoEdit?: boolean; staffUrl?: string | null }) {
   const scope = `farefoto-link-${token}${view.previous ? `-${view.previous.id}` : ""}`;
   setPhotoScope(scope);
   const router = useRouter();
@@ -47,7 +47,7 @@ export function PhotoLinkPage({ token, view, autoEdit = false }: { token: string
     <Workspace
       key={scope}
       link={{
-        token, view, done, reopened, autoEdit, reopen,
+        token, view, done, reopened, autoEdit, reopen, staffUrl,
         onDone: () => { setDone(true); setReopened(false); router.refresh(); },
       }}
     />

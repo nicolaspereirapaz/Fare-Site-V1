@@ -5,13 +5,13 @@ import { useProfessional } from "@/components/fotos/useProfessional";
 import Link from "next/link";
 import { useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CloudCheck, ImagePlus, Info, Minus, Pencil, Plus, RefreshCw, RotateCw, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, CloudCheck, Copy, ImagePlus, Info, Minus, Pencil, Plus, RefreshCw, RotateCw, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { PaperChoice } from "@/components/fotos/PaperChoice";
 import { LinkStatus, LinkSummary, type PhotoLinkProps } from "@/components/fotos/LinkSummary";
 import { PhotoEditor } from "@/components/fotos/PhotoEditor";
 import {
   CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SIZE_GROUPS, SizePicker, groupOf, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
-  isListed, minimumIssues, replacePhotoFile, retryUpload, setPhotos, sizeById, summarize, usePhotoState, type Photo, type SizeGroup,
+  isListed, minimumIssues, newId, replacePhotoFile, retryUpload, setPhotos, sizeById, summarize, usePhotoState, type Photo, type SizeGroup,
 } from "@/components/fotos/shared";
 
 /** Etapa 2 do site; com `link`, é a página do link das fotos (orçamento/pedido da equipe). */
@@ -128,7 +128,7 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
 
             <div className="fp-grid-head">
               <h2>Suas fotos <span>({photos.length})</span></h2>
-              <p><Pencil aria-hidden="true" size={15} /> Toque numa foto para cortar, colocar borda ou filtro.</p>
+              <p><Pencil aria-hidden="true" size={15} /> Toque numa foto para cortar, colocar borda ou filtro.{link?.staffUrl ? " Mesma foto em outro tamanho: Duplicar." : ""}</p>
             </div>
             <ul className="fp-grid">
               {photos.map((photo, index) => {
@@ -153,6 +153,12 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
                       }} type="file" />
                     </label>
                     {replaceError === photo.id ? <p className="fp-upload error" role="alert">Não deu para abrir esse arquivo. Escolha outra foto.</p> : null}
+                    {/* Equipe: a mesma foto em outro tamanho = uma cópia do card logo depois desta (mesmo envio). */}
+                    {link?.staffUrl ? (
+                      <button className="fp-replace fp-duplicate" onClick={() => setPhotos([...photos.slice(0, index + 1), { ...photo, id: newId() }, ...photos.slice(index + 1)])} title="Cria uma cópia desta foto logo ao lado, para pedir em outro tamanho ou papel" type="button">
+                        <Copy aria-hidden="true" size={13} /> Duplicar
+                      </button>
+                    ) : null}
                     <div className="fp-card-row">
                       <span className={`fp-quality q-${q.tone}`}>{q.tone === "low" ? <Info aria-hidden="true" size={14} /> : null}Qualidade {q.label.toLowerCase()}</span>
                       <button aria-label="Remover foto" className="fp-icon-button" onClick={() => setPhotos(photos.filter((p) => p.id !== photo.id))} type="button"><Trash2 aria-hidden="true" size={17} /></button>

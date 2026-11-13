@@ -55,7 +55,7 @@ export function PhotoRender({ photo, filter, className = "", fit = false, origin
 
 // crypto.randomUUID só existe em https/localhost; pelo IP da rede (http://192.168…) não funciona.
 let nextId = 0;
-const newId = () => `foto-${Date.now().toString(36)}-${(nextId++).toString(36)}`;
+export const newId = () => `foto-${Date.now().toString(36)}-${(nextId++).toString(36)}`;
 
 export function loadPhoto(name: string, url: string): Promise<Photo> {
   return new Promise((resolve, reject) => {

@@ -5,6 +5,7 @@ import { paperLabel, sizeById, type Fit, type Paper } from "@/components/fotos/c
 import { resolveCustomer } from "@/lib/customers/repository";
 import { mediaPath } from "@/lib/atendimento/media";
 import { addMessage, AtendimentoError, getConversation, listContactMedia, type StaffActor } from "@/lib/atendimento/repository";
+import { createPhotoLink } from "@/lib/photoLinks/links";
 import { createPhotoOrder, PhotoOrderError } from "@/lib/photoOrders/finalize";
 import { removeUpload, saveUpload } from "@/lib/photoOrders/uploads";
 
@@ -83,7 +84,9 @@ export async function createChatPhotoOrder(db: DatabaseSync, conversationId: str
       author: "sistema",
       body: `${staff.name} criou o pedido ${result.order.code}: ${chosen.length} foto(s) ${size} ${paperLabel(input.paper).toLowerCase()}, ${input.copies} cópia(s) de cada.`,
     });
-    return { code: result.order.code, orderId: result.order.orderId, photos: chosen.length, totalCents: result.order.totalCents, prazo: result.prazo };
+    // Link das fotos do pedido (nasce com as fotos acima): a equipe segue nele para tamanhos, edição e valor.
+    const linkUrl = result.order.orderId ? `/fotos/${createPhotoLink(db, "order", result.order.orderId, staff.name)}?editar=1` : null;
+    return { code: result.order.code, orderId: result.order.orderId, photos: chosen.length, totalCents: result.order.totalCents, prazo: result.prazo, linkUrl };
   } catch (error) {
     // Pedido montado apaga os envios sozinho; aqui só sobra o que falhou no meio.
     await Promise.all(uploads.map((upload) => removeUpload(upload.id)));

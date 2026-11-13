@@ -430,7 +430,9 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 .at-order-form > .at-order-actions { justify-content: flex-end; }
 .at-order-title { display: flex; align-items: center; gap: 6px; color: var(--navy-dark); }
 .at-order-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
-.at-order-fields label { display: grid; gap: 4px; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+.at-order-fields label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 0.78rem; font-weight: 700; }
+/* Nomes longos da lista de tamanhos não empurram o campo para cima do vizinho. */
+.at-order-fields select { min-width: 0; }
 .at-order-fields select, .at-order-fields input { padding: 7px 8px; border: 1px solid #d5d9e6; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; font-size: 0.86rem; font-weight: 400; }
 
 /* Visualizador de fotos */
