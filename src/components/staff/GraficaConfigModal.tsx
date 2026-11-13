@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { MoneyField } from "@/components/staff/ProductConfigModal";
-import { areaM2, GRAFICA_M2, graficaById, graficaItemName, graficaUnitPrice, PEDIDO_MINIMO, PRECO_M2, type GraficaChoice, type GraficaId } from "@/components/staff/graficaItems";
+import { areaM2, GRAFICA_M2, graficaById, graficaImage, graficaItemName, graficaUnitPrice, type GraficaChoice, type GraficaId } from "@/components/staff/graficaItems";
 import { brl, moneyInput, newId, parseNumber, type Item } from "@/components/staff/quoteEditorShared";
 
 const m2 = (value: number) => `${value.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} m²`;
 const cmInput = (text: string) => text.replace(/[^\d,]/g, "").replace(/,(?=.*,)/g, "").slice(0, 7);
 const cmValue = (text: string) => Number(text.replace(",", "."));
 
-/** Banner Lona / Adesivo Vinil no orçamento/pedido: largura e altura em cm, preço por m² (editável), pedido mínimo no item. */
+/** Impressos por m² no orçamento/pedido: largura e altura em cm, preço por m² do produto (editável), pedido mínimo no item. */
 export function GraficaConfigModal({ start, item, onSave, onClose }: {
   start: GraficaChoice;
   /** Item já na lista (editar); sem ele, adiciona um novo. */
@@ -20,6 +20,7 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
 }) {
   const [id] = useState(() => item?.id ?? newId());
   const [productId, setProductId] = useState<GraficaId>(start.id);
+  const [color, setColor] = useState(start.color ?? graficaById(start.id).colors?.[0]?.name);
   const [width, setWidth] = useState(start.width ? String(start.width).replace(".", ",") : "");
   const [height, setHeight] = useState(start.height ? String(start.height).replace(".", ",") : "");
   const [quantity, setQuantity] = useState(String(item?.quantity ?? 1));
@@ -27,11 +28,11 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
   const h = cmValue(height);
   const qty = Number.parseInt(quantity, 10) || 0;
   const sized = w > 0 && h > 0 && qty > 0;
-  const calc = sized ? graficaUnitPrice(w, h, qty) : null;
+  const calc = sized ? graficaUnitPrice(productId, w, h, qty) : null;
   // Preço salvo diferente do calculado = digitado pela equipe; igual = segue o cálculo ao mudar medidas/quantidade.
   const [priceOverride, setPriceOverride] = useState(() => {
     const saved = item?.priceOverride ? parseNumber(item.priceOverride) : NaN;
-    const auto = start.width && start.height ? graficaUnitPrice(start.width, start.height, item?.quantity ?? 1).unit : NaN;
+    const auto = start.width && start.height ? graficaUnitPrice(start.id, start.width, start.height, item?.quantity ?? 1).unit : NaN;
     return Number.isFinite(saved) && Math.abs(saved - auto) > 1e-9 ? item!.priceOverride! : "";
   });
   const unit = priceOverride ? parseNumber(priceOverride) : calc?.unit ?? NaN;
@@ -53,7 +54,7 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
   const canSave = sized && Number.isFinite(unit) && unit >= 0;
   const total = canSave ? Math.round(unit * qty * 100) / 100 : null;
   const save = () => onSave({
-    id, source: "avulso", name: graficaItemName({ id: productId, width: w, height: h }), cost: 0, quantity: qty, gravacoes: [],
+    id, source: "avulso", name: graficaItemName({ id: productId, color, width: w, height: h }), cost: 0, quantity: qty, gravacoes: [],
     // Sempre com preço gravado: o servidor não conhece a regra do m² (custo zero daria preço zero).
     priceOverride: moneyInput(unit),
   });
@@ -73,13 +74,28 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
               <div className="qe-mbox qe-photo-box">
                 <div className="qe-field">
                   <span>Produto</span>
-                  <div aria-label="Produto" className="qe-seg" role="radiogroup">
+                  <div aria-label="Produto" className="qe-seg qe-grafica-seg" role="radiogroup">
                     {GRAFICA_M2.map((entry) => (
                       <button aria-checked={entry.id === productId} className={entry.id === productId ? "on" : undefined} key={entry.id}
-                        onClick={() => setProductId(entry.id)} role="radio" type="button">{entry.name}</button>
+                        onClick={() => {
+                          if (entry.id === productId) return;
+                          setProductId(entry.id);
+                          setColor(graficaById(entry.id).colors?.[0]?.name);
+                        }} role="radio" type="button">{entry.name}</button>
                     ))}
                   </div>
                 </div>
+                {product.colors ? (
+                  <div className="qe-field">
+                    <span>Cor</span>
+                    <div aria-label="Cor" className="qe-seg qe-grafica-seg" role="radiogroup">
+                      {product.colors.map((entry) => (
+                        <button aria-checked={entry.name === color} className={entry.name === color ? "on" : undefined} key={entry.name}
+                          onClick={() => setColor(entry.name)} role="radio" type="button">{entry.name}</button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="qe-mgrid">
                   <label className="qe-field">
                     <span>Largura (cm)</span>
@@ -105,7 +121,7 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
                   </div>
                   <div className="qe-field">
                     <span>Valor do m²</span>
-                    <div className="qe-ro qe-num">{brl(PRECO_M2)}</div>
+                    <div className="qe-ro qe-num">{brl(product.price)}</div>
                   </div>
                 </div>
               </div>
@@ -128,10 +144,10 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
                   </div>
                   <div className="qe-field">
                     <span>Pedido mínimo</span>
-                    <div className="qe-ro qe-num">{brl(PEDIDO_MINIMO)}</div>
+                    <div className="qe-ro qe-num">{brl(product.minimum)}</div>
                   </div>
                 </div>
-                {calc?.minimum && !priceOverride ? <p className="qe-fhint qe-stock">Abaixo do mínimo: o valor por peça subiu para o item fechar pelo menos {brl(PEDIDO_MINIMO)}.</p> : null}
+                {calc?.minimum && !priceOverride ? <p className="qe-fhint qe-stock">Abaixo do mínimo: o valor por peça subiu para o item fechar pelo menos {brl(product.minimum)}.</p> : null}
               </div>
             </section>
             {!sized ? <p className="qe-fhint">Preencha largura, altura e quantidade para calcular.</p> : null}
@@ -140,10 +156,10 @@ export function GraficaConfigModal({ start, item, onSave, onClose }: {
           <aside className="qe-modal-side">
             <div className="qe-mphoto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt={product.name} src={product.image} />
+              <img alt={product.name} src={graficaImage({ id: productId, color })} />
             </div>
-            <p className="qe-mside-name">{sized ? graficaItemName({ id: productId, width: w, height: h }) : product.name}</p>
-            <p className="qe-fhint">Gráfica · {brl(PRECO_M2)} o m² · pedido mínimo {brl(PEDIDO_MINIMO)}</p>
+            <p className="qe-mside-name">{sized ? graficaItemName({ id: productId, color, width: w, height: h }) : color ? `${product.name} ${color}` : product.name}</p>
+            <p className="qe-fhint">Gráfica · {brl(product.price)} o m² · pedido mínimo {brl(product.minimum)}</p>
             <p className="qe-fhint">{product.text}</p>
           </aside>
         </div>

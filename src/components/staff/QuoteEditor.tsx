@@ -9,7 +9,7 @@ import { ProductConfigModal, type ModalStart } from "@/components/staff/ProductC
 import { EMPTY_PICKER, ProductPickerModal, type PickedProduct, type PickerState } from "@/components/staff/ProductPickerModal";
 import { PhotoConfigModal } from "@/components/staff/PhotoConfigModal";
 import { GraficaConfigModal } from "@/components/staff/GraficaConfigModal";
-import { graficaById, graficaFromName, type GraficaChoice, type GraficaId } from "@/components/staff/graficaItems";
+import { graficaFromName, graficaImage, type GraficaChoice, type GraficaId } from "@/components/staff/graficaItems";
 import { photoFromName, photoTablePrice, type PhotoChoice } from "@/components/staff/photoItems";
 import { AddressFields } from "@/components/staff/AddressFields";
 import { EMPTY_ADDRESS } from "@/lib/customers/address";
@@ -455,7 +455,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={PHOTO_PRODUCT_IMAGE[sizeById(photo.sizeId).group]} /></span>
                       ) : grafica && !(item.source === "avulso" && item.mockup) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <span className="qe-thumb qe-thumb-md"><img alt="" src={graficaById(grafica.id).image} /></span>
+                        <span className="qe-thumb qe-thumb-md"><img alt="" src={graficaImage(grafica)} /></span>
                       ) : item.source === "avulso" && item.mockup ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <span className="qe-thumb qe-thumb-md"><img alt="" src={`/api/backoffice/mockups/${item.mockup}`} /></span>

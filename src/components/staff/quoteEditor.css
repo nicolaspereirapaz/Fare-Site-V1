@@ -482,6 +482,11 @@
 .qe-photo-box { display: grid; gap: 16px; }
 .qe-photo-box .qe-seg { width: fit-content; }
 .qe-photo-box .qe-seg button { padding: 0 16px; }
+/* Gráfica no celular: produtos (nome longo: Vinil Adesivo Recorte Eletrônico) e cores um embaixo do outro. */
+@media (max-width: 760px) {
+  .qe-photo-box .qe-grafica-seg { display: grid; width: 100%; }
+  .qe-grafica-seg button + button { border-left: 0; border-top: 1px solid var(--qe-line); }
+}
 
 /* Mesma largura do topo da área da equipe (container-shell). */
 .qe-page { width: min(100% - 48px, 1280px); max-width: none; padding-inline: 0; }

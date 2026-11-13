@@ -6,7 +6,7 @@ import { COLOR_GROUPS, colorGroupOf, colorGroupSwatch, isLightColorGroup } from 
 import { PRODUCT_CATEGORIES } from "@/lib/productCategories";
 import { brl, useDebounced, type Product } from "@/components/staff/quoteEditorShared";
 import { PHOTO_PRODUCT_IMAGE, SIZE_GROUPS, SIZES, type SizeGroup } from "@/components/fotos/catalog";
-import { GRAFICA_M2, PEDIDO_MINIMO, PRECO_M2, type GraficaId } from "@/components/staff/graficaItems";
+import { GRAFICA_M2, type GraficaId } from "@/components/staff/graficaItems";
 
 /**
  * Janela "Escolha o produto" (referência: brinde.me): busca + filtros à esquerda, grade de cards,
@@ -182,7 +182,7 @@ export function ProductPickerModal({ initial, onClose, onPick, onPickPhoto, onPi
   onPick: (picked: PickedProduct[]) => void;
   /** Tipo de foto escolhido na aba Fotos: abre a configuração (tamanho, papel, cópias e preço). */
   onPickPhoto: (group: SizeGroup) => void;
-  /** Produto da aba Gráfica (Banner Lona, Adesivo Vinil): abre a configuração com as medidas em cm. */
+  /** Produto da aba Gráfica (impressos por m²): abre a configuração com as medidas em cm. */
   onPickGrafica: (id: GraficaId) => void;
   /** Guarda busca e filtros para a próxima vez que a janela abrir (adicionar vários produtos). */
   onStateChange: (state: PickerState) => void;
@@ -534,8 +534,8 @@ function GraficaPanel({ onPick }: { onPick: (id: GraficaId) => void }) {
             <img alt="" src={entry.image} />
           </span>
           <b>{entry.name}</b>
-          <small>{brl(PRECO_M2)} o m²</small>
-          <em>Pedido mínimo {brl(PEDIDO_MINIMO)}</em>
+          <small>{brl(entry.price)} o m²</small>
+          <em>Pedido mínimo {brl(entry.minimum)}</em>
         </button>
       ))}
     </div>
