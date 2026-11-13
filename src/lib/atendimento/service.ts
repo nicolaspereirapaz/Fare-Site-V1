@@ -9,7 +9,9 @@ import {
   addMessage,
   firstName,
   getConversation,
+  getMessage,
   getQuickReply,
+  mediaFileOf,
   aiEnabled,
   holdForSeller,
   listMessages,
@@ -188,6 +190,29 @@ export async function sendQuickReplyMedia(
   openForStaff(db, conversationId, staff);
   const file = await copyMedia(reply.mediaFile, conversationId);
   return sendStaffMedia(db, conversationId, staff, { ...reply.media, file }, caption, options);
+}
+
+/**
+ * Encaminhar (como no WhatsApp): copia as mensagens escolhidas, em ordem de data, para outra conversa,
+ * como mensagens da equipe sem assinatura. Texto, Pix e mídia (o arquivo é copiado) vão; notas e avisos não.
+ * Mídia já apagada pela limpeza (FARE_MIDIAS_DIAS) vai só com a legenda, ou fica de fora (skipped).
+ */
+export async function forwardMessages(db: DatabaseSync, targetId: string, staff: StaffActor, messageIds: string[]): Promise<{ sent: Message[]; skipped: number }> {
+  getConversation(db, targetId);
+  const messages = [...new Set(messageIds)]
+    .map((id) => getMessage(db, id))
+    .filter((message): message is Message => Boolean(message) && !isInternal(message!.author))
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.seq - b.seq));
+  const sent: Message[] = [];
+  let skipped = 0;
+  for (const message of messages) {
+    const stored = message.media ? mediaFileOf(db, message.id) : null;
+    const file = stored ? await copyMedia(stored.file, targetId).catch(() => null) : null;
+    if (message.media && file) sent.push(sendStaffMedia(db, targetId, staff, { ...message.media, file }, message.body, { sign: false }));
+    else if (message.body.trim()) sent.push(sendStaffMessage(db, targetId, staff, message.body, { sign: false }));
+    else skipped += 1;
+  }
+  return { sent, skipped };
 }
 
 /** Vendedor responde. Qualquer pessoa da equipe escreve; conversa com a IA ou finalizada vai para "Em atendimento". */

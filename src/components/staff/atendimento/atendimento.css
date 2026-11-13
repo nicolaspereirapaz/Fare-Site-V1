@@ -518,3 +518,16 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
   .at-chat { min-height: 520px; }
   .sim-layout { grid-template-columns: 1fr; }
 }
+
+/* Encaminhar: botão abaixo do "citar"; no modo de seleção, caixinha no lugar e balão marcado com contorno. */
+.at-bubble .at-forward-btn { top: 34px; }
+.at-bubble.is-selectable { cursor: pointer; }
+.at-bubble.is-selected { box-shadow: 0 0 0 2px var(--navy); }
+.at-select-box { position: absolute; top: 6px; right: -30px; width: 18px; height: 18px; margin: 0; accent-color: var(--navy); cursor: pointer; }
+.at-bubble-ia .at-select-box, .at-bubble-vendedor .at-select-box { right: auto; left: -30px; }
+.at-select-bar { display: flex; align-items: center; gap: 10px; }
+.at-select-bar span { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; }
+.at-forward-list { display: grid; gap: 2px; max-height: min(50vh, 420px); overflow: auto; margin: 0; padding: 0; list-style: none; }
+.at-forward-list label { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; }
+.at-forward-list label:hover { background: rgba(127, 127, 127, .12); }
+.at-forward-list small { color: var(--muted); }

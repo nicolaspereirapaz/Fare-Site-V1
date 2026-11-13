@@ -12,6 +12,7 @@ import {
   setTranscript,
   listContactMedia,
   listQuickReplies,
+  mediaFileOf,
   setConversationTags,
   markAllConversationsRead,
   markConversationRead,
@@ -23,7 +24,7 @@ import {
   updateConversationProfile,
   whatsAppHistoryAnchors,
 } from "@/lib/atendimento/repository";
-import { addNote, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, sendStaffMessages, signedText } from "@/lib/atendimento/service";
+import { addNote, forwardMessages, isStoreQrMessage, queueIfAiOff, receiveCustomerMessage, recordCustomerMessage, runAi, sendStaffMessage, sendStaffMessages, signedText } from "@/lib/atendimento/service";
 import { PIX_CARD_TEXT, STORE_PIX } from "@/lib/atendimento/types";
 import { aiEnabled, setAiEnabled } from "@/lib/atendimento/repository";
 import { mkdtempSync, existsSync as fileExists, rmSync as removeDir } from "node:fs";
@@ -834,6 +835,38 @@ describe("limpeza das mídias", () => {
       expect((await pruneOldMedia(db, 90, new Date("2026-11-03T12:00:00Z"))).pruned).toBe(0);
     } finally {
       vi.useRealTimers();
+      delete process.env.FARE_ATENDIMENTO_MEDIA_DIR;
+      removeDir(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("encaminhar", () => {
+  it("copia texto, Pix e mídia na ordem, sem assinatura; nota não vai; mídia apagada sem legenda fica de fora", async () => {
+    const dir = mkdtempSync(nodePath.join(os.tmpdir(), "atd-encaminhar-"));
+    process.env.FARE_ATENDIMENTO_MEDIA_DIR = dir;
+    try {
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+      const source = newConversation();
+      const target = createConversation(db, { channel: "simulador", phone: "(11) 97777-6666" });
+      const text = recordCustomerMessage(db, source.id, "Quero 10 canecas");
+      const note = addNote(db, source.id, ana, "só a equipe");
+      const photo = recordCustomerMessage(db, source.id, "a arte", { ...(await saveMedia(png, { conversationId: source.id, name: "arte.png", mime: "image/png" })), hasThumb: false });
+      const gone = recordCustomerMessage(db, source.id, "", { ...(await saveMedia(png, { conversationId: source.id, name: "velha.png", mime: "image/png" })), hasThumb: false });
+      removeDir(mediaPath(mediaFileOf(db, gone.id)!.file), { force: true });
+      const [pix] = sendStaffMessages(db, source.id, ana, "{pix}", { sign: true });
+      const sourceCount = listMessages(db, source.id).length;
+
+      const result = await forwardMessages(db, target.id, ana, [pix.id, photo.id, note.id, text.id, gone.id]);
+      expect(result.skipped).toBe(1);
+      expect(result.sent.map((message) => message.body)).toEqual(["Quero 10 canecas", "a arte", PIX_CARD_TEXT]);
+      expect(result.sent.every((message) => message.author === "vendedor" && message.deliveredText === message.body)).toBe(true);
+      const copied = mediaFileOf(db, result.sent[1].id)!;
+      expect(copied.conversationId).toBe(target.id);
+      expect(copied.file.startsWith(`${target.id}/`)).toBe(true);
+      expect(fileExists(mediaPath(copied.file))).toBe(true);
+      expect(listMessages(db, source.id)).toHaveLength(sourceCount); // origem intacta
+    } finally {
       delete process.env.FARE_ATENDIMENTO_MEDIA_DIR;
       removeDir(dir, { recursive: true, force: true });
     }

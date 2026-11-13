@@ -10,6 +10,7 @@ import {
   ChevronUp,
   ClipboardList,
   FileText,
+  Forward,
   Images,
   IdCard,
   Inbox,
@@ -30,6 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 import { MediaDialog } from "@/components/staff/atendimento/MediaDialog";
+import { ForwardDialog } from "@/components/staff/atendimento/ForwardDialog";
 import { PhotoViewer } from "@/components/staff/atendimento/PhotoViewer";
 import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recorder";
@@ -278,6 +280,7 @@ export function ConversationView({
       {selected ? (
         <ChatPanel
           conversation={selected}
+          conversations={conversations}
           focus={focus && focus.conversationId === selected.id ? focus : null}
           key={selected.id}
           me={me}
@@ -341,6 +344,7 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 
 function ChatPanel({
   conversation,
+  conversations,
   focus,
   me,
   quickReplies,
@@ -349,6 +353,8 @@ function ChatPanel({
   onMarkUnread,
 }: {
   conversation: Conversation;
+  /** Destinos do "Encaminhar". */
+  conversations: Conversation[];
   focus: { messageId: string; at: number } | null;
   me: StaffUser;
   quickReplies: QuickReply[];
@@ -481,7 +487,26 @@ function ChatPanel({
     }
   }
 
-  const quoteProps = { lookup, onJump: jumpTo, onReply: setReplyTo };
+  // Encaminhar: null = fora do modo de seleção; o botão do balão entra no modo já com ele marcado.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const [forwarding, setForwarding] = useState(false);
+  const togglePicked = (ids: string[]) =>
+    setPicked((current) => {
+      const next = new Set(current);
+      const all = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  const quoteProps: QuoteProps = {
+    lookup,
+    onJump: jumpTo,
+    onReply: setReplyTo,
+    onForward: (ids) => setPicked(new Set(ids)),
+    selection: picked ? { ids: picked, toggle: togglePicked } : undefined,
+  };
   const group = isGroupChat(conversation.waChatId);
 
   return (
@@ -608,21 +633,46 @@ function ChatPanel({
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
         </div>
 
-        <Composer
-          conversation={conversation}
-          me={me}
-          onOpenQuickReplies={onOpenQuickReplies}
-          onSent={(message, updated) => {
-            stickToBottom.current = true;
-            lastSeq.current = Math.max(lastSeq.current, message.seq);
-            setMessages((list) => (list.some((entry) => entry.id === message.id) ? list : [...list, message]));
-            onChanged(updated);
-            setReplyTo(null);
-          }}
-          onCancelReply={() => setReplyTo(null)}
-          quickReplies={quickReplies}
-          replyTo={replyTo}
-        />
+        {picked ? (
+          <div className="at-composer at-select-bar">
+            <button className="at-btn at-btn-quiet" onClick={() => setPicked(null)} type="button">
+              <X aria-hidden="true" size={16} /> Cancelar
+            </button>
+            <span aria-live="polite">
+              {picked.size} selecionada{picked.size === 1 ? "" : "s"} · clique nas mensagens para marcar
+            </span>
+            <button className="at-btn at-btn-primary" disabled={!picked.size} onClick={() => setForwarding(true)} type="button">
+              <Forward aria-hidden="true" size={16} /> Encaminhar
+            </button>
+          </div>
+        ) : (
+          <Composer
+            conversation={conversation}
+            me={me}
+            onOpenQuickReplies={onOpenQuickReplies}
+            onSent={(message, updated) => {
+              stickToBottom.current = true;
+              lastSeq.current = Math.max(lastSeq.current, message.seq);
+              setMessages((list) => (list.some((entry) => entry.id === message.id) ? list : [...list, message]));
+              onChanged(updated);
+              setReplyTo(null);
+            }}
+            onCancelReply={() => setReplyTo(null)}
+            quickReplies={quickReplies}
+            replyTo={replyTo}
+          />
+        )}
+        {forwarding && picked ? (
+          <ForwardDialog
+            conversations={conversations}
+            messageIds={messages.filter((message) => picked.has(message.id)).map((message) => message.id)}
+            onClose={() => setForwarding(false)}
+            onDone={() => {
+              setForwarding(false);
+              setPicked(null);
+            }}
+          />
+        ) : null}
       </section>
 
       <CustomerPanel conversation={conversation} customers={customers} onCustomers={setCustomers} />
@@ -693,7 +743,40 @@ function AuthorLabel({ message, group }: { message: Message; group?: boolean }) 
   );
 }
 
-type QuoteProps = { lookup: (id: string) => Message | undefined; onJump: (id: string) => void; onReply?: (message: Message) => void };
+type Selection = { ids: Set<string>; toggle: (ids: string[]) => void };
+/** Ações do balão: citar, encaminhar (botão) e, no modo de seleção, marcar para encaminhar. */
+type QuoteProps = {
+  lookup: (id: string) => Message | undefined;
+  onJump: (id: string) => void;
+  onReply?: (message: Message) => void;
+  onForward?: (ids: string[]) => void;
+  selection?: Selection;
+};
+
+/** Modo de seleção: caixinha no lugar dos botões; clicar no balão (foto, link, texto) marca/desmarca em vez de abrir. */
+function selectable(ids: string[], selection?: Selection) {
+  if (!selection) return { className: "", onClickCapture: undefined, box: null };
+  const checked = ids.every((id) => selection.ids.has(id));
+  return {
+    className: checked ? " is-selectable is-selected" : " is-selectable",
+    onClickCapture: (event: React.MouseEvent) => {
+      if ((event.target as HTMLElement).closest(".at-select-box")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selection.toggle(ids);
+    },
+    box: <input aria-label="Selecionar para encaminhar" checked={checked} className="at-select-box" onChange={() => selection.toggle(ids)} type="checkbox" />,
+  };
+}
+
+function ForwardButton({ ids, onForward }: { ids: string[]; onForward?: (ids: string[]) => void }) {
+  if (!onForward) return null;
+  return (
+    <button aria-label="Encaminhar esta mensagem" className="at-reply-btn at-forward-btn" onClick={() => onForward(ids)} title="Encaminhar (selecionar várias)" type="button">
+      <Forward aria-hidden="true" size={14} />
+    </button>
+  );
+}
 
 const MEDIA_SNIPPET: Record<string, string> = { imagem: "📷 Foto", video: "🎥 Vídeo", audio: "🎤 Áudio", documento: "📄 Documento", figurinha: "Figurinha" };
 export const snippetOf = (message: Message) => stripWhatsApp(message.body) || (message.media ? MEDIA_SNIPPET[message.media.kind] : "") || "Mensagem";
@@ -736,9 +819,13 @@ function AlbumBubble({
   lookup,
   onJump,
   onReply,
+  onForward,
+  selection,
   group,
 }: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void; group?: boolean } & QuoteProps) {
   const first = messages[0];
+  const ids = messages.map((message) => message.id);
+  const select = selectable(ids, selection);
   const last = messages[messages.length - 1];
   const dayLabel = dayLabelFor(first, previous);
   const sameAuthor = previous && !dayLabel && previous.author === first.author && previous.authorName === first.authorName;
@@ -749,8 +836,18 @@ function AlbumBubble({
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`} data-album={messages.map((message) => message.id).join(" ")} id={`msg-${first.id}`}>
-        <ReplyButton message={first} onReply={onReply} />
+      <div
+        className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}${select.className}`}
+        data-album={ids.join(" ")}
+        id={`msg-${first.id}`}
+        onClickCapture={select.onClickCapture}
+      >
+        {select.box ?? (
+          <>
+            <ReplyButton message={first} onReply={onReply} />
+            <ForwardButton ids={ids} onForward={onForward} />
+          </>
+        )}
         {!sameAuthor ? <AuthorLabel group={group} message={first} /> : null}
         <QuotedSnippet id={first.replyToId} lookup={lookup} onJump={onJump} />
         <div className="at-album-grid">
@@ -805,6 +902,8 @@ function MessageBubble({
   lookup,
   onJump,
   onReply,
+  onForward,
+  selection,
   group,
 }: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
   const dayLabel = dayLabelFor(message, previous);
@@ -831,11 +930,17 @@ function MessageBubble({
     );
   }
   const sameAuthor = previous && previous.author === message.author && previous.authorName === message.authorName && !showDay;
+  const select = selectable([message.id], selection);
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`} id={`msg-${message.id}`}>
-        <ReplyButton message={message} onReply={onReply} />
+      <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}${select.className}`} id={`msg-${message.id}`} onClickCapture={select.onClickCapture}>
+        {select.box ?? (
+          <>
+            <ReplyButton message={message} onReply={onReply} />
+            <ForwardButton ids={[message.id]} onForward={onForward} />
+          </>
+        )}
         {!sameAuthor ? <AuthorLabel group={group} message={message} /> : null}
         <QuotedSnippet id={message.replyToId} lookup={lookup} onJump={onJump} />
         <MessageMediaView message={message} onOpen={onOpenPhoto} />
