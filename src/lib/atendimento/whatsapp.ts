@@ -21,7 +21,7 @@ import {
 } from "@/lib/atendimento/repository";
 import { recordCustomerMessage } from "@/lib/atendimento/service";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
-import { PIX_CARD_TEXT, STORE_PIX, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isGroupChat, PIX_CARD_TEXT, STORE_PIX, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /**
  * Ligação com o WhatsApp pela ponte Baileys (modo painel).
@@ -48,12 +48,14 @@ export function tokenMatches(received: string | null, expected: string | undefin
 export type InboundWhatsApp = {
   /** Id da mensagem no WhatsApp: a mesma mensagem nunca entra duas vezes. */
   externalId: string;
-  /** Destino na ponte (…@s.whatsapp.net ou …@lid). */
+  /** Destino na ponte (…@s.whatsapp.net ou …@lid; grupo: …@g.us). */
   chatId: string;
-  /** Telefone com DDI, só dígitos. */
+  /** Telefone com DDI, só dígitos (no grupo: de quem mandou, pode faltar). */
   phone: string;
   /** Nome do perfil do WhatsApp (pushName), quando houver. */
   pushName?: string;
+  /** Grupo: nome do grupo (vira o nome da conversa). */
+  groupName?: string;
   text: string;
   /** Mensagem digitada no celular da loja (app do WhatsApp Business), não pelo cliente. */
   fromPhone: boolean;
@@ -77,6 +79,7 @@ export function parseInbound(body: Record<string, unknown>, media?: StoredMediaR
     chatId: str(body.chatId, 120),
     phone: phoneDigits(str(body.phone, 30)),
     pushName: str(body.pushName, 80),
+    groupName: str(body.groupName, 80) || undefined,
     text: str(body.text, 4000),
     fromPhone: body.fromPhone === true,
     media,
@@ -84,7 +87,10 @@ export function parseInbound(body: Record<string, unknown>, media?: StoredMediaR
     sentAt: body.historico === true ? historyDate(body.sentAt) : undefined,
   };
   if (body.historico === true && !inbound.sentAt) throw new AtendimentoError("INVALID_REQUEST", "Mensagem do histórico sem data.");
-  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid)$/.test(inbound.chatId) || !/^\d{10,15}$/.test(inbound.phone) || (!inbound.text && !media)) {
+  const group = isGroupChat(inbound.chatId);
+  // Histórico antigo é por contato: grupo cairia na conversa particular de quem mandou.
+  if (group && body.historico === true) throw new AtendimentoError("INVALID_REQUEST", "Histórico de grupo não entra.");
+  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid|g\.us)$/.test(inbound.chatId) || (!group && !/^\d{10,15}$/.test(inbound.phone)) || (!inbound.text && !media)) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
   }
   return inbound;
@@ -120,9 +126,13 @@ export function importWhatsAppHistory(db: DatabaseSync, inbound: InboundWhatsApp
   return { conversationId: conversation.id, duplicate: false };
 }
 
-/** Conversa do contato no WhatsApp (cria se for a primeira mensagem). */
+/**
+ * Conversa do contato no WhatsApp (cria se for a primeira mensagem).
+ * Grupo: a conversa é do grupo (o "telefone" vira o número do grupo), nunca a particular de quem mandou.
+ */
 export function ensureWhatsAppConversation(db: DatabaseSync, chatId: string, phone: string) {
-  return findWhatsAppConversation(db, chatId, phone) ?? createConversation(db, { channel: "whatsapp", phone, waChatId: chatId });
+  const key = isGroupChat(chatId) ? phoneDigits(chatId) : phone;
+  return findWhatsAppConversation(db, chatId, key) ?? createConversation(db, { channel: "whatsapp", phone: key, waChatId: chatId });
 }
 
 /**
@@ -132,7 +142,11 @@ export function ensureWhatsAppConversation(db: DatabaseSync, chatId: string, pho
 export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsApp): { conversationId: string; duplicate: boolean; fromPhone: boolean } {
   const existing = messageByExternalId(db, inbound.externalId);
   if (existing) return { conversationId: existing.conversationId, duplicate: true, fromPhone: inbound.fromPhone };
+  const group = isGroupChat(inbound.chatId);
   const conversation = ensureWhatsAppConversation(db, inbound.chatId, inbound.phone);
+  // Grupo: a conversa leva o nome do grupo (e acompanha se ele mudar).
+  const groupName = inbound.groupName || conversation.contactName || "Grupo do WhatsApp";
+  if (group && conversation.contactName !== groupName) updateConversationProfile(db, conversation.id, { contactName: groupName });
   const replyToId = inbound.quotedId ? (messageByExternalId(db, inbound.quotedId)?.id ?? null) : null;
   if (inbound.fromPhone) {
     addMessage(db, {
@@ -148,11 +162,15 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
     phoneReplied(db, conversation.id);
     return { conversationId: conversation.id, duplicate: false, fromPhone: true };
   }
-  // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
-  if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
-  // Cadastro do site: liga ao que já existe com esse WhatsApp (não cria).
-  linkConversationCustomer(db, conversation.id, inbound.pushName);
-  const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media);
+  if (!group) {
+    // Nome do perfil do WhatsApp só como sugestão inicial; a IA confirma perguntando "Qual o seu nome?".
+    if (!conversation.contactName && inbound.pushName) updateConversationProfile(db, conversation.id, { contactName: inbound.pushName });
+    // Cadastro do site: liga ao que já existe com esse WhatsApp (não cria).
+    linkConversationCustomer(db, conversation.id, inbound.pushName);
+  }
+  // Grupo: cada mensagem com o nome (ou número) de quem mandou.
+  const authorName = group ? inbound.pushName || inbound.phone || "Participante" : undefined;
+  const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media, authorName);
   db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
   return { conversationId: conversation.id, duplicate: false, fromPhone: false };
 }

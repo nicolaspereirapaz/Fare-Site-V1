@@ -69,6 +69,9 @@ export type AuthorKind = "cliente" | "ia" | "vendedor" | "sistema" | "nota";
 /** Avisos do sistema e notas internas: só a equipe vê; nunca vão ao cliente nem à IA. */
 export const isInternal = (author: AuthorKind) => author === "sistema" || author === "nota";
 
+/** Grupo do WhatsApp (destino …@g.us): a IA nunca responde e cada mensagem traz o nome de quem mandou. */
+export const isGroupChat = (waChatId: string | null | undefined) => Boolean(waChatId?.endsWith("@g.us"));
+
 /** Etiquetas sugeridas (as já usadas pela equipe também aparecem). */
 export const DEFAULT_TAGS = ["Urgente", "Revelação", "Brindes", "Pago", "Retirar", "Orçamento enviado"];
 

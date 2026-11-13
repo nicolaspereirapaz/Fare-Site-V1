@@ -687,13 +687,14 @@ const GREETING_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "bod
   { shortcut: "ajudar", title: "Como posso ajudar?", body: "Como posso ajudar?" },
 ];
 
-/** "PAGAMENTO" e "Segue Arte" do sistema antigo de WhatsApp, com o texto igual. */
+/** /pg = confirmação de pagamento recebido (texto trocado a pedido do dono em 13/11/2026); "Segue Arte" do sistema antigo de WhatsApp, com o texto igual. */
+const PG_REPLY = {
+  shortcut: "pg",
+  title: "Pagamento",
+  body: "Recebemos o seu pagamento, obrigado! 😊\nAgora daremos continuidade ao seu pedido.\nSe precisar de algo, é só chamar! 😉",
+};
 const ORDER_QUICK_REPLIES: Array<Pick<QuickReply, "shortcut" | "title" | "body">> = [
-  {
-    shortcut: "pg",
-    title: "Pagamento",
-    body: "💰 Para confirmar seu pedido envie o comprovante.\n\n📎Seu pedido ficará registrado no nome apresentado no PIX\n\n📍 Retirada na loja mediante apresentação do comprovante PIX.",
-  },
+  PG_REPLY,
   {
     shortcut: "aprovacao",
     title: "Segue arte para aprovação",
@@ -728,6 +729,12 @@ function seedQuickReplies(db: DatabaseSync) {
     db.prepare("UPDATE atd_quick_replies SET body = replace(body, ?, ''), updated_at = ? WHERE shortcut = 'pix' AND instr(body, ?) > 0").run(PIX_PICKUP_LINE, at, PIX_PICKUP_LINE);
     db.prepare("DELETE FROM atd_quick_replies WHERE shortcut = 'chavepix'").run();
     db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_pix_sem_retirada', ?)").run(at);
+  }
+  // Pedido do dono (13/11/2026): /pg passa a ser "Recebemos o seu pagamento…" (troca uma vez, mesmo se a equipe tiver editado).
+  if (!db.prepare("SELECT value FROM atd_meta WHERE key = 'quick_replies_pg_recebido'").get()) {
+    const at = nowIso();
+    db.prepare("UPDATE atd_quick_replies SET body = ?, updated_at = ? WHERE shortcut = 'pg'").run(PG_REPLY.body, at);
+    db.prepare("INSERT INTO atd_meta (key, value) VALUES ('quick_replies_pg_recebido', ?)").run(at);
   }
 }
 

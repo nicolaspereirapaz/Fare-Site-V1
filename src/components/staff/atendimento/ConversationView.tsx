@@ -42,6 +42,7 @@ import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/component
 import {
   CONVERSATION_STATUSES,
   CONVERSATION_STATUS_LABELS,
+  isGroupChat,
   type ConversationStatus,
 } from "@/lib/atendimento/types";
 import { stripWhatsApp,
@@ -481,6 +482,7 @@ function ChatPanel({
   }
 
   const quoteProps = { lookup, onJump: jumpTo, onReply: setReplyTo };
+  const group = isGroupChat(conversation.waChatId);
 
   return (
     <>
@@ -490,7 +492,7 @@ function ChatPanel({
           <div className="at-chat-title">
             <h2>{nameWithCompany(conversation)}</h2>
             <p>
-              {formatPhone(conversation.phone)}
+              {group ? "Grupo do WhatsApp" : formatPhone(conversation.phone)}
               {conversation.channel === "simulador" ? <span className="at-sim-tag">Teste</span> : null}
               {conversation.customerRef ? (
                 <Link className="at-customer-link" href={`/equipe/clientes/${encodeURIComponent(conversation.customerRef)}`} title="Abrir o cadastro do site">
@@ -598,9 +600,9 @@ function ChatPanel({
           {!loading && !messages.length ? <p className="at-muted at-center">Nenhuma mensagem ainda.</p> : null}
           {blocks.map((block) =>
             block.kind === "album" ? (
-              <AlbumBubble key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
+              <AlbumBubble group={group} key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ) : (
-              <MessageBubble key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
+              <MessageBubble group={group} key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ),
           )}
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
@@ -679,9 +681,10 @@ function dayLabelFor(message: Message, previous?: Message) {
   return showDay ? date.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", ...year }) : null;
 }
 
-function AuthorLabel({ message }: { message: Message }) {
+/** group: grupo do WhatsApp, onde a mensagem do cliente também mostra quem mandou. */
+function AuthorLabel({ message, group }: { message: Message; group?: boolean }) {
   const fromPhone = message.author === "vendedor" && message.authorName === "Celular";
-  const label = message.author === "ia" ? "IA" : fromPhone ? "Celular (WhatsApp)" : message.author === "vendedor" ? message.authorName : null;
+  const label = message.author === "ia" ? "IA" : fromPhone ? "Celular (WhatsApp)" : message.author === "vendedor" || (group && message.author === "cliente") ? message.authorName : null;
   if (!label) return null;
   return (
     <span className="at-bubble-author">
@@ -733,7 +736,8 @@ function AlbumBubble({
   lookup,
   onJump,
   onReply,
-}: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void } & QuoteProps) {
+  group,
+}: { messages: Message[]; previous?: Message; onOpenPhoto: (id: string) => void; onResend: (id: string) => void; group?: boolean } & QuoteProps) {
   const first = messages[0];
   const last = messages[messages.length - 1];
   const dayLabel = dayLabelFor(first, previous);
@@ -747,7 +751,7 @@ function AlbumBubble({
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
       <div className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}`} data-album={messages.map((message) => message.id).join(" ")} id={`msg-${first.id}`}>
         <ReplyButton message={first} onReply={onReply} />
-        {!sameAuthor ? <AuthorLabel message={first} /> : null}
+        {!sameAuthor ? <AuthorLabel group={group} message={first} /> : null}
         <QuotedSnippet id={first.replyToId} lookup={lookup} onJump={onJump} />
         <div className="at-album-grid">
           {messages.slice(0, 4).map((message, index) => (
@@ -801,7 +805,8 @@ function MessageBubble({
   lookup,
   onJump,
   onReply,
-}: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void } & QuoteProps) {
+  group,
+}: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
   const dayLabel = dayLabelFor(message, previous);
   const showDay = Boolean(dayLabel);
   if (message.author === "nota") {
@@ -831,7 +836,7 @@ function MessageBubble({
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
       <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}`} id={`msg-${message.id}`}>
         <ReplyButton message={message} onReply={onReply} />
-        {!sameAuthor ? <AuthorLabel message={message} /> : null}
+        {!sameAuthor ? <AuthorLabel group={group} message={message} /> : null}
         <QuotedSnippet id={message.replyToId} lookup={lookup} onJump={onJump} />
         <MessageMediaView message={message} onOpen={onOpenPhoto} />
         {message.body ? (
@@ -1244,7 +1249,8 @@ function CustomerPanel({
       <section className="at-card">
         <h3>Cadastro no site</h3>
         {customers === null ? <p className="at-muted">Procurando…</p> : null}
-        {customers?.length === 0 && !creating ? (
+        {customers?.length === 0 && isGroupChat(conversation.waChatId) ? <p className="at-muted">Grupo do WhatsApp: sem cadastro no site.</p> : null}
+        {customers?.length === 0 && !creating && !isGroupChat(conversation.waChatId) ? (
           <>
             <p className="at-muted">Nenhum cliente com o WhatsApp {formatPhone(conversation.phone)}.</p>
             <button

@@ -17,7 +17,7 @@ import {
 } from "@/lib/atendimento/repository";
 import { activeBrain, atendimentoDb, deliverInBackground, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
 import { isAiThinking } from "@/lib/atendimento/service";
-import { isConversationStatus } from "@/lib/atendimento/types";
+import { isConversationStatus, isGroupChat } from "@/lib/atendimento/types";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,7 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
   const body = await readJson(request);
   // Voltou para a IA com mensagem do cliente sem resposta: a IA responde em seguida.
   if (body.action === "devolver" || (body.action === "mover" && body.status === "ia")) {
+    if (isGroupChat(getConversation(db, id).waChatId)) throw new AtendimentoError("INVALID_REQUEST", "Grupo do WhatsApp não tem IA: a equipe responde por aqui.");
     if (!aiEnabled(db)) throw new AtendimentoError("INVALID_REQUEST", "A IA está desligada. Ligue a IA no topo do Atendimento para devolver conversas para ela.");
     respondInBackground(db, id);
   }

@@ -343,12 +343,36 @@ describe("WhatsApp pela ponte", () => {
   };
 
   it("valida a entrada e compara token", () => {
-    expect(() => parseInbound({ externalId: "1", chatId: "123@g.us", phone: "5511977776666", text: "oi" })).toThrow(AtendimentoError);
+    expect(() => parseInbound({ externalId: "1", chatId: "123@broadcast", phone: "5511977776666", text: "oi" })).toThrow(AtendimentoError);
     expect(() => parseInbound({ externalId: "1", chatId: "5511977776666@s.whatsapp.net", phone: "abc", text: "oi" })).toThrow(AtendimentoError);
+    // Grupo: o telefone é de quem mandou e pode faltar; histórico de grupo não entra.
+    expect(parseInbound({ externalId: "1", chatId: "120363000000000001@g.us", phone: "", groupName: "Formatura 2026", text: "oi" })).toMatchObject({ chatId: "120363000000000001@g.us", groupName: "Formatura 2026" });
+    expect(() => parseInbound({ externalId: "1", chatId: "120363000000000001@g.us", phone: "5511977776666", text: "oi", historico: true, sentAt: "2026-11-01T10:00:00Z" })).toThrow(AtendimentoError);
     expect(tokenMatches("tk", "tk")).toBe(true);
     expect(tokenMatches("tx", "tk")).toBe(false);
     expect(tokenMatches(null, "tk")).toBe(false);
     expect(tokenMatches("tk", undefined)).toBe(false);
+  });
+
+  it("grupo: conversa própria com o nome do grupo, cada mensagem com quem mandou, e a IA nunca responde", async () => {
+    const group = "120363000000000001@g.us";
+    const own = receiveWhatsAppMessage(db, inbound("G0", "oi, particular"));
+    const first = receiveWhatsAppMessage(db, inbound("G1", "bom dia", { chatId: group, groupName: "Formatura 2026" }));
+    const second = receiveWhatsAppMessage(db, inbound("G2", "eu também", { chatId: group, phone: "5511955554444", pushName: "Bia", groupName: "Formatura 2026 ✨" }));
+    expect(first.conversationId).not.toBe(own.conversationId);
+    expect(second.conversationId).toBe(first.conversationId);
+    const conversation = getConversation(db, first.conversationId);
+    expect(conversation).toMatchObject({ waChatId: group, contactName: "Formatura 2026 ✨", customerRef: null });
+    expect(listMessages(db, first.conversationId).filter((message) => message.author === "cliente").map((message) => message.authorName)).toEqual(["Zé", "Bia"]);
+    // Mensagem particular do Zé continua na conversa dele.
+    expect(getConversation(db, own.conversationId).contactName).toBe("Zé");
+
+    const brain = vi.fn(async () => ({ reply: "Olá!" }));
+    expect(await runAi(db, first.conversationId, brain)).toEqual([]);
+    expect(brain).not.toHaveBeenCalled();
+    setAiEnabled(db, true);
+    expect(queueIfAiOff(db, first.conversationId)).toBe(true);
+    expect(getConversation(db, first.conversationId)).toMatchObject({ status: "em_atendimento", handoffReason: "Grupo do WhatsApp" });
   });
 
   it("mesmo número cai na mesma conversa e mensagem repetida não duplica", () => {
@@ -972,8 +996,18 @@ describe("mensagens rápidas", () => {
     expect(replies.find((reply) => reply.shortcut === "pix")?.body).toContain("{pix}");
     expect(replies.find((reply) => reply.shortcut === "pix")?.body).not.toContain("retirada");
     expect(replies.some((reply) => reply.shortcut === "chavepix")).toBe(false);
-    expect(replies.find((reply) => reply.shortcut === "pg")?.body).toMatch(/^💰 Para confirmar seu pedido envie o comprovante\./);
+    expect(replies.find((reply) => reply.shortcut === "pg")?.body).toBe("Recebemos o seu pagamento, obrigado! 😊\nAgora daremos continuidade ao seu pedido.\nSe precisar de algo, é só chamar! 😉");
     expect(replies.find((reply) => reply.shortcut === "aprovacao")?.body).toMatch(/^Segue arte para aprovação:/);
+  });
+
+  it("banco antigo: /pg troca para \"Recebemos o seu pagamento\" uma vez, mesmo editado", () => {
+    db.prepare("UPDATE atd_quick_replies SET body = ? WHERE shortcut = 'pg'").run("💰 Para confirmar seu pedido envie o comprovante.");
+    db.prepare("DELETE FROM atd_meta WHERE key = 'quick_replies_pg_recebido'").run();
+    runAtendimentoMigrations(db);
+    expect(listQuickReplies(db).find((reply) => reply.shortcut === "pg")?.body).toMatch(/^Recebemos o seu pagamento, obrigado!/);
+    db.prepare("UPDATE atd_quick_replies SET body = 'editado depois' WHERE shortcut = 'pg'").run();
+    runAtendimentoMigrations(db);
+    expect(listQuickReplies(db).find((reply) => reply.shortcut === "pg")?.body).toBe("editado depois");
   });
 
   it("banco antigo: /pix perde a retirada (mesmo editado) e /chavepix some", () => {

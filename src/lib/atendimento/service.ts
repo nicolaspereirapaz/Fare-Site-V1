@@ -20,7 +20,7 @@ import {
   updateConversationProfile,
   type StaffActor,
 } from "@/lib/atendimento/repository";
-import { isInternal, PIX_CARD_TEXT, PIX_TOKEN, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isGroupChat, isInternal, PIX_CARD_TEXT, PIX_TOKEN, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 import { openDocumentForPhone } from "@/lib/atendimento/customer";
 import { foldText } from "@/lib/atendimento/search";
 
@@ -51,12 +51,14 @@ export function recordCustomerMessage(
   conversationId: string,
   text: string,
   media?: { file: string; kind: MediaKind; mime: string; name: string; size: number; hasThumb: boolean },
+  /** Grupo do WhatsApp: quem mandou (sem ele, o nome da conversa). */
+  authorName?: string,
 ): Message {
   const before = getConversation(db, conversationId);
   const reason = sellerReason(db, before, text);
   if (before.status === "finalizada" && !reason) reopenConversation(db, conversationId);
   if (before.status === "aguardando_cliente") customerReplied(db, conversationId);
-  const message = addMessage(db, { conversationId, author: "cliente", authorName: before.contactName, body: text, media });
+  const message = addMessage(db, { conversationId, author: "cliente", authorName: authorName ?? before.contactName, body: text, media });
   if (reason) holdForSeller(db, conversationId, reason);
   return message;
 }
@@ -83,7 +85,7 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
     for (let attempt = 0; attempt < 4; attempt += 1) {
       state.again = false;
       const conversation = getConversation(db, conversationId);
-      if (conversation.status !== "ia") return created;
+      if (conversation.status !== "ia" || isGroupChat(conversation.waChatId)) return created;
       const messages = listMessages(db, conversationId);
       if (messages.filter((message) => !isInternal(message.author)).at(-1)?.author !== "cliente") return created;
       // Maior seq (a lista vem em ordem de data; histórico importado tem seq alto e data antiga).
@@ -116,9 +118,11 @@ export async function runAi(db: DatabaseSync, conversationId: string, brain: Bra
  * Devolve true se a IA está desligada (quem chamou não deve rodar a IA).
  */
 export function queueIfAiOff(db: DatabaseSync, conversationId: string): boolean {
-  if (aiEnabled(db)) return false;
+  // Grupo do WhatsApp: a IA nunca responde; vai direto para a equipe.
+  const group = isGroupChat(getConversation(db, conversationId).waChatId);
+  if (aiEnabled(db) && !group) return false;
   const last = listMessages(db, conversationId).filter((message) => !isInternal(message.author)).at(-1);
-  if (last?.author === "cliente") holdForSeller(db, conversationId);
+  if (last?.author === "cliente") holdForSeller(db, conversationId, group ? "Grupo do WhatsApp" : undefined);
   return true;
 }
 
