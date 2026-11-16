@@ -12,6 +12,7 @@
     "export:landing": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/export-outubro-rosa.mts",
     "equipe": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/equipe.mts",
     "fornecedores": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/fornecedores.mts",
+    "campanha": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/campanha.mts",
     "fotos": "node --no-warnings --import ./scripts/register-resolver.mjs --experimental-strip-types scripts/fotos.mts"
   },
   "dependencies": {

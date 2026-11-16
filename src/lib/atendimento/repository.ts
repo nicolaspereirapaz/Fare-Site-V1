@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { campaignHiddenConversationIds, migrateCampaign, revealCampaignForStaff } from "@/lib/atendimento/campaign";
 import type { DatabaseSync } from "node:sqlite";
 import {
   CONVERSATION_STATUS_LABELS,
@@ -110,6 +111,7 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   // v11: sem a etapa "Aguardando vendedor" (todos respondem): quem estava nela vai para "Em atendimento".
   db.prepare("UPDATE atd_conversations SET status = 'em_atendimento', assigned_staff_id = NULL, assigned_staff_name = NULL WHERE status = 'aguardando_vendedor'").run();
   seedQuickReplies(db);
+  migrateCampaign(db);
 }
 
 const MEDIA_PREVIEW: Record<MediaKind, string> = { imagem: "📷 Foto", video: "🎥 Vídeo", audio: "🎤 Áudio", documento: "📄 Documento", figurinha: "Figurinha" };
@@ -368,7 +370,8 @@ export function listConversations(db: DatabaseSync, options: { channel?: Channel
   const rows = (options.channel
     ? db.prepare(`${conversationsSelect(db)} WHERE channel = ? ORDER BY last_message_at DESC`).all(options.channel)
     : db.prepare(`${conversationsSelect(db)} ORDER BY last_message_at DESC`).all()) as ConversationRow[];
-  return rows.map(toConversation);
+  const hidden = campaignHiddenConversationIds(db);
+  return rows.map(toConversation).filter((conversation) => !hidden.has(conversation.id));
 }
 
 /** Em ordem de data: o histórico antigo do WhatsApp entra depois (seq maior), mas com a data original. */
@@ -508,6 +511,7 @@ function setStatus(
   fields: { staff?: StaffActor | null; handoffReason?: string | null; waiting?: boolean },
 ) {
   const at = nowIso();
+  if (status !== 'ia') revealCampaignForStaff(db, id);
   db.prepare(
     `UPDATE atd_conversations SET status = ?, assigned_staff_id = ?, assigned_staff_name = ?,
        handoff_reason = ?, waiting_since = ?, updated_at = ? WHERE id = ?`,

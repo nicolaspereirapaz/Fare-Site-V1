@@ -1,8 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
+import { campaignHiddenConversationIds } from "@/lib/atendimento/campaign";
 import { conversationsSelect } from "@/lib/atendimento/repository";
 
 /** Sem acento e minúsculo: "Revelação" acha "revelacao". */
-export const foldText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+import { foldText } from "@/lib/atendimento/searchText";
+export { foldText } from "@/lib/atendimento/searchText";
 
 export type MessageHit = {
   conversationId: string;
@@ -41,7 +43,9 @@ export function searchMessages(db: DatabaseSync, query: string, limit = 30): Mes
     )
     .all() as Array<Record<string, string>>;
   const hits: MessageHit[] = [];
+  const hidden = campaignHiddenConversationIds(db);
   for (const row of rows) {
+    if (hidden.has(row.conversation_id)) continue;
     const folded = foldText(row.body);
     if (!words.every((word) => folded.includes(word))) continue;
     hits.push({

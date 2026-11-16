@@ -3,7 +3,7 @@
 import { Forward, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { api, displayName, formatPhone, type Conversation } from "@/components/staff/atendimento/shared";
-import { foldText } from "@/lib/atendimento/search";
+import { foldText } from "@/lib/atendimento/searchText";
 
 const MAX_TARGETS = 5;
 

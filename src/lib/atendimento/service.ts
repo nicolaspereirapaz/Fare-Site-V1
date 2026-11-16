@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { campaignOwnsConversation } from "@/lib/atendimento/campaign";
 import type { Brain } from "@/lib/atendimento/simulatedBrain";
 import { SIMULATED_AI_NAME } from "@/lib/atendimento/simulatedBrain";
 import { copyMedia } from "@/lib/atendimento/media";
@@ -75,6 +76,8 @@ export const isAiThinking = (conversationId: string) => aiRuns.has(conversationI
  * a resposta velha é descartada e a IA responde de novo já vendo tudo (sem respostas duplicadas).
  */
 export async function runAi(db: DatabaseSync, conversationId: string, brain: Brain, aiName = SIMULATED_AI_NAME): Promise<Message[]> {
+  // Campaigns have their own strict scripts and counters. Never use the generic brain.
+  if (campaignOwnsConversation(db, conversationId)) return [];
   const current = aiRuns.get(conversationId);
   if (current) {
     current.again = true;
@@ -170,7 +173,7 @@ export function sendStaffMedia(
     author: "vendedor",
     authorName: staff.name,
     body,
-    deliveredText: body && options.sign ? signedText(staff.name, body) : body,
+    deliveredText: body && options.sign && !campaignOwnsConversation(db, conversationId) ? signedText(staff.name, body) : body,
     media,
     replyToId: options.replyToId,
   });
@@ -231,7 +234,7 @@ export function sendStaffMessage(
     author: "vendedor",
     authorName: staff.name,
     body,
-    deliveredText: options.sign ? signedText(staff.name, body) : body,
+    deliveredText: options.sign && !campaignOwnsConversation(db, conversationId) ? signedText(staff.name, body) : body,
     replyToId: options.replyToId,
   });
 }

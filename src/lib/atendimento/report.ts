@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { campaignHiddenConversationIds } from "@/lib/atendimento/campaign";
 
 /**
  * Relatório da equipe de atendimento, calculado das mensagens:
@@ -91,7 +92,10 @@ export function teamReport(db: DatabaseSync, period: { from: Date; to?: Date }) 
   const now = new Date().toISOString();
 
   const byConversation = new Map<string, Row[]>();
-  for (const row of rows) byConversation.set(row.conversation_id, [...(byConversation.get(row.conversation_id) ?? []), row]);
+  const hidden = campaignHiddenConversationIds(db);
+  for (const row of rows) {
+    if (!hidden.has(row.conversation_id)) byConversation.set(row.conversation_id, [...(byConversation.get(row.conversation_id) ?? []), row]);
+  }
 
   for (const [conversationId, list] of byConversation) {
     for (let index = 0; index < list.length; index += 1) {

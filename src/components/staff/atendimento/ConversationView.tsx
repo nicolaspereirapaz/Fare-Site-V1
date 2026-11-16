@@ -39,7 +39,8 @@ import { useAiEnabled } from "@/components/staff/atendimento/aiStatus";
 import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { fillQuickReply } from "@/lib/atendimento/quickReplyFill";
-import { foldText, type MessageHit } from "@/lib/atendimento/search";
+import { foldText } from "@/lib/atendimento/searchText";
+import type { MessageHit } from "@/lib/atendimento/search";
 import { formatBytes, mediaUrl, MessageMediaView, uploadFile } from "@/components/staff/atendimento/media";
 import {
   CONVERSATION_STATUSES,
