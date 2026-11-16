@@ -4320,6 +4320,16 @@ aside.checkout-card .checkout-mode > label.active {
 }
 
 /* Minha conta: aviso do pedido recém-enviado */
+/* Saldo de crédito do cliente (Minha conta > Pedidos). */
+.account-credit {
+  margin: 0 0 16px;
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: #e8f4ec;
+  color: #1d6b3a;
+  font-size: 0.95rem;
+}
+
 .account-order-note {
   margin: 0;
   border-bottom: 1px solid var(--line);

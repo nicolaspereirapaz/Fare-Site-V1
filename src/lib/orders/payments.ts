@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { createOrder, findOrderById, runOrderMigrations, type CreateOrderInput, type Order, type PaymentMethod } from "./repository";
 import type { QuoteCartItem } from "@/lib/commerce";
-import { applyDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
+import { applyDiscount, creditOf, type QuoteDiscount } from "@/lib/quotes/discount";
+import { assertCreditAvailable } from "@/lib/customers/credit";
 
 export const STAFF_PAYMENT_METHODS: readonly PaymentMethod[] = [
   "pix", "dinheiro", "cartao_debito", "cartao_credito", "boleto", "faturamento_empresa",
@@ -95,7 +96,8 @@ function validateDirectInput(input: DirectOrderInput) {
   if (input.discount != null && ((input.discount.type !== "percent" && input.discount.type !== "value")
     || typeof input.discount.value !== "number" || !Number.isFinite(input.discount.value) || input.discount.value < 0
     || (input.discount.type === "percent" && input.discount.value > 100)
-    || (input.discount.freight !== undefined && !(input.discount.freight >= 0)))) throw new Error("Desconto inválido.");
+    || (input.discount.freight !== undefined && !(input.discount.freight >= 0))
+    || (input.discount.credit !== undefined && !(input.discount.credit >= 0)))) throw new Error("Desconto inválido.");
 }
 
 function migrateFinance(db: DatabaseSync) {
@@ -248,7 +250,10 @@ export function createDirectOrder(db: DatabaseSync, input: DirectOrderInput): Or
       return findOrderById(db, existing.id)!;
     }
     validateDirectInput(input);
-    const order = createOrder(db, input, { initialStatus: input.payment.amountCents > 0 || input.paymentOnPickup === true ? "aguardando_arte" : "aguardando_pagamento" });
+    assertCreditAvailable(db, input.userId, Math.round(creditOf(input.discount) * 100));
+    // Total zero (tudo pago com crédito): nada a receber, vai direto para a arte.
+    const nothingToPay = applyDiscount(Math.round(input.items.reduce((sum, item) => sum + item.unitPrice! * item.quantity, 0) * 100), input.discount ?? null).totalCents === 0;
+    const order = createOrder(db, input, { initialStatus: input.payment.amountCents > 0 || input.paymentOnPickup === true || nothingToPay ? "aguardando_arte" : "aguardando_pagamento" });
     requireCents(order.totalCents, true);
     if (input.payment.amountCents > order.totalCents!) throw new Error("Pagamento acima do total do pedido.");
     const now = new Date().toISOString();
@@ -339,6 +344,7 @@ export function replaceOrderItems(db: DatabaseSync, input: {
   if (total < paid) throw new Error(`O novo total (${money(total)}) fica menor que o valor já recebido (${money(paid)}).`);
   db.exec("BEGIN IMMEDIATE");
   try {
+    assertCreditAvailable(db, order.userId, Math.round(creditOf(discount) * 100), order.id);
     const result = db.prepare("UPDATE fare_orders SET items_snapshot = ?, total_cents = ?, discount_json = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
       .run(JSON.stringify(input.items), total, discount ? JSON.stringify(discount) : null, new Date().toISOString(), order.id, input.expectedUpdatedAt);
     if (Number(result.changes) !== 1) throw new Error("O pedido foi alterado por outra pessoa. Abra de novo.");

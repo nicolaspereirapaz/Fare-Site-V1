@@ -31,3 +31,12 @@
 .qe-client > .cl-delete { margin-left: 0; }
 .cl-delete, .cl-delete:hover { color: #b42318; }
 .cl-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #fdecea; color: #7a271a; font-size: 14px; }
+/* Crédito do cliente: valor + motivo lado a lado no PC, um embaixo do outro no celular. */
+.cl-credit-balance { margin: 0 0 12px; font-size: 1.05rem; }
+.cl-credit-form { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: 10px 12px; align-items: end; margin-bottom: 12px; }
+.cl-credit-form .qe-actions, .cl-credit-form .qe-error { grid-column: 1 / -1; margin: 0; }
+.cl-credit-form .qe-actions { flex-wrap: wrap; justify-content: flex-start; }
+.cl-credit-in, .cl-credit-out { white-space: nowrap; }
+.cl-credit-in { color: #1d6b3a; }
+.cl-credit-out { color: #b42318; }
+@media (max-width: 600px) { .cl-credit-form { grid-template-columns: 1fr; } .cl-credit-form .qe-actions .qe-btn { flex: 1 1 100%; } }

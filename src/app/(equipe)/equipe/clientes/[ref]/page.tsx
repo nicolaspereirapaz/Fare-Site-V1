@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CustomerCreditPanel } from "@/components/staff/CustomerCreditPanel";
 import { CustomerEditPanel } from "@/components/staff/CustomerEditPanel";
 import { ProfessionalToggle } from "@/components/staff/ProfessionalControls";
 import { StaffTopbar } from "@/components/staff/StaffTopbar";
 import { database } from "@/lib/auth";
+import { creditStatement } from "@/lib/customers/credit";
 import { customerHistory, resolveCustomer } from "@/lib/customers/repository";
 import { ORDER_STAFF_LABELS } from "@/lib/backoffice/orderStatus";
 import { orderCode } from "@/lib/orders/orderCode";
@@ -21,7 +23,7 @@ const day = (iso: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "Ameri
 const quoteLabels = QUOTE_STATUS_LABELS as Record<string, string>;
 const orderLabels = ORDER_STAFF_LABELS as Record<string, string>;
 
-/** Cliente: dados (com "Editar") e todo o histórico de orçamentos e pedidos. */
+/** Cliente: dados (com "Editar"), crédito e todo o histórico de orçamentos e pedidos. */
 export default async function CustomerPage({ params }: { params: Promise<{ ref: string }> }) {
   const session = await getStaffSession();
   if (!session) redirect("/equipe/entrar");
@@ -31,6 +33,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ ref: 
   const history = customerHistory(database, ref);
   const orders = history.filter((entry) => entry.kind === "order" && entry.status !== "cancelado");
   const ordersTotal = orders.reduce((sum, entry) => sum + (entry.totalCents ?? 0), 0);
+  const credit = creditStatement(database, customer.ownerId);
   return (
     <>
       <StaffTopbar name={session.user.name} role={session.user.role} current="clientes" />
@@ -45,6 +48,25 @@ export default async function CustomerPage({ params }: { params: Promise<{ ref: 
           <CustomerEditPanel customer={customer} />
           {customer.kind === "conta" ? <ProfessionalToggle customerRef={customer.ref} professional={Boolean(customer.professional)} />
             : <p className="cl-count">Tabela profissional: só para quem tem conta no site (mande o convite em Clientes cadastrados).</p>}
+        </section>
+        <section className="qe-card">
+          <h2>Crédito</h2>
+          <p className="cl-credit-balance">Saldo: <strong>{brl(credit.balanceCents)}</strong></p>
+          <CustomerCreditPanel customerRef={customer.ref} />
+          {credit.entries.length ? (
+            <table className="cl-history">
+              <thead><tr><th>Data</th><th>Lançamento</th><th>Valor</th></tr></thead>
+              <tbody>
+                {credit.entries.map((entry, index) => (
+                  <tr key={`${entry.createdAt}-${index}`}>
+                    <td>{day(entry.createdAt)}</td>
+                    <td>{entry.orderId ? <>Usado no pedido <Link href={`/equipe/pedidos/${entry.orderId}`}>{orderCode(entry.orderId)}</Link></> : `${entry.reason} (${entry.actorName})`}</td>
+                    <td className={entry.amountCents < 0 ? "cl-credit-out" : "cl-credit-in"}>{entry.amountCents < 0 ? "− " : "+ "}{brl(Math.abs(entry.amountCents))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
         </section>
         <section className="qe-card">
           <h2>Orçamentos e pedidos</h2>

@@ -10,6 +10,7 @@ import { formatDeliveryAddress } from "@/lib/customers/address";
 import { formatProductName } from "@/lib/text/names";
 import { SUPPLIER_LABELS } from "@/lib/productCodes";
 import { applyDiscount, parseDiscount, type QuoteDiscount } from "@/lib/quotes/discount";
+import { addCustomerCredit, creditBalanceCents } from "@/lib/customers/credit";
 import { NO_CUSTOMER_NAME, NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
 import { createManualQuote, findQuoteById, replaceQuoteItems, type Quote, type QuoteDelivery } from "@/lib/quotes/repository";
 import { findOrderById } from "@/lib/orders/repository";
@@ -99,7 +100,7 @@ const reais = (centsValue: number) => centsValue / 100;
 /** Totais da prévia com o desconto: subtotal, desconto, total e margem (sobre o total descontado). */
 function totalsWithDiscount(totals: { total: number; cost: number; pending: number }, discount: QuoteDiscount | null) {
   const subtotalCents = Math.round(totals.total * 100);
-  let applied = { subtotalCents, discountCents: 0, freightCents: 0, totalCents: subtotalCents };
+  let applied = { subtotalCents, discountCents: 0, freightCents: 0, creditCents: 0, totalCents: subtotalCents };
   let discountError: string | undefined;
   try {
     applied = applyDiscount(subtotalCents, discount);
@@ -111,10 +112,11 @@ function totalsWithDiscount(totals: { total: number; cost: number; pending: numb
       subtotal: reais(applied.subtotalCents),
       discount: reais(applied.discountCents),
       freight: reais(applied.freightCents),
+      credit: reais(applied.creditCents),
       total: reais(applied.totalCents),
       cost: totals.cost,
-      // Frete é repassado: não entra na margem.
-      margin: reais(applied.totalCents - applied.freightCents - Math.round(totals.cost * 100)),
+      // Frete é repassado: não entra na margem. Crédito é dívida antiga com o cliente, não redução de preço: também não.
+      margin: reais(applied.totalCents + applied.creditCents - applied.freightCents - Math.round(totals.cost * 100)),
       pending: totals.pending,
     },
     discountError,
@@ -129,7 +131,8 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       const params = new URL(request.url).searchParams;
       // ?ref= : um cadastro só (para o "Editar" do cliente)
       const ref = params.get("ref");
-      if (ref) { const found = resolveCustomer(deps.database(), ref.slice(0, 120)); return json({ customers: found ? [found] : [] }); }
+      // creditCents: saldo de crédito do cliente (aviso "Usar crédito" no editor).
+      if (ref) { const found = resolveCustomer(deps.database(), ref.slice(0, 120)); return json({ customers: found ? [{ ...found, creditCents: creditBalanceCents(deps.database(), found.ownerId) }] : [] }); }
       const query = params.get("q") ?? "";
       return json({ customers: searchCustomers(deps.database(), query.slice(0, 80)) });
     },
@@ -169,6 +172,27 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       }
     },
 
+    /** Lançar (+) ou retirar (−) crédito do cliente, com motivo: { ref, amountCents, reason }. */
+    async addCredit(request: Request) {
+      const access = await staff(deps, request);
+      if (access.error) return access.error;
+      const rejected = financialMutationGuard(request);
+      if (rejected) return rejected;
+      const body = await readJson(request);
+      if (!body || typeof body.ref !== "string" || typeof body.amountCents !== "number") return json({ error: "INVALID_REQUEST" }, 400);
+      const found = resolveCustomer(deps.database(), body.ref.slice(0, 120));
+      if (!found) return json({ error: "INVALID_REQUEST", message: "Cliente não encontrado." }, 404);
+      try {
+        const balanceCents = addCustomerCredit(deps.database(), {
+          ownerId: found.ownerId, amountCents: body.amountCents, reason: String(body.reason ?? ""),
+          actorId: access.session.user.id, actorName: access.session.user.name,
+        });
+        return json({ balanceCents });
+      } catch (error) {
+        return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Não foi possível lançar o crédito." }, 400);
+      }
+    },
+
     /** Excluir cliente cadastrado pela equipe (?ref=painel:…). */
     async deleteCustomer(request: Request) {
       const access = await staff(deps, request);
@@ -176,6 +200,8 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
       const ref = new URL(request.url).searchParams.get("ref");
       if (!ref) return json({ error: "INVALID_REQUEST" }, 400);
       try {
+        const found = resolveCustomer(deps.database(), ref.slice(0, 120));
+        if (found && creditBalanceCents(deps.database(), found.ownerId) !== 0) throw new Error("Este cliente tem crédito. Retire o crédito antes de excluir.");
         deletePanelCustomer(deps.database(), ref.slice(0, 120));
         return json({ ok: true });
       } catch (error) {

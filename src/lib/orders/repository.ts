@@ -307,7 +307,8 @@ function readDiscount(raw: string | null | undefined): QuoteDiscount | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as QuoteDiscount;
-    return (parsed.type === "percent" || parsed.type === "value") && parsed.value > 0 ? parsed : null;
+    // Só frete ou só crédito (desconto zero) também vale.
+    return (parsed.type === "percent" || parsed.type === "value") && (parsed.value > 0 || (parsed.freight ?? 0) > 0 || (parsed.credit ?? 0) > 0) ? parsed : null;
   } catch {
     return null;
   }

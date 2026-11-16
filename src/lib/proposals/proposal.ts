@@ -65,6 +65,8 @@ export type Proposal = {
   discount: { label: string; amount: number } | null;
   /** Frete cobrado (R$); vazio/0 = a combinar. */
   freight?: number;
+  /** Crédito do cliente usado (R$); vazio/0 = nenhum. Já abatido do total. */
+  credit?: number;
   /** Total a pagar (já com desconto). */
   total: number;
   minimumDeposit?: number;
@@ -133,6 +135,7 @@ export function buildProposal(
     subtotal: applied.subtotalCents / 100,
     discount: quote.discount && applied.discountCents > 0 ? { label: discountLabel(quote.discount), amount: applied.discountCents / 100 } : null,
     freight: applied.freightCents / 100,
+    credit: applied.creditCents / 100,
     total: applied.totalCents / 100,
     minimumDeposit: Math.ceil(applied.totalCents / 2) / 100,
     pixKey: "50.344.377/0001-36",
@@ -169,6 +172,7 @@ export function proposalWhatsAppText(proposal: Proposal): string {
     ...lines,
     "",
     ...(proposal.discount ? [`Subtotal: ${brl(proposal.subtotal)} · ${proposal.discount.label}: − ${brl(proposal.discount.amount)}`] : []),
+    ...(proposal.credit ? [`Crédito do cliente: − ${brl(proposal.credit)}`] : []),
     ...(proposal.freight ? [`Frete: ${brl(proposal.freight)}`] : []),
     `*Total: ${brl(proposal.total)}*${proposal.freight ? "" : " (frete a combinar)"}`,
     `Produção: ${PROPOSAL_TERMS.production} Início mediante sinal de 50%.`,

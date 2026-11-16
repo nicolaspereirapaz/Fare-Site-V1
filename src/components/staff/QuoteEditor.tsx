@@ -196,6 +196,10 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   const [discountError, setDiscountError] = useState<string | null>(null);
   /** Frete cobrado do cliente (R$, vazio = a combinar). */
   const [freight, setFreight] = useState("");
+  /** Crédito do cliente usado (R$, vazio = nenhum); saldo do cliente em centavos; crédito já gravado neste documento (R$). */
+  const [credit, setCredit] = useState("");
+  const [creditInfo, setCreditInfo] = useState<{ ref: string; cents: number } | null>(null);
+  const [savedCredit, setSavedCredit] = useState(0);
   const [modal, setModal] = useState<ModalStart | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   /** Configuração de foto aberta (nova ou editando um item de foto da lista). */
@@ -234,6 +238,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
         if (payload.discount) {
           setDiscount({ type: payload.discount.type, value: payload.discount.value ? String(payload.discount.value).replace(".", ",") : "" });
           setFreight(payload.discount.freight ? String(payload.discount.freight).replace(".", ",") : "");
+          setCredit(payload.discount.credit ? String(payload.discount.credit).replace(".", ",") : "");
+          setSavedCredit(payload.discount.credit ?? 0);
         }
         if (payload.hasCustomer === false) setNeedsCustomer(true);
         else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); setFixedProfessional(Boolean(payload.customerProfessional)); }
@@ -247,8 +253,22 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
     };
   }, [docId, editingOrder]);
 
+  // Saldo de crédito do cliente escolhido (aviso "Usar crédito").
+  const creditRef = fixedCustomerRef ?? customer?.ref ?? null;
+  useEffect(() => {
+    if (!creditRef) return;
+    let active = true;
+    fetch(`/api/backoffice/orcamento-editor/clientes?ref=${encodeURIComponent(creditRef)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { customers?: Array<{ creditCents?: number }> }) => { if (active) setCreditInfo({ ref: creditRef, cents: data.customers?.[0]?.creditCents ?? 0 }); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [creditRef]);
+  // Saldo só do cliente escolhido agora (trocou de cliente: some até carregar o do novo).
+  const creditBalance = creditInfo && creditInfo.ref === creditRef ? creditInfo.cents : 0;
+
   // Prévia do preço no servidor a cada mudança dos itens ou do desconto.
-  const discountBody = discount.value.trim() || freight.trim() ? { ...discount, freight } : null;
+  const discountBody = discount.value.trim() || freight.trim() || credit.trim() ? { ...discount, freight, credit } : null;
   const itemsKey = useDebounced(JSON.stringify({ items, discount: discountBody }), 300);
   useEffect(() => {
     const { items: list, discount: sentDiscount } = JSON.parse(itemsKey) as { items: Item[]; discount: DiscountForm | null };
@@ -319,7 +339,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   const skipQueued = useCallback(() => queue && openNext(queue.rest, queue.total), [queue, openNext]);
 
   async function submit() {
-    if (isOrder && !editingOrder && (!customer || !payment.paid.trim() || paymentFormError(payment, Math.round(totals.total * 100)))) return;
+    if (isOrder && !editingOrder && (!customer || !paidChosen || paymentFormError(payment, Math.round(totals.total * 100)))) return;
     const pickup = closingChoice === "pickup";
     const quoteDelivery = isOrder ? {} : { deliveryDate: delivery.date || null, deliveryTime: delivery.date && delivery.time ? delivery.time : null };
     setSaving(true);
@@ -368,11 +388,16 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   // Valor ainda não escolhido não é erro: o botão só fica bloqueado até escolher.
   const paymentError = isOrder && !editingOrder && payment.paid.trim() ? paymentFormError(payment, Math.round(totals.total * 100)) : null;
   const receivedCents = editingOrder ? paidOnServer : paidCents(payment.paid) ?? 0;
+  // Pago todo com crédito: não há o que receber, não precisa escolher quanto pagou.
+  const paidChosen = Boolean(payment.paid.trim()) || (totals.credit > 0 && totals.total === 0);
+  // Crédito que dá para usar: saldo + o que este pedido já usa (orçamento não gasta saldo).
+  const creditAvailableCents = creditBalance + (editingOrder ? Math.round(savedCredit * 100) : 0);
   // Pedido editado não pode ficar com total abaixo do que já foi recebido.
   const belowPaid = editingOrder && Math.round(totals.total * 100) < paidOnServer;
   const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && !belowPaid
-    && (!isOrder || editingOrder || (customer && !changingCustomer && payment.paid.trim() && !paymentError));
-  const marginPercent = totals.total > 0 ? Math.round((totals.margin / totals.total) * 100) : 0;
+    && (!isOrder || editingOrder || (customer && !changingCustomer && paidChosen && !paymentError));
+  // Margem sobre o preço de venda (com o crédito, que não reduz o preço).
+  const marginPercent = totals.total + totals.credit > 0 ? Math.round((totals.margin / (totals.total + totals.credit)) * 100) : 0;
 
   if (loading) return <main className="qe-page"><p className="qe-hint">{editingOrder ? "Carregando pedido…" : "Carregando orçamento…"}</p></main>;
   if (loadError) return <main className="qe-page"><p className="qe-error">{loadError}</p><Link className="qe-btn-text" href={editingOrder ? "/equipe?aba=pedidos" : "/equipe?aba=orcamentos"}>{editingOrder ? "Voltar aos pedidos" : "Voltar aos orçamentos"}</Link></main>;
@@ -581,7 +606,36 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
             </div>
           </div>
 
-          {totals.discount > 0 || totals.freight > 0 ? <div className="qe-sum-row"><span>Subtotal</span><span>{brl(totals.subtotal)}</span></div> : null}
+          {creditAvailableCents > 0 || credit.trim() ? (
+            <div className="qe-discount">
+              <span className="qe-discount-label" id="qe-credit-label">Crédito do cliente</span>
+              {creditAvailableCents > 0 ? <p className="qe-credit-notice">Este cliente tem {brl(creditAvailableCents / 100)} de crédito.</p> : null}
+              <div className="qe-discount-row">
+                <input
+                  aria-labelledby="qe-credit-label"
+                  disabled={!editable}
+                  inputMode="decimal"
+                  onChange={(event) => setCredit(event.target.value.replace(/[^\d.,]/g, ""))}
+                  placeholder="0,00"
+                  value={credit}
+                />
+                {creditAvailableCents > 0 ? (
+                  <button
+                    className="qe-btn qe-btn-secondary"
+                    disabled={!editable}
+                    // Usa o que der: o saldo inteiro ou só o total do pedido.
+                    onClick={() => setCredit((Math.min(creditAvailableCents, Math.round((totals.total + totals.credit) * 100)) / 100).toFixed(2).replace(".", ","))}
+                    type="button"
+                  >
+                    Usar crédito
+                  </button>
+                ) : null}
+              </div>
+              {isOrder && Math.round(totals.credit * 100) > creditAvailableCents ? <p className="qe-error">Este cliente tem só {brl(creditAvailableCents / 100)} de crédito.</p> : null}
+            </div>
+          ) : null}
+
+          {totals.discount > 0 || totals.freight > 0 || totals.credit > 0 ? <div className="qe-sum-row"><span>Subtotal</span><span>{brl(totals.subtotal)}</span></div> : null}
           {totals.discount > 0 ? (
             <div className="qe-sum-row qe-sum-discount">
               <span>Desconto{discount.type === "percent" ? ` (${discount.value.replace(".", ",")}%)` : ""}</span>
@@ -589,6 +643,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
             </div>
           ) : null}
           {totals.freight > 0 ? <div className="qe-sum-row"><span>Frete</span><span>{brl(totals.freight)}</span></div> : null}
+          {totals.credit > 0 ? <div className="qe-sum-row qe-sum-discount"><span>Crédito do cliente</span><span>− {brl(totals.credit)}</span></div> : null}
           <div className="qe-sum-total"><span>Total</span><b>{brl(totals.total)}</b></div>
           {!isOrder ? (
             <div className="qe-discount qe-delivery">
@@ -621,7 +676,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
               {saving ? "Salvando…" : docId ? "Salvar alterações" : isOrder ? "Criar pedido" : "Criar orçamento"}
             </button>
           ) : null}
-          {isOrder && !editingOrder && customer && !payment.paid.trim() ? <p className="qe-hint qe-center">Escolha quanto o cliente pagou para criar o pedido.</p> : null}
+          {isOrder && !editingOrder && customer && !paidChosen ? <p className="qe-hint qe-center">Escolha quanto o cliente pagou para criar o pedido.</p> : null}
           {!fixedCustomer && !customer ? <p className="qe-hint qe-center">{isOrder ? "Selecione o cliente para criar o pedido." : "Sem cliente, fica como “Cliente a definir”. Dá para escolher depois."}</p> : null}
         </aside>
       </div>

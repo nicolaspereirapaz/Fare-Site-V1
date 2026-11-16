@@ -3,11 +3,17 @@
  * Sem dependências de servidor: usado também na tela do editor.
  */
 
-/** freight: frete cobrado do cliente (R$), somado ao total. Gravado junto com o desconto para seguir o mesmo caminho. */
-export type QuoteDiscount = { type: "percent" | "value"; value: number; freight?: number };
+/**
+ * freight: frete cobrado do cliente (R$), somado ao total. Gravado junto com o desconto para seguir o mesmo caminho.
+ * credit: crédito do cliente usado (R$), abatido do total em linha própria (saldo em customers/credit.ts).
+ */
+export type QuoteDiscount = { type: "percent" | "value"; value: number; freight?: number; credit?: number };
 
 /** Frete gravado no documento, em reais (0 = a combinar). */
 export const freightOf = (discount: QuoteDiscount | null | undefined) => discount?.freight ?? 0;
+
+/** Crédito do cliente usado no documento, em reais (0 = nenhum). */
+export const creditOf = (discount: QuoteDiscount | null | undefined) => discount?.credit ?? 0;
 
 /** "1.250,50", "7,5", 150 → número; NaN se não der para ler. */
 function toNumber(raw: unknown): number {
@@ -18,21 +24,22 @@ function toNumber(raw: unknown): number {
   return Number(normalized);
 }
 
-/** Valida desconto e frete vindos do navegador. Vazio ou zero nos dois = null. */
+/** Valida desconto, frete e crédito vindos do navegador. Vazio ou zero em todos = null. */
 export function parseDiscount(raw: unknown): QuoteDiscount | null {
   if (raw === null || raw === undefined) return null;
   const body = raw as Record<string, unknown>;
   if (body.type !== "percent" && body.type !== "value") throw new Error("Desconto inválido.");
-  const freight = parseFreight(body.freight);
+  const freight = parseMoney(body.freight, "Frete inválido.");
+  const credit = parseMoney(body.credit, "Crédito inválido.");
   const discount = parseDiscountValue(body.type, body.value);
-  if (!freight) return discount;
-  return { ...(discount ?? { type: body.type, value: 0 }), freight };
+  if (!freight && !credit) return discount;
+  return { ...(discount ?? { type: body.type, value: 0 }), ...(freight ? { freight } : {}), ...(credit ? { credit } : {}) };
 }
 
-function parseFreight(raw: unknown): number {
+function parseMoney(raw: unknown, error: string): number {
   if (raw === "" || raw === null || raw === undefined) return 0;
   const value = toNumber(raw);
-  if (!Number.isFinite(value) || value < 0) throw new Error("Frete inválido.");
+  if (!Number.isFinite(value) || value < 0) throw new Error(error);
   return Math.round(value * 100) / 100;
 }
 
@@ -51,15 +58,18 @@ function parseDiscountValue(type: "percent" | "value", raw: unknown): QuoteDisco
   return money > 0 ? { type: "value", value: money } : null;
 }
 
-/** Aplica o desconto ao subtotal (em centavos). Porcentagem arredonda o desconto para baixo. */
+/** Aplica desconto, frete e crédito ao subtotal (em centavos). Porcentagem arredonda o desconto para baixo. */
 export function applyDiscount(subtotalCents: number, discount: QuoteDiscount | null) {
-  if (!discount) return { subtotalCents, discountCents: 0, freightCents: 0, totalCents: subtotalCents };
+  if (!discount) return { subtotalCents, discountCents: 0, freightCents: 0, creditCents: 0, totalCents: subtotalCents };
   const freightCents = Math.round(freightOf(discount) * 100);
+  const creditCents = Math.round(creditOf(discount) * 100);
   const discountCents = discount.type === "percent"
     ? Math.floor(Math.round(subtotalCents * discount.value * 1e4) / 1e6)
     : Math.round(discount.value * 100);
   if (discountCents > subtotalCents) throw new Error("O desconto não pode ser maior que o subtotal.");
-  return { subtotalCents, discountCents, freightCents, totalCents: subtotalCents - discountCents + freightCents };
+  const beforeCredit = subtotalCents - discountCents + freightCents;
+  if (creditCents > beforeCredit) throw new Error("O crédito não pode ser maior que o total.");
+  return { subtotalCents, discountCents, freightCents, creditCents, totalCents: beforeCredit - creditCents };
 }
 
 /**

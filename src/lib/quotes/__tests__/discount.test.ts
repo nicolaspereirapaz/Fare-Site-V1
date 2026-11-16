@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { applyDiscount, discountLabel, discountLine, parseDiscount } from "@/lib/quotes/discount";
+import { applyDiscount, creditOf, discountLabel, discountLine, parseDiscount } from "@/lib/quotes/discount";
 
 describe("desconto no total do orçamento", () => {
   it("por porcentagem: arredonda o desconto para baixo no centavo (a loja nunca dá mais que o combinado)", () => {
-    expect(applyDiscount(240000, { type: "percent", value: 10 })).toEqual({ subtotalCents: 240000, discountCents: 24000, freightCents: 0, totalCents: 216000 });
+    expect(applyDiscount(240000, { type: "percent", value: 10 })).toEqual({ subtotalCents: 240000, discountCents: 24000, freightCents: 0, creditCents: 0, totalCents: 216000 });
     // 7,5% de R$ 1.734,00 = 130,05
-    expect(applyDiscount(173400, { type: "percent", value: 7.5 })).toEqual({ subtotalCents: 173400, discountCents: 13005, freightCents: 0, totalCents: 160395 });
+    expect(applyDiscount(173400, { type: "percent", value: 7.5 })).toEqual({ subtotalCents: 173400, discountCents: 13005, freightCents: 0, creditCents: 0, totalCents: 160395 });
     // 3% de R$ 0,99 = 0,0297 -> 0,02
     expect(applyDiscount(99, { type: "percent", value: 3 }).discountCents).toBe(2);
   });
 
   it("por valor: desconta o valor em reais", () => {
-    expect(applyDiscount(240000, { type: "value", value: 150 })).toEqual({ subtotalCents: 240000, discountCents: 15000, freightCents: 0, totalCents: 225000 });
+    expect(applyDiscount(240000, { type: "value", value: 150 })).toEqual({ subtotalCents: 240000, discountCents: 15000, freightCents: 0, creditCents: 0, totalCents: 225000 });
   });
 
   it("sem desconto, o total é o subtotal", () => {
-    expect(applyDiscount(240000, null)).toEqual({ subtotalCents: 240000, discountCents: 0, freightCents: 0, totalCents: 240000 });
+    expect(applyDiscount(240000, null)).toEqual({ subtotalCents: 240000, discountCents: 0, freightCents: 0, creditCents: 0, totalCents: 240000 });
   });
 
   it("valor do desconto não pode passar do subtotal", () => {
@@ -73,6 +73,26 @@ describe("frete no orçamento/pedido", () => {
     expect(parseDiscount({ type: "percent", value: "", freight: "35,50" })).toEqual({ type: "percent", value: 0, freight: 35.5 });
     expect(parseDiscount({ type: "value", value: "10", freight: "" })).toEqual({ type: "value", value: 10 });
     expect(() => parseDiscount({ type: "value", value: "", freight: "-1" })).toThrow(/frete/i);
-    expect(applyDiscount(10000, { type: "percent", value: 10, freight: 20 })).toEqual({ subtotalCents: 10000, discountCents: 1000, freightCents: 2000, totalCents: 11000 });
+    expect(applyDiscount(10000, { type: "percent", value: 10, freight: 20 })).toEqual({ subtotalCents: 10000, discountCents: 1000, freightCents: 2000, creditCents: 0, totalCents: 11000 });
+  });
+});
+
+describe("crédito do cliente no orçamento/pedido", () => {
+  it("abate depois do desconto e do frete, em linha própria", () => {
+    expect(applyDiscount(50000, { type: "percent", value: 10, freight: 20, credit: 80 }))
+      .toEqual({ subtotalCents: 50000, discountCents: 5000, freightCents: 2000, creditCents: 8000, totalCents: 39000 });
+    expect(creditOf({ type: "value", value: 0, credit: 80.5 })).toBe(80.5);
+    expect(creditOf(null)).toBe(0);
+  });
+
+  it("pode zerar o total, mas não passar dele", () => {
+    expect(applyDiscount(10000, { type: "value", value: 0, credit: 100 }).totalCents).toBe(0);
+    expect(() => applyDiscount(10000, { type: "value", value: 0, credit: 100.01 })).toThrow("O crédito não pode ser maior que o total.");
+  });
+
+  it("vem do navegador como o frete: sozinho vale, vazio some, negativo é erro", () => {
+    expect(parseDiscount({ type: "value", value: "", credit: "80,50" })).toEqual({ type: "value", value: 0, credit: 80.5 });
+    expect(parseDiscount({ type: "percent", value: "10", freight: "5", credit: "" })).toEqual({ type: "percent", value: 10, freight: 5 });
+    expect(() => parseDiscount({ type: "value", value: "", credit: "-1" })).toThrow(/crédito/i);
   });
 });

@@ -16,6 +16,7 @@ export type AccountOrder = {
   /** Desconto vindo do orçamento (rótulo e valor), sem nada interno. */
   discount?: { label: string; amount: number } | null;
   freight?: number;
+  credit?: number;
   createdAt: string;
   items: Array<{
     productName: string;
@@ -86,6 +87,12 @@ export function AccountOrders({ orders }: { orders: AccountOrder[] }) {
                 <p className="account-quote-discount">
                   <span>{order.discount.label}</span>{" "}
                   <strong>− {brl(order.discount.amount)}</strong>
+                </p>
+              ) : null}
+              {order.credit ? (
+                <p className="account-quote-discount">
+                  <span>Crédito do cliente</span>{" "}
+                  <strong>− {brl(order.credit)}</strong>
                 </p>
               ) : null}
               {order.freight ? (
