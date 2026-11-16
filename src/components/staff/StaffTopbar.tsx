@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
+import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import { staffAuthClient } from "@/lib/staff/client";
 
 // Pedidos e Orçamentos são abas do Quadro; o menu não repete as abas.
@@ -38,6 +39,7 @@ export function StaffTopbar({ name, role, current }: { name: string; role: strin
         <div className="staff-topbar-user">
           <span className="staff-topbar-name">{name}</span>
           <span className="staff-role">{ROLE_LABELS[role] ?? role}</span>
+          <ThemeToggle className="staff-signout staff-theme" />
           <button className="staff-signout" disabled={pending} onClick={signOut} type="button">
             <LogOut aria-hidden="true" size={16} /> Sair
           </button>

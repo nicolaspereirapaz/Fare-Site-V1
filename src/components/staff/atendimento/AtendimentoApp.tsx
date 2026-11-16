@@ -9,7 +9,6 @@ import { ConversationView, matchesQuery } from "@/components/staff/atendimento/C
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
 import { NewConversationDialog } from "@/components/staff/atendimento/NewConversationDialog";
-import { ThemeToggle } from "@/components/staff/atendimento/theme";
 import { AiEnabledContext } from "@/components/staff/atendimento/aiStatus";
 import { api, displayName, type Conversation, type QuickReply, type StaffUser } from "@/components/staff/atendimento/shared";
 import type { ConversationStatus } from "@/lib/atendimento/types";
@@ -209,7 +208,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
           >
             {aiOn ? <Bot aria-hidden="true" size={16} /> : <BotOff aria-hidden="true" size={16} />} IA {aiOn ? "ligada" : "desligada"}
           </button>
-          <ThemeToggle />
           <button className="at-btn at-toolbar-btn" onClick={() => setEditingReplies(true)} type="button">
             <Zap aria-hidden="true" size={16} /> Mensagens rápidas
           </button>

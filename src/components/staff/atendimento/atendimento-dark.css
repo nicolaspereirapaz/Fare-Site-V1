@@ -1,4 +1,4 @@
-/* ===== Atendimento — tema escuro (botão lua/sol no topo; escolha guardada no cookie fare_atd_tema) ===== */
+/* ===== Equipe — tema escuro (botão lua/sol no topo de todas as telas; escolha no cookie fare_atd_tema). Outras telas: staff-dark.css ===== */
 .atd-root { min-height: 100vh; }
 
 .atd-root[data-atd-theme="dark"] {
