@@ -4,7 +4,7 @@ import "@/components/staff/quoteEditor.css";
 import "@/components/staff/atendimento/atendimento.css";
 import "@/components/staff/atendimento/atendimento-dark.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { BarChart3, Bell, BellOff, Bot, BotOff, FlaskConical, MessageSquarePlus, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
+import { Bell, BellOff, Bot, BotOff, MessageSquarePlus, LayoutGrid, MessagesSquare, Search, TriangleAlert, Zap } from "lucide-react";
 import { ConversationView, matchesQuery } from "@/components/staff/atendimento/ConversationView";
 import { ConversationsKanban } from "@/components/staff/atendimento/ConversationsKanban";
 import { QuickRepliesDialog } from "@/components/staff/atendimento/QuickRepliesDialog";
@@ -213,12 +213,6 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
           <button className="at-btn at-toolbar-btn" onClick={() => setEditingReplies(true)} type="button">
             <Zap aria-hidden="true" size={16} /> Mensagens rápidas
           </button>
-          <a className="kb-new-quote" href="/equipe/atendimento/relatorio">
-            <BarChart3 aria-hidden="true" size={16} /> Relatório
-          </a>
-          <a className="kb-new-quote" href="/equipe/atendimento/simulador" rel="noopener" target="_blank">
-            <FlaskConical aria-hidden="true" size={16} /> Simulador
-          </a>
         </div>
       </div>
 
