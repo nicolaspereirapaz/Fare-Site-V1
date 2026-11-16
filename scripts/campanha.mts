@@ -4,21 +4,23 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runAtendimentoMigrations, aiEnabled } from '@/lib/atendimento/repository';
-import { campaignSnapshot, campaignTick, importCampaignContact, setCampaignEnabled } from '@/lib/atendimento/campaign';
+import { campaignSnapshot, campaignTick, importCampaignContact, setCampaignEnabled, setCampaignAudience } from '@/lib/atendimento/campaign';
 import { createCampaignDeps } from '@/lib/atendimento/campaignAdapter';
 
 const [command,...args]=process.argv.slice(2);
 const option=(name:string)=>{const at=args.indexOf(name);return at<0?undefined:args[at+1];};
 let db:DatabaseSync|undefined;
 try {
- if(!['status','import','pause','run-pilot'].includes(command))throw new Error('Comandos: status | import --file contatos.json | pause | run-pilot --confirm-pilot. Todos exigem --database caminho.sqlite.');
+ if(!['status','import','pause','configure-list','run-list','run-pilot'].includes(command))throw new Error('Comandos: status | import --file contatos.json | pause | configure-list --confirm-list | run-list --confirm-list | run-pilot --confirm-pilot. Todos exigem --database caminho.sqlite.');
  const database=option('--database');
  if(!database || !existsSync(resolve(database)))throw new Error('Informe --database apontando para um banco existente. Nenhum banco é escolhido automaticamente.');
  // Safety permission check comes before opening/migrating a database.
  if(command==='run-pilot' && !args.includes('--confirm-pilot'))throw new Error('Envio bloqueado: falta --confirm-pilot. Esta opção autoriza no máximo os dois pilotos qualificados.');
+ if(['configure-list','run-list'].includes(command) && !args.includes('--confirm-list'))throw new Error('Lista bloqueada: falta --confirm-list.');
  db=new DatabaseSync(resolve(database));db.exec('PRAGMA busy_timeout=5000');runAtendimentoMigrations(db);
  if(command==='status')console.log(JSON.stringify(campaignSnapshot(db),null,2));
  else if(command==='pause'){setCampaignEnabled(db,false);console.log('Campanha pausada. Atendimento normal preservado.');}
+ else if(command==='configure-list'){setCampaignAudience(db,'list');console.log(JSON.stringify(campaignSnapshot(db),null,2));}
  else if(command==='import'){
   const file=option('--file');if(!file)throw new Error('Informe --file contatos.json');
   const contacts=JSON.parse(readFileSync(resolve(file),'utf8'));
@@ -28,6 +30,8 @@ try {
   console.log(JSON.stringify(campaignSnapshot(db),null,2));
  } else {
   setCampaignEnabled(db,false);
+  const expectedAudience=command==='run-list'?'list':'pilot';
+  if((campaignSnapshot(db) as {audience:string}).audience!==expectedAudience)throw new Error('Modo da campanha não corresponde ao comando. Configure com a campanha pausada.');
   if((campaignSnapshot(db) as {dispatchBlocked:boolean}).dispatchBlocked)throw new Error('Despacho bloqueado após interrupção: reconciliar os recibos antes de reativar.');
   if(!aiEnabled(db))throw new Error('IA global pausada: campanha não será ativada.');
   const bridge=process.env.FARE_PONTE_URL?.replace(/\/$/,''), ai=process.env.FARE_IA_URL?.replace(/\/$/,'');
@@ -41,7 +45,7 @@ try {
   if(bridgeHealth.status!=='connected' || bridgeHealth.capabilities?.campaignDelivery!==true || bridgeHealth.fareControl?.globalPaused || !aiHealth.ok || !aiHealth.model || aiHealth.capabilities?.campaignClassifier!==true)throw new Error('Health check não confirmou conexão, entrega idempotente ou classificador do atendimento.');
   let stop=false;process.once('SIGINT',()=>{stop=true;});process.once('SIGTERM',()=>{stop=true;});
   const deps=createCampaignDeps(db);setCampaignEnabled(db,true);
-  console.log('Piloto ativo: máximo dois contatos qualificados. Modelo do atendimento: '+aiHealth.model);
+  console.log((expectedAudience==='list'?'Lista ativa: máximo 15 novos contatos/dia, por potencial de volume.':'Piloto ativo: máximo dois contatos qualificados.')+' Modelo do atendimento: '+aiHealth.model);
   try {
    while(!stop){
     if(!aiEnabled(db)){setCampaignEnabled(db,false);console.error('Campanha pausada: IA global desligada.');break;}

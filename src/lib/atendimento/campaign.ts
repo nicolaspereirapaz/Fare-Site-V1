@@ -9,7 +9,17 @@ type ContactRow = {
 };
 type QueueRow = { ref:string;contact_id:string;text:string;kind:string;chat_id:string;conversation_id:string };
 type MessageRow = { id:string;external_id:string|null;body:string;seq:number };
-type SettingsRow = { enabled:number;next_contact:number;next_bubble:number };
+type SettingsRow = { enabled:number;next_contact:number;next_bubble:number;audience:'pilot'|'list' };
+// Operational proxy: potential order volume, NOT measured profit by segment.
+export const CAMPAIGN_SEGMENT_PRIORITY = [5,1,7,10,3,12,2,4,6,11,8,9] as const;
+function audience(db:DatabaseSync):'pilot'|'list' {
+  return db.prepare('SELECT audience FROM campaign_settings WHERE id=1').get()?.audience==='list' ? 'list' : 'pilot';
+}
+export function setCampaignAudience(db:DatabaseSync,mode:'pilot'|'list'):void {
+  if (!['pilot','list'].includes(mode)) throw new Error('Invalid campaign audience');
+  if (db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled || db.prepare('SELECT busy FROM campaign_runtime WHERE id=1').get()?.busy) throw new Error('Pause and reconcile campaign before changing audience');
+  db.prepare('UPDATE campaign_settings SET audience=? WHERE id=1').run(mode);
+}
 const DENIED = new Set(['11991038295','11943479338','11950640555','11975023299','11948042641','11945084994','1121523200','11953146725','11990007825','1145881365','11968523418','1121360251','1145888899'].map(p => '55' + p));
 const PILOTS = new Set(['5511991665576', '551145830807', '551145831111']);
 function phoneDigits(phone: string): string {
@@ -24,7 +34,7 @@ export function importCampaignContact(db: DatabaseSync, input: { phone: string; 
   const previous = db.prepare('SELECT id FROM campaign_contacts WHERE phone=?').get(phone);
   if (previous) return String(previous.id);
   const qualified = input.qualification?.verified === true && typeof input.qualification.source==='string' && input.qualification.source.trim() && typeof input.qualification.rationale==='string' && input.qualification.rationale.trim();
-  const state = DENIED.has(phone) ? 'excluded' : qualified && input.pilot === true && PILOTS.has(phone) ? 'ready' : 'held';
+  const state = DENIED.has(phone) ? 'excluded' : qualified && (audience(db)==='list' || input.pilot === true && PILOTS.has(phone)) ? 'ready' : 'held';
   const id = randomUUID();
   db.prepare('INSERT INTO campaign_contacts(id,phone,name,segment,qualification,pilot,state) VALUES(?,?,?,?,?,?,?)').run(id,phone,input.name,input.segment,JSON.stringify(input.qualification),input.pilot === true ? 1 : 0,state);
   return id;
@@ -47,10 +57,13 @@ export function migrateCampaign(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS campaign_queue(seq INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT UNIQUE NOT NULL, contact_id TEXT NOT NULL, text TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', external_id TEXT, UNIQUE(contact_id,text));
     CREATE TABLE IF NOT EXISTS campaign_inbound(contact_id TEXT NOT NULL, message_key TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(contact_id,message_key));
   `);
+  if (!db.prepare('PRAGMA table_info(campaign_settings)').all().some(column=>column.name==='audience')) db.exec("ALTER TABLE campaign_settings ADD COLUMN audience TEXT NOT NULL DEFAULT 'pilot' CHECK(audience IN ('pilot','list'))");
 }
 export function campaignSnapshot(db: DatabaseSync): unknown {
   return {
     enabled: Boolean(db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled),
+    audience: audience(db),
+    segmentPriority: CAMPAIGN_SEGMENT_PRIORITY,
     states: db.prepare('SELECT state,COUNT(*) AS count FROM campaign_contacts GROUP BY state').all(),
     daily: db.prepare('SELECT * FROM campaign_daily ORDER BY day DESC LIMIT 7').all(),
     queue: db.prepare('SELECT status,COUNT(*) AS count FROM campaign_queue GROUP BY status').all(),
@@ -273,13 +286,15 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
     if (!q) {
       const settings=db.prepare('SELECT * FROM campaign_settings WHERE id=1').get() as SettingsRow;
       if (Number(settings.next_contact)>deps.now().getTime()) return;
-      const c=db.prepare("SELECT * FROM campaign_contacts WHERE state='ready' AND pilot=1 ORDER BY rowid LIMIT 1").get() as ContactRow|undefined;
-      if (!c || !PILOTS.has(c.phone) || DENIED.has(c.phone)) return;
+      const mode=audience(db);
+      const priority=CAMPAIGN_SEGMENT_PRIORITY.map((segment,index)=>`WHEN ${segment} THEN ${index}`).join(' ');
+      const c=db.prepare(`SELECT * FROM campaign_contacts WHERE state='ready' AND (?='list' OR pilot=1) ORDER BY CASE WHEN ?='list' THEN CASE segment ${priority} ELSE 99 END ELSE 0 END,rowid LIMIT 1`).get(mode,mode) as ContactRow|undefined;
+      if (!c || mode==='pilot' && !PILOTS.has(c.phone) || DENIED.has(c.phone)) return;
       if (hasExisting(db,c.phone)) { db.prepare("UPDATE campaign_contacts SET state='existing' WHERE id=?").run(c.id); return; }
       const reserved=atomic(db,()=> {
         const day=local(deps.now()).day;
         db.prepare('INSERT OR IGNORE INTO campaign_daily(day) VALUES(?)').run(day);
-        if (Number(db.prepare("SELECT COUNT(*) AS n FROM campaign_contacts WHERE attempts>0 AND state<>'no_whatsapp'").get()?.n)>=2) return false;
+        if (mode==='pilot' && Number(db.prepare("SELECT COUNT(*) AS n FROM campaign_contacts WHERE attempts>0 AND state<>'no_whatsapp'").get()?.n)>=2) return false;
         if (!db.prepare('UPDATE campaign_daily SET new_contacts=new_contacts+1 WHERE day=? AND new_contacts<15 AND bubbles<60').run(day).changes) return false;
         db.prepare("UPDATE campaign_contacts SET state='starting',attempts=1 WHERE id=?").run(c.id);
         db.prepare('UPDATE campaign_settings SET next_contact=? WHERE id=1').run(deps.now().getTime()+delay(deps,60000));
