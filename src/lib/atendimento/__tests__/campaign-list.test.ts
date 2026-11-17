@@ -22,17 +22,30 @@ it('does not change audience while enabled or while a durable dispatch lock exis
 it('uses declared potential-volume priority across all segments, not the first two pilots',async()=>{
  const f=fixture();f.audience('list');for(let segment=12;segment>=1;segment--)f.add(segment,segment);core.setCampaignEnabled(f.db,true);
  for(let i=0;i<24;i++){await core.campaignTick(f.db,f.deps);f.advance();}
- expect(f.started).toEqual([5,1,7,10,3,12,2,4,6,11,8,9]);expect(f.sent).toHaveLength(24);
+ expect(f.started).toEqual([1,5,3,12,2,4,7,10,6,11,8,9]);expect(f.sent).toHaveLength(24);
 });
 it('retains exclusions and holds unapproved records even in list mode',()=>{
  const f=fixture();f.audience('list');const held=f.add(1,5,false);const denied=core.importCampaignContact(f.db,{phone:'11991038295',name:'Excluded',segment:1,qualification:qualify});
  expect(f.db.prepare('SELECT state FROM campaign_contacts WHERE id=?').get(held)?.state).toBe('held');expect(f.db.prepare('SELECT state FROM campaign_contacts WHERE id=?').get(denied)?.state).toBe('excluded');
 });
-it('list mode still stops at fifteen new contacts and resumes next business day',async()=>{
- const f=fixture();f.audience('list');for(let i=1;i<=16;i++)f.add(i,5);core.setCampaignEnabled(f.db,true);
- for(let i=0;i<36;i++){await core.campaignTick(f.db,f.deps);f.advance();}
- expect(f.started).toHaveLength(15);expect(f.sent).toHaveLength(30);
- f.advance(86400000);await core.campaignTick(f.db,f.deps);expect(f.started).toHaveLength(16);
+it('list mode stops at twenty new contacts and resumes next business day',async()=>{
+ const f=fixture();f.audience('list');for(let i=1;i<=21;i++)f.add(i,5);core.setCampaignEnabled(f.db,true);
+ for(let i=0;i<46;i++){await core.campaignTick(f.db,f.deps);f.advance();}
+ expect(f.started).toHaveLength(20);expect(f.sent).toHaveLength(40);
+ f.advance(86400000);await core.campaignTick(f.db,f.deps);expect(f.started).toHaveLength(21);
+});
+it('waits ninety seconds after the previous contact last bubble before a new contact',async()=>{
+ const f=fixture();f.audience('list');f.add(1,1);f.add(2,1);f.deps.random=()=>0.99;core.setCampaignEnabled(f.db,true);
+ await core.campaignTick(f.db,f.deps);f.advance(5000);await core.campaignTick(f.db,f.deps);expect(f.sent).toHaveLength(2);
+ f.advance(90_000-1);await core.campaignTick(f.db,f.deps);expect(f.started).toHaveLength(1);
+ f.advance(1);await core.campaignTick(f.db,f.deps);expect(f.started).toHaveLength(2);
+});
+it('does not consume new-contact quota for a confirmed number without WhatsApp',async()=>{
+ const f=fixture();f.audience('list');const absent=f.add(1,1);f.add(2,1);const check=f.deps.checkWhatsApp;
+ f.deps.checkWhatsApp=async phone=>phone.endsWith('0001')?null:check(phone);core.setCampaignEnabled(f.db,true);
+ for(let i=0;i<6;i++){await core.campaignTick(f.db,f.deps);f.advance(90_000);}
+ expect(f.db.prepare('SELECT state FROM campaign_contacts WHERE id=?').get(absent)?.state).toBe('no_whatsapp');
+ expect(f.started).toHaveLength(1);expect(f.sent).toHaveLength(2);expect(f.db.prepare('SELECT new_contacts FROM campaign_daily').get()?.new_contacts).toBe(1);
 });
 it('default pilot mode keeps ordinary list contacts held',()=>{
  const f=fixture();const id=f.add(1,5);expect(f.db.prepare('SELECT state FROM campaign_contacts WHERE id=?').get(id)?.state).toBe('held');

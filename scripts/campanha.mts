@@ -45,7 +45,7 @@ try {
   if(bridgeHealth.status!=='connected' || bridgeHealth.capabilities?.campaignDelivery!==true || bridgeHealth.fareControl?.globalPaused || !aiHealth.ok || !aiHealth.model || aiHealth.capabilities?.campaignClassifier!==true)throw new Error('Health check não confirmou conexão, entrega idempotente ou classificador do atendimento.');
   let stop=false;process.once('SIGINT',()=>{stop=true;});process.once('SIGTERM',()=>{stop=true;});
   const deps=createCampaignDeps(db);setCampaignEnabled(db,true);
-  console.log((expectedAudience==='list'?'Lista ativa: máximo 15 novos contatos/dia, por potencial de volume.':'Piloto ativo: máximo dois contatos qualificados.')+' Modelo do atendimento: '+aiHealth.model);
+  console.log((expectedAudience==='list'?'Lista ativa: máximo 20 novos contatos/dia, intervalo 90 segundos, prioridade definida pelo usuário.':'Piloto ativo: máximo dois contatos qualificados.')+' Modelo do atendimento: '+aiHealth.model);
   try {
    while(!stop){
     if(!aiEnabled(db)){setCampaignEnabled(db,false);console.error('Campanha pausada: IA global desligada.');break;}

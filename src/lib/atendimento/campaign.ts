@@ -11,7 +11,7 @@ type QueueRow = { ref:string;contact_id:string;text:string;kind:string;chat_id:s
 type MessageRow = { id:string;external_id:string|null;body:string;seq:number };
 type SettingsRow = { enabled:number;next_contact:number;next_bubble:number;audience:'pilot'|'list' };
 // Operational proxy: potential order volume, NOT measured profit by segment.
-export const CAMPAIGN_SEGMENT_PRIORITY = [5,1,7,10,3,12,2,4,6,11,8,9] as const;
+export const CAMPAIGN_SEGMENT_PRIORITY = [1,5,3,12,2,4,7,10,6,11,8,9] as const;
 function audience(db:DatabaseSync):'pilot'|'list' {
   return db.prepare('SELECT audience FROM campaign_settings WHERE id=1').get()?.audience==='list' ? 'list' : 'pilot';
 }
@@ -295,15 +295,20 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
         const day=local(deps.now()).day;
         db.prepare('INSERT OR IGNORE INTO campaign_daily(day) VALUES(?)').run(day);
         if (mode==='pilot' && Number(db.prepare("SELECT COUNT(*) AS n FROM campaign_contacts WHERE attempts>0 AND state<>'no_whatsapp'").get()?.n)>=2) return false;
-        if (!db.prepare('UPDATE campaign_daily SET new_contacts=new_contacts+1 WHERE day=? AND new_contacts<15 AND bubbles<60').run(day).changes) return false;
+        if (!db.prepare('UPDATE campaign_daily SET new_contacts=new_contacts+1 WHERE day=? AND new_contacts<20 AND bubbles<60').run(day).changes) return false;
         db.prepare("UPDATE campaign_contacts SET state='starting',attempts=1 WHERE id=?").run(c.id);
-        db.prepare('UPDATE campaign_settings SET next_contact=? WHERE id=1').run(deps.now().getTime()+delay(deps,60000));
+        db.prepare('UPDATE campaign_settings SET next_contact=? WHERE id=1').run(deps.now().getTime()+90_000);
         return true;
       });
       if (!reserved) return;
       try {
         const wa=await deps.checkWhatsApp(c.phone);
-        if (!wa) { db.prepare("UPDATE campaign_contacts SET state='no_whatsapp' WHERE id=?").run(c.id); return; }
+        if (!wa) {
+          atomic(db,()=> {
+            if (db.prepare("UPDATE campaign_contacts SET state='no_whatsapp' WHERE id=? AND state='starting'").run(c.id).changes) db.prepare('UPDATE campaign_daily SET new_contacts=MAX(0,new_contacts-1) WHERE day=?').run(day);
+          });
+          return;
+        }
         if (phoneDigits(wa.phone)!==c.phone || !wa.chatId || wa.chatId.endsWith('@g.us')) throw new Error('Unsafe WhatsApp destination');
         atomic(db,()=> {
           if (hasExisting(db,c.phone)) throw new Error('Existing conversation');
@@ -348,7 +353,7 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       if (!result.messageId) throw new Error('Missing send receipt');
       db.prepare("UPDATE campaign_queue SET status='sent',external_id=? WHERE ref=?").run(result.messageId,q.ref);
       db.prepare('UPDATE campaign_contacts SET last_sent=? WHERE id=?').run(deps.now().getTime(),q.contact_id);
-      db.prepare('UPDATE campaign_settings SET next_bubble=?,next_contact=MAX(next_contact,?) WHERE id=1').run(deps.now().getTime()+bubbleGap,deps.now().getTime()+delay(deps,60000));
+      db.prepare('UPDATE campaign_settings SET next_bubble=?,next_contact=MAX(next_contact,?) WHERE id=1').run(deps.now().getTime()+bubbleGap,deps.now().getTime()+90_000);
       deps.recordOutbound(q.conversation_id,q.text,result.messageId);
       const current=active(db,q.contact_id);
       if (current && !db.prepare("SELECT 1 FROM campaign_queue WHERE contact_id=? AND status='pending'").get(q.contact_id)) {

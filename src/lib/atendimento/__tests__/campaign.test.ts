@@ -88,11 +88,11 @@ test('3-5 second delay is measured after slow successful send, not before await'
   f.advance(2999); await f.tick(); assert.equal(f.sent.length,1);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,2); f.db.close();
 });
-test('max RNG interval enforces five seconds and five minutes between contacts', async () => {
+test('max RNG interval enforces five seconds between bubbles and ninety seconds between contacts', async () => {
   const f=fixture(); f.deps.random=()=>1; f.add(); f.add('1145830807'); core.setCampaignEnabled(f.db,true);
   await f.tick(); f.advance(4999); await f.tick(); assert.equal(f.sent.length,1);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,2);
-  f.advance(299999); await f.tick(); assert.equal(f.sent.length,2);
+  f.advance(90_000-1); await f.tick(); assert.equal(f.sent.length,2);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,3); f.db.close();
 });
 test('crash durable lock and orphan sending reservation never permit blind second bubble', async () => {
@@ -165,7 +165,7 @@ test('daily cap counts menu and reply bubbles, alerts once, resets on next local
 });
 test('daily new-contact cap blocks lookup and does not create a conversation', async () => {
   const f=fixture(); f.add(); core.setCampaignEnabled(f.db,true);
-  f.db.prepare('INSERT INTO campaign_daily(day,new_contacts,bubbles) VALUES(?,?,?)').run('2026-11-16',15,0);
+  f.db.prepare('INSERT INTO campaign_daily(day,new_contacts,bubbles) VALUES(?,?,?)').run('2026-11-16',20,0);
   let checks=0; f.deps.checkWhatsApp=async()=>{checks++;return null;}; await f.tick();
   assert.equal(checks,0); assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM atd_conversations').get()?.n,0);
   f.db.close();
