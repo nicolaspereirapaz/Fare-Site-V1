@@ -79,14 +79,16 @@
 .at-inbox {
   display: grid; grid-template-columns: min(600px, 42vw) minmax(0, 1fr) 300px;
   height: max(560px, calc(100vh - 176px)); overflow: hidden;
-  border: 1px solid #c9ced6; border-radius: 10px; background: #fff; box-shadow: 0 2px 6px rgba(11, 20, 26, .08);
+  border: 1px solid #c9ced6; border-radius: 10px; background: #f0f2f5; box-shadow: 0 2px 6px rgba(11, 20, 26, .08);
 }
 /* Conversas de ponta a ponta (como o WhatsApp Web): sem margem dos lados nem embaixo, ocupa a tela abaixo do topo da equipe. */
 .kb-page.container-shell.at-page-inbox { display: flex; flex-direction: column; width: 100%; height: calc(100dvh - var(--staff-topbar-h, 65px)); min-height: 640px; padding-bottom: 0; }
 .at-page-inbox > :not(.at-inbox) { margin-inline: 16px; }
 .at-page-inbox > .at-inbox { flex: 1; height: auto; min-height: 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
 
-.at-list { display: flex; min-height: 0; flex-direction: column; border-right: 1px solid #c9ced6; background: #fff; }
+/* Lista como cartão, com a mesma folga (12px) e cantos dos cartões do painel do cliente à direita. */
+.at-list { display: flex; min-height: 0; flex-direction: column; margin: 12px; overflow: hidden; border-radius: 10px; background: #fff; box-shadow: 0 0 0 1px #dde1e6; }
+.at-chat, .at-chat-empty { border-left: 1px solid #c9ced6; }
 .at-list-head { display: flex; align-items: center; height: 52px; flex: none; padding: 0 16px; background: var(--navy); color: #fff; font-family: var(--font-outfit), sans-serif; font-size: 1.02rem; font-weight: 700; }
 .at-list-head-btn {
   display: inline-flex; align-items: center; gap: 5px; margin-left: auto; height: 28px; padding: 0 10px; border: 0; border-radius: 999px;
@@ -552,7 +554,8 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 @media (max-width: 760px) {
   .at-inbox { grid-template-columns: 1fr; height: auto; }
   .kb-page.container-shell.at-page-inbox { height: auto; min-height: 0; }
-  .at-list { max-height: 320px; border-right: 0; border-bottom: 1px solid #c9ced6; }
+  .at-list { max-height: 320px; }
+  .at-chat, .at-chat-empty { border-left: 0; border-top: 1px solid #c9ced6; }
   .at-chat { min-height: 520px; }
   .sim-layout { grid-template-columns: 1fr; }
 }

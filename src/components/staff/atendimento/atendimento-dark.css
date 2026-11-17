@@ -63,7 +63,8 @@
 
 /* Lista | conversa | cliente (cores do WhatsApp escuro; topo da lista no azul da Fare) */
 [data-atd-theme="dark"] .at-inbox { border-color: #2a3942; background: #111b21; box-shadow: none; }
-[data-atd-theme="dark"] .at-list { border-color: #2a3942; background: #111b21; }
+[data-atd-theme="dark"] .at-list { border-color: #2a3942; background: #111b21; box-shadow: 0 0 0 1px var(--d-border); }
+[data-atd-theme="dark"] .at-chat, [data-atd-theme="dark"] .at-chat-empty { border-color: #2a3942; }
 [data-atd-theme="dark"] .at-list-head { background: #2c3561; color: #fff; }
 [data-atd-theme="dark"] .at-filters { border-color: #222d34; }
 [data-atd-theme="dark"] .at-filters button { background: #202c33; color: #aebac1; }
