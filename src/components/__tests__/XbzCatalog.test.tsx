@@ -122,4 +122,29 @@ describe("catálogo de brindes", () => {
     expect(screen.queryByRole("option", { name: "Menor preço" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Mais relevantes" })).toBeInTheDocument();
   });
+
+  it("celular: botão Filtros abre a gaveta e Esc, X ou Aplicar fecham", async () => {
+    const { fetchMock, lastParams } = mockCatalog(false);
+    render(<XbzCatalog />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const toggle = screen.getByRole("button", { name: /^Filtros/ });
+    const drawer = screen.getByRole("complementary", { name: "Filtros do catálogo" });
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(drawer).toHaveClass("open");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(drawer).not.toHaveClass("open");
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Fechar filtros" }));
+    expect(drawer).not.toHaveClass("open");
+
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText("Quantidade"), { target: { value: "250" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(drawer).not.toHaveClass("open");
+    await waitFor(() => expect(lastParams().get("qtd")).toBe("250"));
+    expect(toggle).toHaveTextContent("Filtros1");
+  });
 });

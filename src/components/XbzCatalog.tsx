@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUpDown, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { ColorDots } from "@/components/ColorDots";
 import { formatProductName } from "@/lib/xbz";
@@ -43,7 +43,7 @@ export function XbzProductCard({ product, pricesVisible }: { product: PublicCata
             alt={formatProductName(product.name)}
             fill
             onError={() => setImageFailed(true)}
-            sizes="(max-width: 640px) 82vw, (max-width: 1024px) 42vw, 280px"
+            sizes="(max-width: 1024px) 46vw, 280px"
             src={product.imageUrl}
             unoptimized
           />
@@ -103,6 +103,27 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Celular: os filtros ficam numa gaveta lateral aberta pelo botão "Filtros" (no computador a lateral é fixa).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersToggleRef = useRef<HTMLButtonElement>(null);
+  const filtersCloseRef = useRef<HTMLButtonElement>(null);
+
+  function closeFilters() {
+    setFiltersOpen(false);
+    filtersToggleRef.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    filtersCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setFiltersOpen(false);
+      filtersToggleRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filtersOpen]);
 
   // A URL mudou para outra categoria (menu do cabeçalho, voltar do navegador): mostra essa, da 1ª página, sem a busca anterior.
   // Só reage quando a URL muda; a escolha feita aqui na lateral já está na tela quando a URL a alcança.
@@ -187,7 +208,8 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
 
   const totalPages = data ? Math.max(1, Math.ceil(data.meta.total / PAGE_SIZE)) : 1;
   const pricesVisible = Boolean(data?.pricesVisible);
-  const hasActiveFilters = search !== "" || category !== "Todos" || filters.quantity !== "" || filters.minPrice !== "" || filters.maxPrice !== "";
+  const activeFilterCount = [search, category !== "Todos", filters.quantity, filters.minPrice || filters.maxPrice].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
   const sortOptions = CATALOG_SORTS.filter((option) => pricesVisible || !PRICE_SORTS.has(option));
 
   function applyFilters(next: Filters = draftFilters) {
@@ -217,10 +239,14 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
 
   return (
     <div className="catalog-layout">
-      <aside aria-label="Filtros do catálogo" className="catalog-sidebar">
+      {filtersOpen ? <div aria-hidden="true" className="catalog-drawer-backdrop" onClick={closeFilters} /> : null}
+      <aside aria-label="Filtros do catálogo" className={filtersOpen ? "catalog-sidebar open" : "catalog-sidebar"} id="catalog-filtros">
         <div className="catalog-sidebar-heading">
           <SlidersHorizontal aria-hidden="true" size={19} />
           <h2>Filtrar brindes</h2>
+          <button aria-label="Fechar filtros" className="catalog-drawer-close" onClick={closeFilters} ref={filtersCloseRef} type="button">
+            <X aria-hidden="true" size={20} />
+          </button>
         </div>
 
         <form
@@ -230,6 +256,7 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
             setLoading(true);
             setPage(1);
             setSearch(draftSearch.trim());
+            if (filtersOpen) closeFilters();
           }}
         >
           <span>Buscar produto</span>
@@ -253,6 +280,7 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
           onSubmit={(event) => {
             event.preventDefault();
             applyFilters();
+            if (filtersOpen) closeFilters();
           }}
         >
           <fieldset className="catalog-refine-field">
@@ -355,6 +383,10 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
             <Link href="/entrar">Entre ou crie sua conta</Link> para ver os preços dos brindes.
           </p>
         ) : null}
+
+        <button className="catalog-drawer-done" onClick={closeFilters} type="button">
+          {loading || !data ? "Ver produtos" : `Ver ${data.meta.total} ${data.meta.total === 1 ? "produto" : "produtos"}`}
+        </button>
       </aside>
 
       <div className="catalog-results">
@@ -369,23 +401,37 @@ export function XbzCatalog({ initialCategory = "Todos" }: { initialCategory?: st
                 : "Brindes personalizados para empresas, eventos e ocasiões especiais."}
             </span>
           </div>
-          <label className="catalog-sort-field">
-            <ArrowUpDown aria-hidden="true" size={16} />
-            <span>Ordenar por</span>
-            <select
-              aria-label="Ordenar por"
-              onChange={(event) => {
-                setLoading(true);
-                setPage(1);
-                setSort(event.target.value as CatalogSort);
-              }}
-              value={sortOptions.includes(sort) ? sort : "relevancia"}
+          <div className="catalog-toolbar">
+            <button
+              aria-controls="catalog-filtros"
+              aria-expanded={filtersOpen}
+              className="catalog-filter-toggle"
+              onClick={() => setFiltersOpen(true)}
+              ref={filtersToggleRef}
+              type="button"
             >
-              {sortOptions.map((option) => (
-                <option key={option} value={option}>{SORT_LABELS[option]}</option>
-              ))}
-            </select>
-          </label>
+              <SlidersHorizontal aria-hidden="true" size={16} />
+              Filtros
+              {activeFilterCount ? <b className="catalog-filter-count">{activeFilterCount}</b> : null}
+            </button>
+            <label className="catalog-sort-field">
+              <ArrowUpDown aria-hidden="true" size={16} />
+              <span>Ordenar por</span>
+              <select
+                aria-label="Ordenar por"
+                onChange={(event) => {
+                  setLoading(true);
+                  setPage(1);
+                  setSort(event.target.value as CatalogSort);
+                }}
+                value={sortOptions.includes(sort) ? sort : "relevancia"}
+              >
+                {sortOptions.map((option) => (
+                  <option key={option} value={option}>{SORT_LABELS[option]}</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         {error ? (
