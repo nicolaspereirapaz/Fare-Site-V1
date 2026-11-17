@@ -77,10 +77,14 @@
 
 /* ===== Conversas: lista | conversa | cliente (desenho do WhatsApp Web, com o azul da Fare no topo da lista) ===== */
 .at-inbox {
-  display: grid; grid-template-columns: 400px minmax(0, 1fr) 300px;
+  display: grid; grid-template-columns: min(600px, 42vw) minmax(0, 1fr) 300px;
   height: max(560px, calc(100vh - 176px)); overflow: hidden;
   border: 1px solid #c9ced6; border-radius: 10px; background: #fff; box-shadow: 0 2px 6px rgba(11, 20, 26, .08);
 }
+/* Conversas de ponta a ponta (como o WhatsApp Web): sem margem dos lados nem embaixo, ocupa a tela abaixo do topo da equipe. */
+.kb-page.container-shell.at-page-inbox { display: flex; flex-direction: column; width: 100%; height: calc(100dvh - var(--staff-topbar-h, 65px)); min-height: 640px; padding-bottom: 0; }
+.at-page-inbox > :not(.at-inbox) { margin-inline: 16px; }
+.at-page-inbox > .at-inbox { flex: 1; height: auto; min-height: 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
 
 .at-list { display: flex; min-height: 0; flex-direction: column; border-right: 1px solid #c9ced6; background: #fff; }
 .at-list-head { display: flex; align-items: center; height: 52px; flex: none; padding: 0 16px; background: var(--navy); color: #fff; font-family: var(--font-outfit), sans-serif; font-size: 1.02rem; font-weight: 700; }
@@ -175,6 +179,8 @@
   flex: 1; min-height: 40px; max-height: 160px; padding: 9px 12px; border: 1px solid #d1d7db; border-radius: 8px;
   background: #fff; font: inherit; font-size: 0.92rem; line-height: 1.4; resize: none;
 }
+/* Conversa estreita: a dica do campo fica numa linha (com …) em vez de aparecer cortada. */
+.at-composer textarea::placeholder { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .at-composer textarea:focus { outline: 2px solid rgba(44, 53, 97, .18); border-color: var(--navy); }
 .at-send {
   display: inline-grid; place-items: center; width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%;
@@ -536,15 +542,16 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 
 /* ===== Telas menores ===== */
 @media (max-width: 1280px) {
-  .at-inbox { grid-template-columns: 350px minmax(0, 1fr) 260px; }
+  .at-inbox { grid-template-columns: min(525px, 40vw) minmax(0, 1fr) 260px; }
 }
 @media (max-width: 1080px) {
-  .at-inbox { grid-template-columns: 330px minmax(0, 1fr); }
+  .at-inbox { grid-template-columns: min(495px, 45vw) minmax(0, 1fr); }
   .at-customer { display: none; }
   .at-chat-empty { grid-column: span 1; }
 }
 @media (max-width: 760px) {
   .at-inbox { grid-template-columns: 1fr; height: auto; }
+  .kb-page.container-shell.at-page-inbox { height: auto; min-height: 0; }
   .at-list { max-height: 320px; border-right: 0; border-bottom: 1px solid #c9ced6; }
   .at-chat { min-height: 520px; }
   .sim-layout { grid-template-columns: 1fr; }
