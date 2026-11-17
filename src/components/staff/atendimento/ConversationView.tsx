@@ -984,7 +984,7 @@ function MessageBubble({
         <InteractiveOptions message={message} stale={menuStale} />
         {message.body ? (
           <div className="at-bubble-text">
-            <WhatsAppText text={message.body} />
+            <WhatsAppText text={message.interactive ? message.body.replace('\n[Opções apenas para leitura; selecione pelo WhatsApp.]', '') : message.body} />
           </div>
         ) : null}
         <span className="at-bubble-time">

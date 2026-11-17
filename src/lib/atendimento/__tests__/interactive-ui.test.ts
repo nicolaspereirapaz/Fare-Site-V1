@@ -15,6 +15,10 @@ it('keeps selected, uncertain and expired menus disabled on reload',()=>{
   const view=render(createElement(InteractiveOptions,{message:{...message,...extra}}));expect(screen.getByRole('button',{name:'RH'})).toBeDisabled();view.unmount();
  }
 });
+it('shows the received menu body alongside the clickable options',()=>{
+ render(createElement(InteractiveOptions,{message:{...message,interactive:{...message.interactive,body:'Escolha um setor para atendimento'}}}));
+ expect(screen.getByText('Escolha um setor para atendimento')).toBeTruthy();
+});
 it('expires a mounted menu without waiting for a parent rerender',()=>{
  vi.useFakeTimers();const now=Date.now();vi.setSystemTime(now);
  render(createElement(InteractiveOptions,{message:{...message,interactive:{...message.interactive,receivedAt:now-86400000+1000}}}));
