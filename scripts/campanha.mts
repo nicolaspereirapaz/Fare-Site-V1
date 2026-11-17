@@ -1,26 +1,28 @@
-/** Campaign operator CLI. No sends without the explicit run-pilot confirmation. */
+/** Campaign operator CLI. No sends without explicit run confirmation. */
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runAtendimentoMigrations, aiEnabled } from '@/lib/atendimento/repository';
-import { campaignSnapshot, campaignTick, importCampaignContact, setCampaignEnabled, setCampaignAudience } from '@/lib/atendimento/campaign';
+import { campaignSnapshot, campaignTick, importCampaignContact, setCampaignEnabled, setCampaignAudience, setCampaignDailyCapsEnabled } from '@/lib/atendimento/campaign';
 import { createCampaignDeps } from '@/lib/atendimento/campaignAdapter';
 
 const [command,...args]=process.argv.slice(2);
 const option=(name:string)=>{const at=args.indexOf(name);return at<0?undefined:args[at+1];};
 let db:DatabaseSync|undefined;
 try {
- if(!['status','import','pause','configure-list','run-list','run-pilot'].includes(command))throw new Error('Comandos: status | import --file contatos.json | pause | configure-list --confirm-list | run-list --confirm-list | run-pilot --confirm-pilot. Todos exigem --database caminho.sqlite.');
+ if(!['status','import','pause','configure-list','run-list','run-pilot','disable-daily-caps','enable-daily-caps'].includes(command))throw new Error('Comandos: status | import --file contatos.json | pause | configure-list --confirm-list | run-list --confirm-list | run-pilot --confirm-pilot | disable-daily-caps --confirm-daily-caps | enable-daily-caps --confirm-daily-caps. Todos exigem --database caminho.sqlite.');
  const database=option('--database');
  if(!database || !existsSync(resolve(database)))throw new Error('Informe --database apontando para um banco existente. Nenhum banco é escolhido automaticamente.');
  // Safety permission check comes before opening/migrating a database.
  if(command==='run-pilot' && !args.includes('--confirm-pilot'))throw new Error('Envio bloqueado: falta --confirm-pilot. Esta opção autoriza no máximo os dois pilotos qualificados.');
  if(['configure-list','run-list'].includes(command) && !args.includes('--confirm-list'))throw new Error('Lista bloqueada: falta --confirm-list.');
+ if(['disable-daily-caps','enable-daily-caps'].includes(command) && !args.includes('--confirm-daily-caps'))throw new Error('Alteração de limites bloqueada: falta --confirm-daily-caps.');
  db=new DatabaseSync(resolve(database));db.exec('PRAGMA busy_timeout=5000');runAtendimentoMigrations(db);
  if(command==='status')console.log(JSON.stringify(campaignSnapshot(db),null,2));
  else if(command==='pause'){setCampaignEnabled(db,false);console.log('Campanha pausada. Atendimento normal preservado.');}
  else if(command==='configure-list'){setCampaignAudience(db,'list');console.log(JSON.stringify(campaignSnapshot(db),null,2));}
+ else if(['disable-daily-caps','enable-daily-caps'].includes(command)){setCampaignDailyCapsEnabled(db,command==='enable-daily-caps');console.log(JSON.stringify(campaignSnapshot(db),null,2));}
  else if(command==='import'){
   const file=option('--file');if(!file)throw new Error('Informe --file contatos.json');
   const contacts=JSON.parse(readFileSync(resolve(file),'utf8'));
@@ -45,7 +47,8 @@ try {
   if(bridgeHealth.status!=='connected' || bridgeHealth.capabilities?.campaignDelivery!==true || bridgeHealth.fareControl?.globalPaused || !aiHealth.ok || !aiHealth.model || aiHealth.capabilities?.campaignClassifier!==true)throw new Error('Health check não confirmou conexão, entrega idempotente ou classificador do atendimento.');
   let stop=false;process.once('SIGINT',()=>{stop=true;});process.once('SIGTERM',()=>{stop=true;});
   const deps=createCampaignDeps(db);setCampaignEnabled(db,true);
-  console.log((expectedAudience==='list'?'Lista ativa: máximo 20 novos contatos/dia, intervalo 90 segundos, prioridade definida pelo usuário.':'Piloto ativo: máximo dois contatos qualificados.')+' Modelo do atendimento: '+aiHealth.model);
+  const limits=(campaignSnapshot(db) as {dailyLimits:{newContacts:number|null}}).dailyLimits;
+  console.log((expectedAudience==='list'?'Lista ativa: '+(limits.newContacts===null?'sem tetos diários de contatos e mensagens.':'máximo '+limits.newContacts+' novos contatos/dia.'):'Piloto ativo: máximo dois contatos qualificados.')+' Intervalo entre contatos: aleatório de 60 a 180 segundos. Modelo do atendimento: '+aiHealth.model);
   try {
    while(!stop){
     if(!aiEnabled(db)){setCampaignEnabled(db,false);console.error('Campanha pausada: IA global desligada.');break;}

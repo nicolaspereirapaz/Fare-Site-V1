@@ -88,11 +88,11 @@ test('3-5 second delay is measured after slow successful send, not before await'
   f.advance(2999); await f.tick(); assert.equal(f.sent.length,1);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,2); f.db.close();
 });
-test('max RNG interval enforces five seconds between bubbles and ninety seconds between contacts', async () => {
+test('max RNG interval enforces five seconds between bubbles and three minutes between contacts', async () => {
   const f=fixture(); f.deps.random=()=>1; f.add(); f.add('1145830807'); core.setCampaignEnabled(f.db,true);
   await f.tick(); f.advance(4999); await f.tick(); assert.equal(f.sent.length,1);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,2);
-  f.advance(90_000-1); await f.tick(); assert.equal(f.sent.length,2);
+  f.advance(180_000-1); await f.tick(); assert.equal(f.sent.length,2);
   f.advance(1); await f.tick(); assert.equal(f.sent.length,3); f.db.close();
 });
 test('crash durable lock and orphan sending reservation never permit blind second bubble', async () => {

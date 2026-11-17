@@ -15,6 +15,16 @@ export const CAMPAIGN_SEGMENT_PRIORITY = [1,5,3,12,2,4,7,10,6,11,8,9] as const;
 function audience(db:DatabaseSync):'pilot'|'list' {
   return db.prepare('SELECT audience FROM campaign_settings WHERE id=1').get()?.audience==='list' ? 'list' : 'pilot';
 }
+function dailyCapsEnabled(db:DatabaseSync):boolean {
+  return db.prepare('SELECT daily_caps_enabled FROM campaign_settings WHERE id=1').get()?.daily_caps_enabled!==0;
+}
+export function setCampaignDailyCapsEnabled(db:DatabaseSync,enabled:boolean):void {
+  if (typeof enabled!=='boolean') throw new Error('Invalid daily caps setting');
+  atomic(db,()=> {
+    if (db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled || db.prepare('SELECT busy FROM campaign_runtime WHERE id=1').get()?.busy) throw new Error('Pause and reconcile campaign before changing daily caps');
+    db.prepare('UPDATE campaign_settings SET daily_caps_enabled=? WHERE id=1').run(enabled?1:0);
+  });
+}
 export function setCampaignAudience(db:DatabaseSync,mode:'pilot'|'list'):void {
   if (!['pilot','list'].includes(mode)) throw new Error('Invalid campaign audience');
   if (db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled || db.prepare('SELECT busy FROM campaign_runtime WHERE id=1').get()?.busy) throw new Error('Pause and reconcile campaign before changing audience');
@@ -58,12 +68,15 @@ export function migrateCampaign(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS campaign_inbound(contact_id TEXT NOT NULL, message_key TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(contact_id,message_key));
   `);
   if (!db.prepare('PRAGMA table_info(campaign_settings)').all().some(column=>column.name==='audience')) db.exec("ALTER TABLE campaign_settings ADD COLUMN audience TEXT NOT NULL DEFAULT 'pilot' CHECK(audience IN ('pilot','list'))");
+  if (!db.prepare('PRAGMA table_info(campaign_settings)').all().some(column=>column.name==='daily_caps_enabled')) db.exec('ALTER TABLE campaign_settings ADD COLUMN daily_caps_enabled INTEGER NOT NULL DEFAULT 1 CHECK(daily_caps_enabled IN (0,1))');
 }
 export function campaignSnapshot(db: DatabaseSync): unknown {
   return {
     enabled: Boolean(db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled),
     audience: audience(db),
     segmentPriority: CAMPAIGN_SEGMENT_PRIORITY,
+    dailyLimits: {newContacts:dailyCapsEnabled(db)?20:null,messages:dailyCapsEnabled(db)?60:null},
+    contactIntervalSeconds: {min:60,max:180},
     states: db.prepare('SELECT state,COUNT(*) AS count FROM campaign_contacts GROUP BY state').all(),
     daily: db.prepare('SELECT * FROM campaign_daily ORDER BY day DESC LIMIT 7').all(),
     queue: db.prepare('SELECT status,COUNT(*) AS count FROM campaign_queue GROUP BY status').all(),
@@ -111,6 +124,11 @@ function local(date:Date) {
 function delay(deps:CampaignDeps, scale=1000):number {
   const r=deps.random();
   return Math.round((3+2*(Number.isFinite(r)?Math.max(0,Math.min(1,r)):0))*scale);
+}
+function contactDelay(deps:CampaignDeps):number {
+  const random=deps.random();
+  const bounded=Number.isFinite(random)?Math.max(0,Math.min(1,random)):0;
+  return (60+Math.min(120,Math.floor(bounded*121)))*1000;
 }
 function enqueue(db:DatabaseSync,id:string,texts:string[],kind:string):void {
   // Only cancelled, never-attempted bubbles may return to the queue.
@@ -270,7 +288,7 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
     if (!local(deps.now()).open || !db.prepare('SELECT enabled FROM campaign_settings WHERE id=1').get()?.enabled) return;
     const day=local(deps.now()).day;
     const usage=db.prepare('SELECT * FROM campaign_daily WHERE day=?').get(day) as {bubbles:number}|undefined;
-    if (usage && Number(usage.bubbles)>=60) {
+    if (dailyCapsEnabled(db) && usage && Number(usage.bubbles)>=60) {
       if (db.prepare('UPDATE campaign_daily SET cap_alerted=1 WHERE day=? AND cap_alerted=0').run(day).changes) safeAlert(deps,'Campaign daily bubble cap reached');
       return;
     }
@@ -295,9 +313,9 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
         const day=local(deps.now()).day;
         db.prepare('INSERT OR IGNORE INTO campaign_daily(day) VALUES(?)').run(day);
         if (mode==='pilot' && Number(db.prepare("SELECT COUNT(*) AS n FROM campaign_contacts WHERE attempts>0 AND state<>'no_whatsapp'").get()?.n)>=2) return false;
-        if (!db.prepare('UPDATE campaign_daily SET new_contacts=new_contacts+1 WHERE day=? AND new_contacts<20 AND bubbles<60').run(day).changes) return false;
+        if (!db.prepare('UPDATE campaign_daily SET new_contacts=new_contacts+1 WHERE day=? AND ((SELECT daily_caps_enabled FROM campaign_settings WHERE id=1)=0 OR (new_contacts<20 AND bubbles<60))').run(day).changes) return false;
         db.prepare("UPDATE campaign_contacts SET state='starting',attempts=1 WHERE id=?").run(c.id);
-        db.prepare('UPDATE campaign_settings SET next_contact=? WHERE id=1').run(deps.now().getTime()+90_000);
+        db.prepare('UPDATE campaign_settings SET next_contact=? WHERE id=1').run(deps.now().getTime()+contactDelay(deps));
         return true;
       });
       if (!reserved) return;
@@ -337,7 +355,7 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       if (nextInbound(db,String(fresh.conversation_id),fresh.id)) return 'stale';
       const day=local(deps.now()).day;
       db.prepare('INSERT OR IGNORE INTO campaign_daily(day) VALUES(?)').run(day);
-      if (!db.prepare('UPDATE campaign_daily SET bubbles=bubbles+1 WHERE day=? AND bubbles<60').run(day).changes) return 'cap';
+      if (!db.prepare('UPDATE campaign_daily SET bubbles=bubbles+1 WHERE day=? AND ((SELECT daily_caps_enabled FROM campaign_settings WHERE id=1)=0 OR bubbles<60)').run(day).changes) return 'cap';
       db.prepare("UPDATE campaign_queue SET status='sending' WHERE ref=? AND status='pending'").run(q!.ref);
       db.prepare('UPDATE campaign_settings SET next_bubble=? WHERE id=1').run(deps.now().getTime()+bubbleGap);
       return 'reserved';
@@ -353,7 +371,7 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       if (!result.messageId) throw new Error('Missing send receipt');
       db.prepare("UPDATE campaign_queue SET status='sent',external_id=? WHERE ref=?").run(result.messageId,q.ref);
       db.prepare('UPDATE campaign_contacts SET last_sent=? WHERE id=?').run(deps.now().getTime(),q.contact_id);
-      db.prepare('UPDATE campaign_settings SET next_bubble=?,next_contact=MAX(next_contact,?) WHERE id=1').run(deps.now().getTime()+bubbleGap,deps.now().getTime()+90_000);
+      db.prepare('UPDATE campaign_settings SET next_bubble=?,next_contact=MAX(next_contact,?) WHERE id=1').run(deps.now().getTime()+bubbleGap,deps.now().getTime()+contactDelay(deps));
       deps.recordOutbound(q.conversation_id,q.text,result.messageId);
       const current=active(db,q.contact_id);
       if (current && !db.prepare("SELECT 1 FROM campaign_queue WHERE contact_id=? AND status='pending'").get(q.contact_id)) {
