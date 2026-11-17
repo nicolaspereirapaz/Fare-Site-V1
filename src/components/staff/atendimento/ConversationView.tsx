@@ -22,6 +22,7 @@ import {
   Reply,
   Search,
   Smartphone,
+  Smile,
   StickyNote,
   Trash2,
   Undo2,
@@ -37,6 +38,7 @@ import { TagChips, TagEditor } from "@/components/staff/atendimento/tags";
 import { formatSeconds, useRecorder } from "@/components/staff/atendimento/recorder";
 import { useAiEnabled } from "@/components/staff/atendimento/aiStatus";
 import { ContactAvatar } from "@/components/staff/atendimento/ContactAvatar";
+import { EmojiPanel, ReactButton, ReactionChips } from "@/components/staff/atendimento/emoji";
 import { groupMessages } from "@/lib/atendimento/albums";
 import { fillQuickReply } from "@/lib/atendimento/quickReplyFill";
 import { foldText } from "@/lib/atendimento/searchText";
@@ -423,6 +425,7 @@ function ChatPanel({
           aiThinking?: boolean;
           deliveries?: Array<Pick<Message, "id" | "delivery" | "deliveryError">>;
           transcripts?: Array<Pick<Message, "id" | "transcript" | "transcriptStatus">>;
+          reactions?: Array<{ id: string; reactions: Record<string, string> }>;
         }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
         );
@@ -448,6 +451,16 @@ function ChatPanel({
           setMessages((list) =>
             list.some((message) => transcripts.has(message.id) && transcripts.get(message.id)!.transcriptStatus !== message.transcriptStatus)
               ? list.map((message) => (transcripts.has(message.id) ? { ...message, ...transcripts.get(message.id)! } : message))
+              : list,
+          );
+        }
+        // Reação do cliente (ou tirada) chega depois da mensagem: atualiza o selo do balão.
+        const reactions = new Map((data.reactions ?? []).map((entry) => [entry.id, entry.reactions]));
+        if (reactions.size) {
+          const same = (message: Message) => JSON.stringify(message.reactions ?? {}) === JSON.stringify(reactions.get(message.id));
+          setMessages((list) =>
+            list.some((message) => reactions.has(message.id) && !same(message))
+              ? list.map((message) => (reactions.has(message.id) ? { ...message, reactions: reactions.get(message.id) } : message))
               : list,
           );
         }
@@ -501,10 +514,20 @@ function ChatPanel({
       }
       return next;
     });
+  async function react(message: Message, emoji: string) {
+    setError(null);
+    try {
+      const data = await api<{ message: Message }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "reagir", messageId: message.id, emoji } });
+      setMessages((list) => list.map((entry) => (entry.id === data.message.id ? { ...entry, reactions: data.message.reactions } : entry)));
+    } catch (reactError) {
+      setError(reactError instanceof Error ? reactError.message : "Não foi possível reagir.");
+    }
+  }
   const quoteProps: QuoteProps = {
     lookup,
     onJump: jumpTo,
     onReply: setReplyTo,
+    onReact: (message, emoji) => void react(message, emoji),
     onForward: (ids) => setPicked(new Set(ids)),
     selection: picked ? { ids: picked, toggle: togglePicked } : undefined,
   };
@@ -751,6 +774,7 @@ type QuoteProps = {
   onJump: (id: string) => void;
   onReply?: (message: Message) => void;
   onForward?: (ids: string[]) => void;
+  onReact?: (message: Message, emoji: string) => void;
   selection?: Selection;
 };
 
@@ -834,11 +858,12 @@ function AlbumBubble({
   const pending = messages.some((message) => message.delivery === "pendente");
   const allSent = messages.every((message) => message.delivery === "enviada");
   const extra = messages.length - 4;
+  const reacted = messages.some((message) => Object.keys(message.reactions ?? {}).length);
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
       <div
-        className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}${select.className}`}
+        className={`at-bubble at-bubble-${first.author} at-album${sameAuthor ? " is-grouped" : ""}${reacted ? " has-reactions" : ""}${select.className}`}
         data-album={ids.join(" ")}
         id={`msg-${first.id}`}
         onClickCapture={select.onClickCapture}
@@ -890,6 +915,7 @@ function AlbumBubble({
           ) : null}
           {clockTime(last.createdAt)}
         </span>
+        <ReactionChips messages={messages} />
       </div>
     </>
   );
@@ -904,6 +930,7 @@ function MessageBubble({
   onJump,
   onReply,
   onForward,
+  onReact,
   selection,
   group,
 }: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
@@ -935,11 +962,16 @@ function MessageBubble({
   return (
     <>
       {dayLabel ? <div className="at-day">{dayLabel}</div> : null}
-      <div className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}${select.className}`} id={`msg-${message.id}`} onClickCapture={select.onClickCapture}>
+      <div
+        className={`at-bubble at-bubble-${message.author}${sameAuthor ? " is-grouped" : ""}${Object.keys(message.reactions ?? {}).length ? " has-reactions" : ""}${select.className}`}
+        id={`msg-${message.id}`}
+        onClickCapture={select.onClickCapture}
+      >
         {select.box ?? (
           <>
             <ReplyButton message={message} onReply={onReply} />
             <ForwardButton ids={[message.id]} onForward={onForward} />
+            <ReactButton message={message} onReact={onReact} />
           </>
         )}
         {!sameAuthor ? <AuthorLabel group={group} message={message} /> : null}
@@ -955,6 +987,7 @@ function MessageBubble({
           <DeliveryMark message={message} onResend={onResend} />
           {clockTime(message.createdAt)}
         </span>
+        <ReactionChips messages={[message]} />
       </div>
     </>
   );
@@ -987,6 +1020,8 @@ function Composer({
   const [error, setError] = useState<string | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const closeEmoji = useCallback(() => setEmojiOpen(false), []);
   const [files, setFiles] = useState<File[]>([]);
   const [original, setOriginal] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -1092,6 +1127,18 @@ function Composer({
       setSending(false);
       input.current?.focus();
     }
+  }
+
+  /** Emoji onde está o cursor (ou no lugar do texto selecionado). */
+  function insertEmoji(emoji: string) {
+    const box = input.current;
+    const start = box?.selectionStart ?? text.length;
+    const end = box?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    window.requestAnimationFrame(() => {
+      box?.focus();
+      box?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -1213,6 +1260,7 @@ function Composer({
           )}
         </div>
       ) : null}
+      {emojiOpen ? <EmojiPanel onClose={closeEmoji} onPick={insertEmoji} /> : null}
       {error || recorder.error ? <p className="at-composer-error" role="alert">{error ?? recorder.error}</p> : null}
       {recorder.recording ? (
         <div className="at-composer-row at-recording" aria-live="polite">
@@ -1247,6 +1295,18 @@ function Composer({
             <Paperclip aria-hidden="true" size={18} />
           </button>
         ) : null}
+        <button
+          aria-expanded={emojiOpen}
+          aria-label="Emojis"
+          className="at-icon-btn"
+          onClick={() => setEmojiOpen((open) => !open)}
+          // O "clicar fora" do painel não pode fechar e o clique reabrir.
+          onMouseDown={(event) => event.stopPropagation()}
+          title="Emojis"
+          type="button"
+        >
+          <Smile aria-hidden="true" size={18} />
+        </button>
         <input
           hidden
           multiple

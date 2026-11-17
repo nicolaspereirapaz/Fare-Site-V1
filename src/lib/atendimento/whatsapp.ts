@@ -17,11 +17,12 @@ import {
   phoneDigits,
   phoneReplied,
   setDelivery,
+  setReaction,
   updateConversationProfile,
 } from "@/lib/atendimento/repository";
 import { recordCustomerMessage } from "@/lib/atendimento/service";
 import { linkConversationCustomer } from "@/lib/atendimento/customer";
-import { isGroupChat, PIX_CARD_TEXT, STORE_PIX, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
+import { isGroupChat, isInternal, PIX_CARD_TEXT, STORE_PIX, type Conversation, type MediaKind, type Message } from "@/lib/atendimento/types";
 
 /**
  * Ligação com o WhatsApp pela ponte Baileys (modo painel).
@@ -173,6 +174,63 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media, authorName);
   db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
   return { conversationId: conversation.id, duplicate: false, fromPhone: false };
+}
+
+/** Um emoji (com variações e junções, ex.: 👍🏽, ❤️, 👨‍👩‍👧) ou vazio para tirar a reação. */
+export const isReactionEmoji = (value: unknown): value is string =>
+  typeof value === "string" && (value === "" || (value.length <= 32 && /^[\p{Extended_Pictographic}\p{Emoji_Component}‍️⃣]+$/u.test(value) && /\p{Extended_Pictographic}|⃣|\p{Regional_Indicator}/u.test(value)));
+
+/**
+ * Reação vinda do WhatsApp (do cliente ou do celular da loja) numa mensagem que o painel conhece.
+ * Mensagem que não está no painel: ignora.
+ */
+export function receiveWhatsAppReaction(db: DatabaseSync, body: Record<string, unknown>): { applied: boolean } {
+  const reaction = body.reaction && typeof body.reaction === "object" ? (body.reaction as Record<string, unknown>) : {};
+  const targetId = typeof reaction.id === "string" ? reaction.id.trim().slice(0, 200) : "";
+  if (!targetId || !isReactionEmoji(reaction.emoji)) throw new AtendimentoError("INVALID_REQUEST", "Reação do WhatsApp inválida.");
+  const message = messageByExternalId(db, targetId);
+  if (!message) return { applied: false };
+  const name = (key: string) => (typeof body[key] === "string" ? String(body[key]).trim().slice(0, 80) : "");
+  const who = body.fromPhone === true ? "loja" : isGroupChat(name("chatId")) ? name("pushName") || name("phone") || "Participante" : "cliente";
+  setReaction(db, message.id, who, reaction.emoji);
+  return { applied: true };
+}
+
+/** Reação da loja (painel) numa mensagem; na conversa do WhatsApp vai pela ponte antes de gravar. Emoji vazio tira. */
+export async function reactToMessage(
+  db: DatabaseSync,
+  conversationId: string,
+  messageId: string,
+  emoji: unknown,
+  config = bridgeConfig(),
+  fetcher: typeof fetch = fetch,
+): Promise<Message> {
+  const message = getMessage(db, messageId);
+  if (!message || message.conversationId !== conversationId || isInternal(message.author)) throw new AtendimentoError("INVALID_REQUEST", "Mensagem não encontrada.");
+  if (!isReactionEmoji(emoji)) throw new AtendimentoError("INVALID_REQUEST", "Reação inválida.");
+  const conversation = getConversation(db, conversationId);
+  if (conversation.channel === "whatsapp") {
+    const externalId = externalIdOf(db, messageId);
+    if (!config) throw new AtendimentoError("INVALID_REQUEST", "WhatsApp não configurado neste site.");
+    if (!conversation.waChatId || !externalId) throw new AtendimentoError("INVALID_REQUEST", "Essa mensagem não chegou ao WhatsApp: não dá para reagir.");
+    let response: Response;
+    try {
+      response = await fetcher(`${config.url}/fare/painel/reagir`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-fare-token": config.token },
+        body: JSON.stringify({ chatId: conversation.waChatId, messageId: externalId, fromMe: message.author !== "cliente", emoji }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new AtendimentoError("INVALID_REQUEST", "Não consegui falar com o WhatsApp da loja agora. Tente de novo em instantes.");
+    }
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new AtendimentoError("INVALID_REQUEST", response.status === 404 ? "A ponte do WhatsApp ainda não sabe reagir (precisa atualizar)." : `Não foi possível reagir no WhatsApp: ${data.error || response.status}`);
+    }
+  }
+  setReaction(db, messageId, "loja", emoji);
+  return getMessage(db, messageId)!;
 }
 
 /** Número digitado pela equipe -> só dígitos com o 55 do Brasil ("(11) 98888-7777" -> "5511988887777"). */

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CustomerCreditPanel } from "@/components/staff/CustomerCreditPanel";
@@ -43,6 +44,11 @@ export default async function CustomerPage({ params }: { params: Promise<{ ref: 
         <p className="cl-count">
           {customer.kind === "conta" ? "Conta no site" : `Cadastrado por ${customer.createdBy ?? "equipe"}`} · {orders.length} {orders.length === 1 ? "pedido" : "pedidos"} · {brl(ordersTotal)} em pedidos
         </p>
+        {customer.phone ? (
+          <a className="cl-chat-link" href={`/equipe/atendimento?${new URLSearchParams({ telefone: customer.phone, nome: customer.name })}`} rel="noopener noreferrer" target="_blank" title="Abre em nova guia">
+            <MessageCircle aria-hidden="true" size={16} /> Abrir conversa no WhatsApp ({customer.phone})
+          </a>
+        ) : null}
         <section className="qe-card">
           <h2>Dados do cliente</h2>
           <CustomerEditPanel customer={customer} />

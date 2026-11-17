@@ -104,6 +104,8 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "media_pruned", "TEXT");
   // v8: evento dos avisos do sistema (relatório da equipe).
   addColumn(db, "atd_messages", "event", "TEXT");
+  // v12: reações (JSON {quem: emoji}; "{}" = já teve reação, para o painel ver quando tiram).
+  addColumn(db, "atd_messages", "reactions", "TEXT NOT NULL DEFAULT ''");
   // v7: anexo nas mensagens rápidas.
   for (const [column, definition] of [["media_file", "TEXT"], ["media_kind", "TEXT"], ["media_mime", "TEXT"], ["media_name", "TEXT"], ["media_size", "INTEGER"], ["media_thumb", "INTEGER NOT NULL DEFAULT 0"]]) {
     addColumn(db, "atd_quick_replies", column, definition);
@@ -246,8 +248,37 @@ function toMessage(row: ConversationRow): Message {
     replyToId: row.reply_to_id === null || row.reply_to_id === undefined ? null : String(row.reply_to_id),
     transcript: String(row.transcript ?? ""),
     transcriptStatus: (String(row.transcript_status ?? "") as Message["transcriptStatus"]) || "",
+    ...(row.reactions ? { reactions: parseReactions(row.reactions) } : {}),
     createdAt: String(row.created_at),
   };
+}
+
+function parseReactions(value: unknown): Record<string, string> {
+  try {
+    const map: unknown = JSON.parse(String(value || "{}"));
+    return map && typeof map === "object" && !Array.isArray(map)
+      ? Object.fromEntries(Object.entries(map).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""))
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Reação de alguém numa mensagem (cada um tem uma, como no WhatsApp); emoji vazio tira. */
+export function setReaction(db: DatabaseSync, messageId: string, who: string, emoji: string) {
+  const row = db.prepare("SELECT reactions FROM atd_messages WHERE id = ?").get(messageId) as ConversationRow | undefined;
+  if (!row) throw new AtendimentoError("INVALID_REQUEST", "Mensagem não encontrada.");
+  const map = parseReactions(row.reactions);
+  if (emoji) map[who.slice(0, 80)] = emoji;
+  else delete map[who.slice(0, 80)];
+  db.prepare("UPDATE atd_messages SET reactions = ? WHERE id = ?").run(JSON.stringify(map), messageId);
+}
+
+/** Reações recentes (mudam depois que a mensagem já apareceu no painel). */
+export function recentReactions(db: DatabaseSync, conversationId: string): Array<{ id: string; reactions: Record<string, string> }> {
+  return (db
+    .prepare("SELECT id, reactions FROM atd_messages WHERE conversation_id = ? AND reactions <> '' ORDER BY seq DESC LIMIT 100")
+    .all(conversationId) as ConversationRow[]).map((row) => ({ id: String(row.id), reactions: parseReactions(row.reactions) }));
 }
 
 export function createConversation(db: DatabaseSync, input: { channel: Channel; phone: string; contactName?: string; waChatId?: string }): Conversation {
@@ -364,6 +395,22 @@ export function findConversationByPhone(db: DatabaseSync, channel: Channel, phon
     .prepare(`${conversationsSelect(db)} WHERE channel = ? AND phone = ? ORDER BY last_message_at DESC LIMIT 1`)
     .get(channel, phoneDigits(phone)) as ConversationRow | undefined;
   return row ? toConversation(row) : null;
+}
+
+/**
+ * Conversa do WhatsApp com o telefone do pedido/cadastro, como foi digitado: com ou sem 55 e, no celular, com ou sem o 9
+ * (contas antigas do WhatsApp guardam sem). Nenhuma: null.
+ */
+export function conversationForPhone(db: DatabaseSync, value: string): Conversation | null {
+  const digits = value.replace(/\D/g, "").replace(/^0+/, "");
+  const full = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+  if (full.length < 12) return null;
+  const twin = !full.startsWith("55") ? null : full.length === 13 && full[4] === "9" ? full.slice(0, 4) + full.slice(5) : full.length === 12 && /[6-9]/.test(full[4]) ? `${full.slice(0, 4)}9${full.slice(4)}` : null;
+  for (const phone of [full, twin]) {
+    const found = phone ? findConversationByPhone(db, "whatsapp", phone) : null;
+    if (found) return found;
+  }
+  return null;
 }
 
 export function listConversations(db: DatabaseSync, options: { channel?: Channel } = {}): Conversation[] {

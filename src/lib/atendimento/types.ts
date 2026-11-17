@@ -95,8 +95,13 @@ export type Message = {
   /** Áudio: texto transcrito e situação ("" = não se aplica). */
   transcript: string;
   transcriptStatus: "" | "pendente" | "ok" | "falhou";
+  /** Reações (emoji) por quem reagiu: "loja" = a Fare (painel ou celular), "cliente" = o contato; no grupo, o nome de quem reagiu. */
+  reactions?: Record<string, string>;
   createdAt: string;
 };
+
+/** Reações rápidas do balão (as mesmas do WhatsApp). */
+export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
 
 export type Delivery = "" | "pendente" | "enviada" | "falhou";
 

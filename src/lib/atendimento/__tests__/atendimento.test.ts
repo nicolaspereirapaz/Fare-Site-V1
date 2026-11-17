@@ -32,7 +32,8 @@ import os from "node:os";
 import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
-import { deliverToWhatsApp, importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { deliverToWhatsApp, importWhatsAppHistory, isReactionEmoji, parseInbound, reactToMessage, receiveWhatsAppMessage, receiveWhatsAppReaction, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { conversationForPhone, recentReactions } from "@/lib/atendimento/repository";
 import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, redoThumbs, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
@@ -408,6 +409,53 @@ describe("WhatsApp pela ponte", () => {
     expect(listMessages(db, id).at(-1)?.delivery).toBe("enviada");
     await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
     expect(ok.sent).toHaveLength(2); // já enviada: não manda de novo
+  });
+
+  it("reações: do cliente/celular marcam o balão, a do painel sai pela ponte e emoji vazio tira", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("R1", "oi"));
+    const target = listMessages(db, id)[0];
+    expect(receiveWhatsAppReaction(db, { reaction: { id: "R1", emoji: "❤️" }, chatId: "5511977776666@s.whatsapp.net" })).toEqual({ applied: true });
+    expect(receiveWhatsAppReaction(db, { reaction: { id: "NAO-EXISTE", emoji: "👍" } })).toEqual({ applied: false });
+    expect(() => receiveWhatsAppReaction(db, { reaction: { id: "R1", emoji: "oi" } })).toThrow(AtendimentoError);
+
+    const ok = fakeBridge();
+    const reacted = await reactToMessage(db, id, target.id, "👍🏽", bridge, ok.fetcher);
+    expect(ok.sent).toEqual([
+      { url: "http://ponte.local/fare/painel/reagir", token: "tk", body: { chatId: "5511977776666@s.whatsapp.net", messageId: "R1", fromMe: false, emoji: "👍🏽" } },
+    ]);
+    expect(reacted.reactions).toEqual({ cliente: "❤️", loja: "👍🏽" });
+    // Cliente tirou a reação: o painel vê pela lista de reações recentes.
+    receiveWhatsAppReaction(db, { reaction: { id: "R1", emoji: "" }, chatId: "5511977776666@s.whatsapp.net" });
+    expect(recentReactions(db, id)).toEqual([{ id: target.id, reactions: { loja: "👍🏽" } }]);
+    // Ponte fora do ar: não grava.
+    await expect(reactToMessage(db, id, target.id, "😂", bridge, fakeBridge(503).fetcher)).rejects.toThrow(AtendimentoError);
+    expect(listMessages(db, id)[0].reactions).toEqual({ loja: "👍🏽" });
+    // Nota interna não recebe reação.
+    const note = addNote(db, id, ana, "cliente chato");
+    await expect(reactToMessage(db, id, note.id, "👍", bridge, ok.fetcher)).rejects.toThrow(AtendimentoError);
+
+    // Grupo: cada participante tem a sua; a do celular da loja conta como "loja".
+    const group = "120363000000000001@g.us";
+    const { conversationId: groupId } = receiveWhatsAppMessage(db, inbound("RG", "foto", { chatId: group, groupName: "Formatura" }));
+    receiveWhatsAppReaction(db, { reaction: { id: "RG", emoji: "🔥" }, chatId: group, pushName: "Bia" });
+    receiveWhatsAppReaction(db, { reaction: { id: "RG", emoji: "👏" }, chatId: group, fromPhone: true });
+    expect(listMessages(db, groupId)[0].reactions).toEqual({ Bia: "🔥", loja: "👏" });
+  });
+
+  it("emoji de reação válido", () => {
+    for (const emoji of ["", "👍", "❤️", "👍🏽", "👨‍👩‍👧", "🇧🇷", "#️⃣", "☀️"]) expect(isReactionEmoji(emoji)).toBe(true);
+    for (const value of ["oi", "1", "👍 a", "<b>", null, 3]) expect(isReactionEmoji(value)).toBe(false);
+  });
+
+  it("telefone do pedido acha a conversa do WhatsApp (com ou sem 55, com ou sem o 9)", () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("T1", "oi"));
+    expect(conversationForPhone(db, "(11) 97777-6666")?.id).toBe(id);
+    expect(conversationForPhone(db, "+55 11 97777-6666")?.id).toBe(id);
+    expect(conversationForPhone(db, "11 7777-6666")?.id).toBe(id);
+    const { conversationId: old } = receiveWhatsAppMessage(db, inbound("T2", "oi", { chatId: "551188887777@s.whatsapp.net", phone: "551188887777" }));
+    expect(conversationForPhone(db, "(11) 98888-7777")?.id).toBe(old);
+    expect(conversationForPhone(db, "(11) 3333-4444")).toBeNull();
+    expect(conversationForPhone(db, "")).toBeNull();
   });
 
   it("/pix: texto do sistema antigo e, depois, o cartão do Pix; ponte sem a rota nova manda a chave em texto", async () => {

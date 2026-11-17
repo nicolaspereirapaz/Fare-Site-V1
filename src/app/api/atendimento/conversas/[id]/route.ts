@@ -8,6 +8,7 @@ import {
   getMessage,
   listMessages,
   recentDeliveries,
+  recentReactions,
   recentTranscripts,
   setConversationTags,
   markConversationRead,
@@ -18,6 +19,7 @@ import {
 import { activeBrain, atendimentoDb, deliverInBackground, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
 import { isAiThinking } from "@/lib/atendimento/service";
 import { isConversationStatus, isGroupChat } from "@/lib/atendimento/types";
+import { reactToMessage } from "@/lib/atendimento/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     // Status de envio ao WhatsApp das últimas mensagens (muda depois que a mensagem já apareceu).
     deliveries: conversation.channel === "whatsapp" ? recentDeliveries(db, id) : [],
     transcripts: recentTranscripts(db, id),
+    reactions: recentReactions(db, id),
   });
 });
 
@@ -79,6 +82,8 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
     case "nao_lida":
       markConversationUnread(db, id);
       return json({ conversation: getConversation(db, id) });
+    case "reagir":
+      return json({ message: await reactToMessage(db, id, text(body.messageId, 80), body.emoji), conversation: getConversation(db, id) });
     default:
       throw new AtendimentoError("INVALID_REQUEST", "Ação desconhecida.");
   }

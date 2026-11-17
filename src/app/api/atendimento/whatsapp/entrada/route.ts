@@ -1,6 +1,6 @@
 import { AtendimentoError } from "@/lib/atendimento/repository";
 import { atendimentoDb, json, respondInBackground } from "@/lib/atendimento/server";
-import { importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { importWhatsAppHistory, parseInbound, receiveWhatsAppMessage, receiveWhatsAppReaction, tokenMatches } from "@/lib/atendimento/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,8 @@ export async function POST(request: Request) {
   }
   try {
     const db = atendimentoDb();
+    // Reação (emoji) numa mensagem: só marca o balão; não é mensagem nova (sem IA, sem não lidas).
+    if (body.reaction) return json({ ok: true, ...receiveWhatsAppReaction(db, body) });
     const inbound = parseInbound(body);
     if (inbound.sentAt) {
       const imported = importWhatsAppHistory(db, inbound);

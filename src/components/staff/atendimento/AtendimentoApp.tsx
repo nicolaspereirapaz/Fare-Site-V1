@@ -31,7 +31,18 @@ function notifyDesktop(items: Array<{ conversation: Conversation; title: string 
 const readPermission = (): NotificationPermission | "unsupported" => (typeof Notification === "undefined" ? "unsupported" : Notification.permission);
 
 /** Página Atendimento: lista de conversas (estilo WhatsApp Web) ou quadro Kanban, com aviso de mensagem nova. */
-export function AtendimentoApp({ me, initialView, initialConversation }: { me: StaffUser; initialView: View; initialConversation?: string }) {
+export function AtendimentoApp({
+  me,
+  initialView,
+  initialConversation,
+  initialContact,
+}: {
+  me: StaffUser;
+  initialView: View;
+  initialConversation?: string;
+  /** Número sem conversa (vindo do pedido/cadastro): abre "Nova conversa" já preenchida. */
+  initialContact?: { phone: string; name: string };
+}) {
   const [view, setView] = useState<View>(initialView);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -41,10 +52,15 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
   const [editingReplies, setEditingReplies] = useState(false);
   const [search, setSearch] = useState("");
   const [aiOn, setAiOn] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const closeStart = useCallback(() => setStarting(false), []);
+  const [starting, setStarting] = useState(Boolean(initialContact));
+  const [contact, setContact] = useState(initialContact);
+  const closeStart = useCallback(() => {
+    setStarting(false);
+    setContact(undefined);
+  }, []);
   const onStarted = useCallback((conversation: Conversation) => {
     setStarting(false);
+    setContact(undefined);
     setConversations((list) => [conversation, ...list.filter((entry) => entry.id !== conversation.id)]);
     setSelectedId(conversation.id);
     setView("conversas");
@@ -243,7 +259,7 @@ export function AtendimentoApp({ me, initialView, initialConversation }: { me: S
         />
       )}
 
-      {starting ? <NewConversationDialog onClose={closeStart} onStarted={onStarted} /> : null}
+      {starting ? <NewConversationDialog initial={contact} onClose={closeStart} onStarted={onStarted} /> : null}
       {editingReplies ? <QuickRepliesDialog onChanged={setQuickReplies} onClose={closeReplies} quickReplies={quickReplies} /> : null}
     </div>
     </AiEnabledContext.Provider>

@@ -5,10 +5,19 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, type Conversation } from "@/components/staff/atendimento/shared";
 
 /** "Nova conversa": digita o WhatsApp (e o nome, se souber) e a conversa abre com você, pronta para escrever. */
-export function NewConversationDialog({ onClose, onStarted }: { onClose: () => void; onStarted: (conversation: Conversation) => void }) {
+export function NewConversationDialog({
+  initial,
+  onClose,
+  onStarted,
+}: {
+  /** Número e nome já preenchidos (cliente do pedido/cadastro que ainda não tem conversa). */
+  initial?: { phone: string; name: string };
+  onClose: () => void;
+  onStarted: (conversation: Conversation) => void;
+}) {
   const titleId = useId();
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const phoneInput = useRef<HTMLInputElement>(null);

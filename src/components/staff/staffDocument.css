@@ -52,6 +52,8 @@
 .sd-muted { color:#7a7f91; font-size:13px; line-height:1.65; margin:0; overflow-wrap:anywhere; }
 .sd-delivery-date { font:600 21px var(--font-outfit),sans-serif; color:#1d2447; margin:0 0 4px; }
 .sd-customer { font-size:14px; font-weight:600; color:#1d2447; margin:0 0 3px; }
+.sd-chat-link { color:inherit; text-decoration:underline dotted; text-underline-offset:3px; }
+.sd-chat-link:hover { color:#167b55; text-decoration-style:solid; }
 .sd-billing { margin-top:14px; border-top:1px solid #f0f1f4; padding-top:12px; font-size:12px; color:#7a7f91; }
 .sd-billing summary { cursor:pointer; color:#656fa4; }
 .sd-pix { margin-top:17px; padding-top:15px; border-top:1px solid #e6e7ec; }

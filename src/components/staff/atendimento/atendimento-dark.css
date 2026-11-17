@@ -129,6 +129,11 @@
 
 /* Mensagens rápidas (lista ao digitar / e janela) */
 [data-atd-theme="dark"] .at-picker { background: var(--d-raised); box-shadow: 0 14px 40px rgba(0, 0, 0, .55), 0 0 0 1px var(--d-border-strong); }
+[data-atd-theme="dark"] .at-emoji-panel, [data-atd-theme="dark"] .at-react-bar { background: var(--d-raised); box-shadow: 0 14px 40px rgba(0, 0, 0, .55), 0 0 0 1px var(--d-border-strong); }
+[data-atd-theme="dark"] .at-reactions { background: var(--d-raised); box-shadow: 0 0 0 1px var(--d-border-strong); }
+[data-atd-theme="dark"] .at-reactions small { color: var(--d-text-2); }
+[data-atd-theme="dark"] .at-emoji-grid button:hover, [data-atd-theme="dark"] .at-react-quick button:hover { background: var(--navy-soft); }
+[data-atd-theme="dark"] .at-react-quick button.is-active, [data-atd-theme="dark"] .at-emoji-grid button.is-active { background: #1f4d36; }
 [data-atd-theme="dark"] .at-picker > button { color: var(--ink); }
 [data-atd-theme="dark"] .at-picker code,
 [data-atd-theme="dark"] .at-qr-list code,

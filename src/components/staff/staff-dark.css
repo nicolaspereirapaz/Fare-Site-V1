@@ -135,6 +135,9 @@
 /* --- src/components/staff/customers.css --- */
 [data-atd-theme="dark"] .cl-list a { background: #171a20; }
 [data-atd-theme="dark"] .cl-badge { background: #1c3b26; color: #8fe1ad; }
+[data-atd-theme="dark"] .cl-chat-link { border-color: #2c5a43; background: #1c3b26; color: #8fe1ad; }
+[data-atd-theme="dark"] .cl-chat-link:hover { background: #24492f; }
+[data-atd-theme="dark"] .sd-chat-link:hover { color: #8fe1ad; }
 [data-atd-theme="dark"] .cl-delete, [data-atd-theme="dark"] .cl-delete:hover { color: #ed8a82; }
 [data-atd-theme="dark"] .cl-confirm { background: #3f1c18; color: #e69689; }
 [data-atd-theme="dark"] .cl-credit-in { color: #8fe1ad; }
