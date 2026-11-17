@@ -43,11 +43,11 @@ test('second opening bubble is deferred at exact 17h until next weekday 09h', as
   f.at('2026-11-23T11:59:59Z');await f.tick();assert.equal(f.sent.length,1);
   f.at('2026-11-23T12:00:00Z');await f.tick();assert.equal(f.sent.length,2);f.db.close();
 });
-test('menu selection reserves the sixtieth bubble, and another send is blocked', async () => {
+test('text-only menu never consumes a bubble or fabricates a native selection', async () => {
   const f=await opened();f.db.prepare('UPDATE campaign_daily SET bubbles=59').run();
-  await inbound(f,'Digite:\n0 - Atendente');f.advance(3000);await f.tick();assert.equal(f.sent[2].text,'0');
-  assert.equal(f.db.prepare('SELECT bubbles FROM campaign_daily').get()?.bubbles,60);
-  await inbound(f,'Sim','human-after-menu');f.advance(3000);await f.tick();assert.equal(f.sent.length,3);f.db.close();
+  await inbound(f,'Digite:\n0 - Atendente');f.advance(3000);await f.tick();assert.equal(f.sent.length,2);
+  assert.equal(f.db.prepare('SELECT bubbles FROM campaign_daily').get()?.bubbles,59);
+  assert.equal(f.db.prepare('SELECT state FROM campaign_contacts').get()?.state,'handoff');f.db.close();
 });
 test('local message id is fallback dedupe key when external id is absent', async () => {
   const f=await opened();f.db.prepare('INSERT INTO atd_messages(id,external_id,conversation_id,author,body,created_at) VALUES(?,NULL,?,?,?,?)').run('local','chat-5511991665576','cliente','Sim',f.deps.now().toISOString());
@@ -111,12 +111,12 @@ test('classifier result is stale if newer persisted input has not reached callba
   assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM campaign_queue WHERE status='pending'").get()?.n,0);
   await f.tick(); assert.equal(f.db.prepare('SELECT state FROM campaign_contacts').get()?.state,'stopped'); f.db.close();
 });
-test('no ambiguous, negative, virtual or long human option labels are sent; exact short token preserved', async () => {
+test('text-only ambiguous, negative, virtual, long and short-token menus never fabricate native IDs', async () => {
   for(const text of ['1 - Não falar com atendente','1 - Atendente virtual','1 - Falar com atendente para obter descontos']) {
     const f=await opened(); await inbound(f,text); f.advance(3000); await f.tick(); assert.equal(f.sent.length,2,text); f.db.close();
   }
   const f=await opened(); await inbound(f,'Escolha uma opção:\nH - Falar com atendente');
-  f.advance(3000); await f.tick(); assert.equal(f.sent[2].text,'H'); f.db.close();
+  f.advance(3000); await f.tick(); assert.equal(f.sent.length,2); assert.equal(f.db.prepare('SELECT state FROM campaign_contacts').get()?.state,'handoff'); f.db.close();
 });
 test('model robot intent does not count as human response', async () => {
   const f=await opened(); f.deps.classify=async()=>({intent:'robot'}); await inbound(f,'Agradecemos seu contato. Aguarde um momento.');
@@ -226,14 +226,14 @@ test('human response cancels reminder permanently even when received within twen
   f.advance(3000); await f.tick(); f.advance(3000); await f.tick(); f.advance(7*86400000); await f.tick();
   assert.equal(f.sent.length,4); f.db.close();
 });
-test('single clear human menu choice is verified locally, counted, never navigated twice', async () => {
+test('textual menu is handed off without inventing an option ID', async () => {
   const f=await opened(); let calls=0; f.deps.classify=async()=>{calls++;return {intent:'menu',menuOption:'9'};};
   await inbound(f,'Bem-vindo! Digite uma opção:\n1 - Financeiro\n2 - Falar com atendente');
-  assert.equal(calls,0); f.advance(3000); await f.tick(); assert.equal(f.sent[2].text,'2');
+  assert.equal(calls,0); f.advance(3000); await f.tick(); assert.equal(f.sent.length,2);
   assert.equal(f.db.prepare('SELECT human FROM campaign_contacts').get()?.human,0);
   await inbound(f,'Digite uma opção:\n1 - Comercial\n2 - Falar com atendente','menu2');
-  assert.equal(f.db.prepare('SELECT state FROM campaign_contacts').get()?.state,'robot');
-  f.advance(3000); await f.tick(); assert.equal(f.sent.length,3); f.db.close();
+  assert.equal(f.db.prepare('SELECT state FROM campaign_contacts').get()?.state,'handoff');
+  f.advance(3000); await f.tick(); assert.equal(f.sent.length,2); f.db.close();
 });
 test('ambiguous or fabricated menu tokens never enter outbound queue', async () => {
   for (const text of ['Escolha: 1 - Vendas\n2 - Financeiro', '1 - Falar com atendente\n2 - Falar com humano', 'Olá, posso ajudar?']) {

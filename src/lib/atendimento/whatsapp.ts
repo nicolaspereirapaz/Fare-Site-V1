@@ -1,3 +1,4 @@
+import { validateInteractive } from './interactive';
 import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { mediaPath } from "@/lib/atendimento/media";
@@ -47,6 +48,7 @@ export function tokenMatches(received: string | null, expected: string | undefin
 }
 
 export type InboundWhatsApp = {
+  interactive?: import('./interactive').InteractiveMenu;
   /** Id da mensagem no WhatsApp: a mesma mensagem nunca entra duas vezes. */
   externalId: string;
   /** Destino na ponte (…@s.whatsapp.net ou …@lid; grupo: …@g.us). */
@@ -75,7 +77,10 @@ export const PHONE_AUTHOR = "Celular";
 
 export function parseInbound(body: Record<string, unknown>, media?: StoredMediaRef): InboundWhatsApp {
   const str = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+  const interactive = validateInteractive(body.interactive);
+  if (body.interactive !== undefined && (!interactive || interactive.messageId !== body.externalId || interactive.chatId !== body.chatId || body.fromPhone === true || body.fromMe === true)) throw new AtendimentoError('INVALID_REQUEST', 'Menu inválido.');
   const inbound = {
+    interactive: body.historico === true ? undefined : interactive ?? undefined,
     externalId: str(body.externalId, 200),
     chatId: str(body.chatId, 120),
     phone: phoneDigits(str(body.phone, 30)),
@@ -91,7 +96,7 @@ export function parseInbound(body: Record<string, unknown>, media?: StoredMediaR
   const group = isGroupChat(inbound.chatId);
   // Histórico antigo é por contato: grupo cairia na conversa particular de quem mandou.
   if (group && body.historico === true) throw new AtendimentoError("INVALID_REQUEST", "Histórico de grupo não entra.");
-  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid|g\.us)$/.test(inbound.chatId) || (!group && !/^\d{10,15}$/.test(inbound.phone)) || (!inbound.text && !media)) {
+  if (!inbound.externalId || !/@(s\.whatsapp\.net|lid|g\.us)$/.test(inbound.chatId) || (!group && !/^\d{10,15}$/.test(inbound.phone)) || (!inbound.text && !media && !inbound.interactive)) {
     throw new AtendimentoError("INVALID_REQUEST", "Mensagem do WhatsApp inválida.");
   }
   return inbound;
@@ -171,8 +176,9 @@ export function receiveWhatsAppMessage(db: DatabaseSync, inbound: InboundWhatsAp
   }
   // Grupo: cada mensagem com o nome (ou número) de quem mandou.
   const authorName = group ? inbound.pushName || inbound.phone || "Participante" : undefined;
-  const message = recordCustomerMessage(db, conversation.id, inbound.text, inbound.media, authorName);
+  const message = recordCustomerMessage(db, conversation.id, inbound.text || (inbound.interactive ? inbound.interactive.body || inbound.interactive.title || "Menu WhatsApp" : ""), inbound.media, authorName);
   db.prepare("UPDATE atd_messages SET external_id = ?, reply_to_id = ? WHERE id = ?").run(inbound.externalId, replyToId, message.id);
+  if (inbound.interactive) db.prepare("UPDATE atd_messages SET interactive=? WHERE id=?").run(JSON.stringify(inbound.interactive), message.id);
   return { conversationId: conversation.id, duplicate: false, fromPhone: false };
 }
 

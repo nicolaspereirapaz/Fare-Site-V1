@@ -75,7 +75,10 @@ export const isGroupChat = (waChatId: string | null | undefined) => Boolean(waCh
 /** Etiquetas sugeridas (as já usadas pela equipe também aparecem). */
 export const DEFAULT_TAGS = ["Urgente", "Revelação", "Brindes", "Pago", "Retirar", "Orçamento enviado"];
 
+import type { InteractiveMenu, MenuSelection } from './interactive';
 export type Message = {
+  interactive?: InteractiveMenu | null;
+  menuSelection?: MenuSelection | null;
   /** Sequência crescente: o painel pede só o que veio depois do último número que já tem. */
   seq: number;
   id: string;

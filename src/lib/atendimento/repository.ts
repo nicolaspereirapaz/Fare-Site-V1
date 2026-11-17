@@ -1,3 +1,4 @@
+import { parseInteractive } from './interactive';
 import { randomUUID } from "node:crypto";
 import { campaignHiddenConversationIds, migrateCampaign, revealCampaignForStaff } from "@/lib/atendimento/campaign";
 import type { DatabaseSync } from "node:sqlite";
@@ -104,6 +105,9 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "media_pruned", "TEXT");
   // v8: evento dos avisos do sistema (relatório da equipe).
   addColumn(db, "atd_messages", "event", "TEXT");
+  db.exec('CREATE TABLE IF NOT EXISTS atd_menu_selections(ref TEXT PRIMARY KEY,conversation_id TEXT NOT NULL,source_id TEXT NOT NULL,option_id TEXT NOT NULL,state TEXT NOT NULL)');
+  addColumn(db, "atd_messages", "interactive", "TEXT");
+  addColumn(db, "atd_messages", "menu_selection", "TEXT");
   // v12: reações (JSON {quem: emoji}; "{}" = já teve reação, para o painel ver quando tiram).
   addColumn(db, "atd_messages", "reactions", "TEXT NOT NULL DEFAULT ''");
   // v7: anexo nas mensagens rápidas.
@@ -226,6 +230,8 @@ function toConversation(row: ConversationRow): Conversation {
 
 function toMessage(row: ConversationRow): Message {
   return {
+    interactive: parseInteractive(row.interactive),
+    menuSelection: row.menu_selection ? JSON.parse(String(row.menu_selection)) : null,
     seq: Number(row.seq),
     id: String(row.id),
     conversationId: String(row.conversation_id),
@@ -321,6 +327,10 @@ export function recentTranscripts(db: DatabaseSync, conversationId: string): Arr
     transcript: String(row.transcript ?? ""),
     transcriptStatus: String(row.transcript_status) as Message["transcriptStatus"],
   }));
+}
+
+export function recentMenuSelections(db: DatabaseSync, conversationId: string): Array<Pick<Message,'id'|'menuSelection'>> {
+  return db.prepare('SELECT id,menu_selection FROM atd_messages WHERE conversation_id=? AND menu_selection IS NOT NULL ORDER BY seq DESC LIMIT 100').all(conversationId).map(row=>({id:String(row.id),menuSelection:JSON.parse(String(row.menu_selection))}));
 }
 
 export function recentDeliveries(db: DatabaseSync, conversationId: string): Array<Pick<Message, "id" | "delivery" | "deliveryError">> {

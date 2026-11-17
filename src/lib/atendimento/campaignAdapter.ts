@@ -52,7 +52,7 @@ export function createCampaignDeps(db:DatabaseSync, options:Options = {}):Campai
    const response=await post('PONTE','/fare/painel/campanha/enviar',input);
    if(!response.ok)throw new Error('Campaign delivery uncertain; reconcile, do not repeat');
    const data=await response.json();
-   if(typeof data.messageId!=='string' || !data.messageId)throw new Error('Missing campaign receipt');
+   if(typeof data.messageId!=='string' || !data.messageId || input.selection && (data.status!=='confirmed' || data.success!==true || data.ref!==input.ref))throw new Error('Missing campaign receipt');
    return {messageId:data.messageId};
   },
   recordOutbound(conversationId,text,externalId){

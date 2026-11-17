@@ -8,6 +8,7 @@ import {
   getMessage,
   listMessages,
   recentDeliveries,
+  recentMenuSelections,
   recentReactions,
   recentTranscripts,
   setConversationTags,
@@ -43,6 +44,7 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     deliveries: conversation.channel === "whatsapp" ? recentDeliveries(db, id) : [],
     transcripts: recentTranscripts(db, id),
     reactions: recentReactions(db, id),
+    menuSelections: recentMenuSelections(db,id),
   });
 });
 

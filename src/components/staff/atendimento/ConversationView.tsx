@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InteractiveOptions } from "./InteractiveOptions";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Bot,
@@ -425,6 +426,7 @@ function ChatPanel({
           aiThinking?: boolean;
           deliveries?: Array<Pick<Message, "id" | "delivery" | "deliveryError">>;
           transcripts?: Array<Pick<Message, "id" | "transcript" | "transcriptStatus">>;
+          menuSelections?: Array<Pick<Message,"id"|"menuSelection">>;
           reactions?: Array<{ id: string; reactions: Record<string, string> }>;
         }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
@@ -435,6 +437,7 @@ function ChatPanel({
           // Histórico antigo do WhatsApp pode chegar depois: mantém em ordem de data.
           setMessages((list) => (first ? data.messages : byDate([...list, ...data.messages])));
         }
+        if(data.menuSelections?.length){const selections=new Map(data.menuSelections.map(m=>[m.id,m.menuSelection]));setMessages(list=>list.map(m=>selections.has(m.id)?{...m,menuSelection:selections.get(m.id)}:m));}
         if (data.customers) setCustomers(data.customers);
         setAiThinking(Boolean(data.aiThinking));
         const deliveries = new Map((data.deliveries ?? []).map((entry) => [entry.id, entry]));
@@ -651,7 +654,7 @@ function ChatPanel({
             block.kind === "album" ? (
               <AlbumBubble group={group} key={block.messages[0].id} messages={block.messages} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ) : (
-              <MessageBubble group={group} key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
+              <MessageBubble menuStale={messages.some(m=>m.seq>block.message.seq && (m.interactive || m.author==='vendedor' || m.author==='ia'))} group={group} key={block.message.id} message={block.message} onOpenPhoto={openPhoto} onResend={resend} previous={block.previous} {...quoteProps} />
             ),
           )}
           {aiThinking ? <div className="at-bubble at-bubble-ia at-typing" aria-live="polite"><Bot aria-hidden="true" size={12} /> IA digitando…</div> : null}
@@ -922,6 +925,7 @@ function AlbumBubble({
 }
 
 function MessageBubble({
+  menuStale,
   message,
   previous,
   onResend,
@@ -933,7 +937,7 @@ function MessageBubble({
   onReact,
   selection,
   group,
-}: { message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
+}: { menuStale?: boolean; message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
   const dayLabel = dayLabelFor(message, previous);
   const showDay = Boolean(dayLabel);
   if (message.author === "nota") {
@@ -977,6 +981,7 @@ function MessageBubble({
         {!sameAuthor ? <AuthorLabel group={group} message={message} /> : null}
         <QuotedSnippet id={message.replyToId} lookup={lookup} onJump={onJump} />
         <MessageMediaView message={message} onOpen={onOpenPhoto} />
+        <InteractiveOptions message={message} stale={menuStale} />
         {message.body ? (
           <div className="at-bubble-text">
             <WhatsAppText text={message.body} />

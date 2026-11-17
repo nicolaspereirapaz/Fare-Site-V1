@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { parseInteractive, canonicalMenuRef, safeMenuOption, menuFresh } from './interactive.ts';
+import { reserveMenu, finishMenu } from './interactiveStore.ts';
+import type { NativeSend } from './interactiveService';
 import type { DatabaseSync } from 'node:sqlite';
 
 type ContactRow = {
@@ -7,8 +10,8 @@ type ContactRow = {
   turns:number; menu_used:number; last_sent:number|null; reminder_due:number|null;
   version:number; phase:string;
 };
-type QueueRow = { ref:string;contact_id:string;text:string;kind:string;chat_id:string;conversation_id:string };
-type MessageRow = { id:string;external_id:string|null;body:string;seq:number };
+type QueueRow = { ref:string;contact_id:string;text:string;kind:string;chat_id:string;conversation_id:string;selection:string|null };
+type MessageRow = { id:string;external_id:string|null;body:string;seq:number;interactive?:string;menu_selection?:string };
 type SettingsRow = { enabled:number;next_contact:number;next_bubble:number;audience:'pilot'|'list' };
 // Operational proxy: potential order volume, NOT measured profit by segment.
 export const CAMPAIGN_SEGMENT_PRIORITY = [1,5,3,12,2,4,7,10,6,11,8,9] as const;
@@ -67,7 +70,10 @@ export function migrateCampaign(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS campaign_queue(seq INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT UNIQUE NOT NULL, contact_id TEXT NOT NULL, text TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', external_id TEXT, UNIQUE(contact_id,text));
     CREATE TABLE IF NOT EXISTS campaign_inbound(contact_id TEXT NOT NULL, message_key TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY(contact_id,message_key));
   `);
+
   if (!db.prepare('PRAGMA table_info(campaign_settings)').all().some(column=>column.name==='audience')) db.exec("ALTER TABLE campaign_settings ADD COLUMN audience TEXT NOT NULL DEFAULT 'pilot' CHECK(audience IN ('pilot','list'))");
+
+  if (!db.prepare('PRAGMA table_info(campaign_queue)').all().some(c=>c.name==='selection')) db.exec('ALTER TABLE campaign_queue ADD COLUMN selection TEXT');
   if (!db.prepare('PRAGMA table_info(campaign_settings)').all().some(column=>column.name==='daily_caps_enabled')) db.exec('ALTER TABLE campaign_settings ADD COLUMN daily_caps_enabled INTEGER NOT NULL DEFAULT 1 CHECK(daily_caps_enabled IN (0,1))');
 }
 export function campaignSnapshot(db: DatabaseSync): unknown {
@@ -89,7 +95,7 @@ export type CampaignDeps = {
   checkWhatsApp: (phone:string) => Promise<{chatId:string;phone:string}|null>;
   createConversation: (contact:{phone:string;name:string;chatId:string;segment:number}) => string;
   classify: (input:{text:string;segment:number;history:Array<{author:string;text:string}>;state:string}) => Promise<{intent:'yes'|'no'|'optout'|'handoff'|'robot'|'menu'|'unknown';menuOption?:string}>;
-  send: (input:{chatId:string;text:string;ref:string}) => Promise<{messageId:string}>;
+  send: (input:{chatId:string;text:string;ref:string;selection?:{messageId:string;optionId:string}}) => Promise<{messageId:string}>;
   recordOutbound: (conversationId:string,text:string,externalId:string) => void;
   handoff: (conversationId:string,reason:string) => void;
   alert: (reason:string) => void;
@@ -217,6 +223,19 @@ async function processCampaignMessage(db:DatabaseSync,conversationId:string,deps
   const text=String(m.body), norm=normalized(text);
   if (OPTOUT.test(norm)) { cancel(db,c.id); db.prepare("UPDATE campaign_contacts SET state='stopped',human=1,version=version+1 WHERE id=?").run(c.id); return; }
   if (paused(db,c)) { handoff(db,c,deps,'Campaign manually paused'); return; }
+  const native=parseInteractive(m.interactive);
+  if (native) {
+    const choice=safeMenuOption(native);
+    if (c.menu_used || !choice || m.menu_selection || native.messageId!==m.external_id || !menuFresh(native,deps.now().getTime())) { handoff(db,c,deps,'Menu repetido, expirado ou sem opção segura; seleção manual necessária'); return; }
+    atomic(db,()=>{
+      const fresh=active(db,c.id);if(!fresh || fresh.version!==c.version || paused(db,fresh) || fresh.menu_used)return;
+      cancel(db,c.id);
+      const input:NativeSend={chatId:native.chatId,text:choice.label,ref:canonicalMenuRef(native),selection:{messageId:native.messageId,optionId:choice.id}};
+      db.prepare("INSERT OR IGNORE INTO campaign_queue(ref,contact_id,text,kind,selection) VALUES(?,?,?,'menu',?)").run(input.ref,c.id,input.text,JSON.stringify({...input,sourceId:m.id}));
+      db.prepare('UPDATE campaign_contacts SET menu_used=1,version=version+1 WHERE id=?').run(c.id);
+    });
+    return;
+  }
   const options=menuChoices(text);
   const previous=(db.prepare('SELECT text FROM campaign_inbound WHERE NOT (contact_id=? AND message_key=?)').all(c.id,key) as Array<{text:string}>);
   const repeated=previous.some(r=>normalized(String(r.text))===norm && norm.length>=25);
@@ -227,12 +246,9 @@ async function processCampaignMessage(db:DatabaseSync,conversationId:string,deps
     handoff(db,c,deps,'Campaign commercial request with automated greeting'); return;
   }
   if (robot || options.length || repeated) {
-    if (c.menu_used || repeated) { robotStop(db,c,deps); return; }
-    if (options.length===1) {
-      cancel(db,c.id);
-      db.prepare('UPDATE campaign_contacts SET menu_used=1 WHERE id=?').run(c.id);
-      enqueue(db,c.id,[options[0]],'menu');
-    } else if (options.length>1) handoff(db,c,deps,'Campaign ambiguous human menu');
+    if(c.menu_used){handoff(db,c,deps,'Continuação de menu após seleção única; atendimento manual necessário');return;}
+    if (repeated) { robotStop(db,c,deps); return; }
+    if (options.length) handoff(db,c,deps,'Menu textual sem IDs nativos; seleção manual necessária');
     return;
   }
   if (COMMERCIAL.test(norm)) { handoff(db,c,deps,'Campaign commercial/offscript request'); return; }
@@ -269,7 +285,7 @@ async function processCampaignMessage(db:DatabaseSync,conversationId:string,deps
   if (result.intent==='robot') {
     for (const {ref} of priorPending) db.prepare("UPDATE campaign_queue SET status='pending' WHERE ref=? AND status='cancelled' AND external_id IS NULL").run(ref);
     db.prepare('UPDATE campaign_contacts SET human=? WHERE id=?').run(c.human,c.id);
-    if (c.menu_used) robotStop(db,c,deps);
+    if (c.menu_used) handoff(db,c,deps,'Continuação automatizada após seleção única; atendimento manual necessário');
     return;
   }
   handoff(db,c,deps,'Campaign uncertain or offscript response');
@@ -353,9 +369,21 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       if (!fresh || fresh.version!==owner.version || paused(db,fresh) || !config.enabled || !local(deps.now()).open || config.next_bubble>deps.now().getTime()) return 'stale';
       if (!db.prepare("SELECT 1 FROM campaign_queue WHERE ref=? AND status='pending'").get(q!.ref)) return 'stale';
       if (nextInbound(db,String(fresh.conversation_id),fresh.id)) return 'stale';
+      if(q!.kind==='menu') {
+        if(!q!.selection) {db.prepare("UPDATE campaign_queue SET status='cancelled' WHERE ref=?").run(q!.ref);return 'stale';}
+        const payload=JSON.parse(q!.selection) as NativeSend & {sourceId:string};
+        const source=db.prepare('SELECT * FROM atd_messages WHERE id=? AND conversation_id=?').get(payload.sourceId,q!.conversation_id);
+        const menu=parseInteractive(source?.interactive),option=menu?.options.find(o=>o.id===payload.selection.optionId);
+        if(!source || source.author!=='cliente' || source.menu_selection || !menu || source.external_id!==menu.messageId || !menuFresh(menu,deps.now().getTime()) || payload.chatId!==menu.chatId || db.prepare('SELECT wa_chat_id FROM atd_conversations WHERE id=?').get(q!.conversation_id)?.wa_chat_id!==menu.chatId || q!.ref!==payload.ref || q!.text!==payload.text || payload.ref!==canonicalMenuRef(menu) || payload.selection.messageId!==menu.messageId || option?.label!==payload.text || safeMenuOption(menu)?.id!==payload.selection.optionId || db.prepare("SELECT 1 FROM atd_messages WHERE conversation_id=? AND seq>? AND author IN ('cliente','vendedor','ia')").get(q!.conversation_id,Number(source.seq))) {
+          handoff(db,fresh,deps,'Menu indisponível; seleção manual necessária');return 'stale';
+        }
+
+      }
+
       const day=local(deps.now()).day;
       db.prepare('INSERT OR IGNORE INTO campaign_daily(day) VALUES(?)').run(day);
       if (!db.prepare('UPDATE campaign_daily SET bubbles=bubbles+1 WHERE day=? AND ((SELECT daily_caps_enabled FROM campaign_settings WHERE id=1)=0 OR bubbles<60)').run(day).changes) return 'cap';
+      if(q!.selection){const payload=JSON.parse(q!.selection) as NativeSend & {sourceId:string};reserveMenu(db,payload,q!.conversation_id,payload.sourceId);}
       db.prepare("UPDATE campaign_queue SET status='sending' WHERE ref=? AND status='pending'").run(q!.ref);
       db.prepare('UPDATE campaign_settings SET next_bubble=? WHERE id=1').run(deps.now().getTime()+bubbleGap);
       return 'reserved';
@@ -367,12 +395,14 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       return;
     }
     try {
-      const result=await deps.send({chatId:q.chat_id,text:q.text,ref:q.ref});
+      const native=q.selection ? JSON.parse(q.selection) as NativeSend : null;
+      const result=await deps.send(native ? {chatId:native.chatId,text:native.text,ref:native.ref,selection:native.selection} : {chatId:q.chat_id,text:q.text,ref:q.ref});
       if (!result.messageId) throw new Error('Missing send receipt');
       db.prepare("UPDATE campaign_queue SET status='sent',external_id=? WHERE ref=?").run(result.messageId,q.ref);
       db.prepare('UPDATE campaign_contacts SET last_sent=? WHERE id=?').run(deps.now().getTime(),q.contact_id);
       db.prepare('UPDATE campaign_settings SET next_bubble=?,next_contact=MAX(next_contact,?) WHERE id=1').run(deps.now().getTime()+bubbleGap,deps.now().getTime()+contactDelay(deps));
       deps.recordOutbound(q.conversation_id,q.text,result.messageId);
+      if(q.selection)finishMenu(db,q.ref,'confirmed',result.messageId);
       const current=active(db,q.contact_id);
       if (current && !db.prepare("SELECT 1 FROM campaign_queue WHERE contact_id=? AND status='pending'").get(q.contact_id)) {
         if (q.kind==='opening') db.prepare('UPDATE campaign_contacts SET reminder_due=? WHERE id=?').run(businessDue(deps.now().getTime()),q.contact_id);
@@ -380,6 +410,7 @@ export async function campaignTick(db:DatabaseSync,deps:CampaignDeps):Promise<vo
       }
       if (q.kind==='closing') db.prepare("UPDATE campaign_contacts SET state='stopped',version=version+1 WHERE id=? AND state='active'").run(q.contact_id);
     } catch {
+      if(q.selection)finishMenu(db,q.ref,'uncertain');
       db.prepare("UPDATE campaign_queue SET status='uncertain' WHERE ref=?").run(q.ref);
       // A timeout belongs to this delivery, not to a later human takeover or opt-out.
       db.prepare("UPDATE campaign_contacts SET state='uncertain',version=version+1 WHERE id=? AND state='active'").run(q.contact_id);
