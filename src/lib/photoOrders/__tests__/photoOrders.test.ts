@@ -174,6 +174,9 @@ describe("pedido de fotos", () => {
       const sent = await upload("ima.jpg", 1200, 1800);
       const photo = { ...edits, uploadId: sent.id, sizeId: "ima-10x15", paper: "brilho" as const, copies: 3 };
       await expect(createPhotoOrder(database, { id: "comum" }, { ...base, photos: [photo] })).rejects.toThrow("só para clientes profissionais");
+      // Pela equipe (Atendimento): qualquer cliente, mesmo preço fixo.
+      const staffOrder = await createPhotoOrder(database, { id: "comum" }, { ...base, photos: [{ ...photo, uploadId: (await upload("ima2.jpg", 1200, 1800)).id }] }, { staff: true });
+      expect(staffOrder.order.totalCents).toBe(1170);
       setProfessional(database, "pro-1", true, "Equipe");
       await expect(createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [{ ...photo, sizeId: "ima-5x5" }] })).rejects.toThrow("5 × 5 com ímã: mínimo de 4 fotos");
       const { order, whatsappUrl } = await createPhotoOrder(database, { id: "pro-1" }, { ...base, photos: [photo] });

@@ -127,11 +127,14 @@ const thumbnail = async (file: string) =>
 /**
  * Monta o pedido de fotos: pasta do cliente (criada no 1º pedido) → pasta do pedido → uma pasta por tamanho + papel
  * com os arquivos prontos para imprimir, a pasta Originais e o PED-XXXXXX.html. Grava o pedido no banco.
+ * `staff`: pedido montado pela equipe (Atendimento): foto com ímã vale para qualquer cliente.
  */
-export async function createPhotoOrder(database: DatabaseSync, user: { id: string }, input: PhotoOrderInput) {
+export async function createPhotoOrder(database: DatabaseSync, user: { id: string }, input: PhotoOrderInput, { staff = false } = {}) {
   const data = validate(input);
   // Cliente profissional (cadastro pelo convite): tabela profissional.
   const professional = isProfessional(database, user.id);
+  // No site, foto com ímã só aparece para o profissional; pela equipe, qualquer cliente (mesmo preço fixo).
+  if (!staff && !professional && data.photos.some((photo) => sizeById(photo.sizeId).magnet)) throw new PhotoOrderError("Foto com ímã é só para clientes profissionais.");
   const { uploads, summary } = await readPhotos(data.photos, professional);
 
   const id = randomUUID();
@@ -176,7 +179,6 @@ export async function createPhotoOrder(database: DatabaseSync, user: { id: strin
 
 /** Lê os envios das fotos (falta algum = erro) e calcula o resumo com as medidas reais de cada arquivo. */
 export async function readPhotos(photos: ValidPhoto[], pro = false) {
-  if (!pro && photos.some((photo) => sizeById(photo.sizeId).magnet)) throw new PhotoOrderError("Foto com ímã é só para clientes profissionais.");
   const uploads = new Map<string, PhotoUpload>();
   for (const photo of photos) {
     const upload = uploads.get(photo.uploadId) ?? (await readUpload(photo.uploadId));

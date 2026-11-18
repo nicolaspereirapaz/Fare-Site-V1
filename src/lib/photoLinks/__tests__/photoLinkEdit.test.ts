@@ -128,6 +128,8 @@ describe("link das fotos: alterar depois de enviar", () => {
     // 2) Erro ao gravar no banco depois da troca de pastas: as fotos anteriores voltam e o registro também.
     const photos = validatePhotos([{ ...reopened.photos[0], sizeId: "10x15", paper: "brilho", copies: 5 }]);
     const { uploads, summary } = await readPhotos(photos);
+    // Link da equipe: foto com ímã vale para cliente comum (preço fixo).
+    expect((await readPhotos(validatePhotos([{ ...reopened.photos[0], sizeId: "ima-10x15", paper: "brilho", copies: 2 }]))).summary.total).toBe(7.8);
     const previous = getPhotoOrder(database, first.photoOrder.id)!;
     await expect(assemblePhotoFolder(database, {
       id: "00000000-0000-4000-8000-000000000001", orderId: order.id, code: previous.code, userId: order.userId, customer: previous.customer,

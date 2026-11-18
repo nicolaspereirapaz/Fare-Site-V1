@@ -77,7 +77,7 @@ export async function createChatPhotoOrder(db: DatabaseSync, conversationId: str
         contrast: 0,
         saturation: 0,
       })),
-    });
+    }, { staff: true });
     const size = sizeById(input.sizeId).label.replace(" cm", "");
     addMessage(db, {
       conversationId,
