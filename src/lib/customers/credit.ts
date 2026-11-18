@@ -23,6 +23,31 @@ function migrate(db: DatabaseSync) {
     reason TEXT NOT NULL, actor_id TEXT NOT NULL, actor_name TEXT NOT NULL, created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS fare_customer_credits_owner ON fare_customer_credits(owner_id);`);
+  // order_id: crédito que veio da diferença de um pedido que diminuiu depois de pago.
+  const columns = db.prepare("PRAGMA table_info(fare_customer_credits)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "order_id")) db.exec("ALTER TABLE fare_customer_credits ADD COLUMN order_id TEXT");
+}
+
+type CreditRow = { ownerId: string; amountCents: number; reason: string; actorId: string; actorName: string; orderId?: string };
+function insertCredit(db: DatabaseSync, input: CreditRow) {
+  db.prepare(`INSERT INTO fare_customer_credits (id, owner_id, amount_cents, reason, actor_id, actor_name, created_at, order_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), input.ownerId, input.amountCents, input.reason, input.actorId, input.actorName,
+    new Date().toISOString(), input.orderId ?? null);
+}
+
+/** Quanto do que foi pago neste pedido já virou crédito do cliente. */
+export function orderCreditedCents(db: DatabaseSync, orderId: string): number {
+  migrate(db);
+  const row = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) AS total FROM fare_customer_credits WHERE order_id = ?").get(orderId) as { total: number };
+  return Number(row.total);
+}
+
+/** Pedido ficou menor que o já pago: a diferença vira crédito. Chamar dentro da transação que grava o pedido. */
+export function creditOrderExcess(db: DatabaseSync, input: Required<CreditRow>) {
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) throw new Error("Valor do crédito inválido.");
+  if (!input.ownerId || !input.orderId || !input.actorId || !input.actorName) throw new Error("Lançamento de crédito inválido.");
+  migrate(db);
+  insertCredit(db, input);
 }
 
 const marks = (owners: string[]) => owners.map(() => "?").join(", ");
@@ -77,8 +102,7 @@ export function addCustomerCredit(db: DatabaseSync, input: {
   try {
     const balance = creditBalanceCents(db, input.ownerId);
     if (balance + input.amountCents < 0) throw new Error(`Este cliente tem só ${brl(Math.max(balance, 0))} de crédito.`);
-    db.prepare(`INSERT INTO fare_customer_credits (id, owner_id, amount_cents, reason, actor_id, actor_name, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(randomUUID(), input.ownerId, input.amountCents, reason, input.actorId, input.actorName, new Date().toISOString());
+    insertCredit(db, { ...input, reason });
     db.exec("COMMIT");
     return balance + input.amountCents;
   } catch (error) {

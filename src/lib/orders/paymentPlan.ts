@@ -11,8 +11,9 @@ const day = (iso: string) => { const [, m, d] = iso.slice(0, 10).split("-"); ret
  * Pagamento em partes, como aparece no pedido, no documento e na comanda:
  * cada recebimento ("21/10 · Pix · R$ 50,00") e o que falta e quando ("R$ 50,00 · na retirada").
  */
-export function paymentPlan(finance: Pick<OrderFinance, "payments" | "balanceCents" | "dueDate" | "deliveryMode" | "installments">) {
+export function paymentPlan(finance: Pick<OrderFinance, "payments" | "balanceCents" | "dueDate" | "deliveryMode" | "installments" | "creditedCents">) {
   const receipts = finance.payments.map((p) => ({ label: `${day(p.paidAt)} · ${LABELS[p.paymentMethod]}`, amount: brl(p.amountCents) }));
+  if (finance.creditedCents) receipts.push({ label: "Virou crédito do cliente", amount: `− ${brl(finance.creditedCents)}` });
   const when = finance.dueDate ? `vence ${day(finance.dueDate)}` : finance.deliveryMode === "entrega" ? "na entrega" : "na retirada";
   const remainder = finance.balanceCents > 0 ? { label: `Falta pagar · ${when}`, amount: brl(finance.balanceCents) } : null;
   return { receipts, remainder };

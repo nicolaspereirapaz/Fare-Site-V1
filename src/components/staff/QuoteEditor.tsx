@@ -171,6 +171,10 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   const isOrder = mode === "order" || editingOrder;
   const docId = quoteId ?? orderId;
   const [paidOnServer, setPaidOnServer] = useState(0);
+  /** Pedido editado: retirada ou entrega (quando o cliente paga o que aumentou). */
+  const [orderDeliveryMode, setOrderDeliveryMode] = useState<"retirada" | "entrega">("retirada");
+  /** Total ficou menor que o já pago: a equipe marcou para a diferença virar crédito do cliente. */
+  const [creditExcess, setCreditExcess] = useState(false);
   const [payment, setPayment] = useState<PaymentForm>(() => ({ ...EMPTY_PAYMENT_FORM, paid: "", paidAt: todayInBrazil() }));
   const [paymentChoice, setPaymentChoice] = useState<ClosingChoice>(null);
   const [customer, setCustomer] = useState<Customer | null>(initialCustomer);
@@ -244,7 +248,7 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
         if (payload.hasCustomer === false) setNeedsCustomer(true);
         else { setFixedCustomer(payload.customer); setFixedCustomerRef(payload.customerRef ?? null); setFixedProfessional(Boolean(payload.customerProfessional)); }
         setState({ updatedAt: payload.updatedAt, status: payload.status, createdBy: payload.createdBy });
-        if (editingOrder) setPaidOnServer(payload.paidCents ?? 0);
+        if (editingOrder) { setPaidOnServer(payload.paidCents ?? 0); setOrderDeliveryMode(payload.deliveryMode === "entrega" ? "entrega" : "retirada"); }
       })
       .catch((error: unknown) => active && setLoadError(error instanceof Error ? error.message : "Erro inesperado."))
       .finally(() => active && setLoading(false));
@@ -345,7 +349,8 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
     setSaving(true);
     setSaveError(null);
     const body = docId
-      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...quoteDelivery, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}) }
+      ? { updatedAt: state?.updatedAt, internalNotes: notes, items, discount: discountBody, ...quoteDelivery, ...(needsCustomer && customer ? { customerRef: customer.ref } : {}),
+        ...(belowPaid && creditExcess ? { creditExcess: true } : {}) }
       : { customerRef: customer?.ref, idempotencyKey: idempotencyKey.current, internalNotes: notes, items, discount: discountBody, ...quoteDelivery,
         ...(isOrder ? {
           // Mesmas regras de "Fechar Orçamento": pagar na retirada = sem recebimento agora, retirada na loja.
@@ -392,9 +397,10 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
   const paidChosen = Boolean(payment.paid.trim()) || (totals.credit > 0 && totals.total === 0);
   // Crédito que dá para usar: saldo + o que este pedido já usa (orçamento não gasta saldo).
   const creditAvailableCents = creditBalance + (editingOrder ? Math.round(savedCredit * 100) : 0);
-  // Pedido editado não pode ficar com total abaixo do que já foi recebido.
-  const belowPaid = editingOrder && Math.round(totals.total * 100) < paidOnServer;
-  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && !belowPaid
+  // Pedido editado com total abaixo do já recebido: só salva se a diferença virar crédito do cliente.
+  const excessCents = editingOrder ? paidOnServer - Math.round(totals.total * 100) : 0;
+  const belowPaid = excessCents > 0;
+  const canSubmit = editable && items.length > 0 && totals.pending === 0 && !discountError && !saving && (!belowPaid || (creditExcess && Boolean(fixedCustomerRef)))
     && (!isOrder || editingOrder || (customer && !changingCustomer && paidChosen && !paymentError));
   // Margem sobre o preço de venda (com o crédito, que não reduz o preço).
   const marginPercent = totals.total + totals.credit > 0 ? Math.round((totals.margin / (totals.total + totals.credit)) * 100) : 0;
@@ -669,7 +675,13 @@ export function QuoteEditor({ quoteId, orderId, mode = "quote", initialCustomer 
 
           {!isOrder ? <p className="qe-terms">Validade de 7 dias · produção em 7 dias após a aprovação da arte e o sinal de 50%.</p> : null}
           {paymentError ? <p className="qe-error">{paymentError}</p> : null}
-          {belowPaid ? <p className="qe-error">O total não pode ficar menor que o já recebido ({brl(paidOnServer / 100)}).</p> : null}
+          {belowPaid && fixedCustomerRef ? (
+            <label className="qe-credit-notice qe-credit-excess">
+              <input checked={creditExcess} onChange={(event) => setCreditExcess(event.target.checked)} type="checkbox" />
+              <span>Deixar {brl(excessCents / 100)} como crédito do cliente (o total ficou menor que o já pago, {brl(paidOnServer / 100)}).</span>
+            </label>
+          ) : belowPaid ? <p className="qe-error">O total não pode ficar menor que o já recebido ({brl(paidOnServer / 100)}).</p> : null}
+          {editingOrder && paidOnServer > 0 && excessCents < 0 ? <p className="qe-hint">O cliente paga a diferença ({brl(-excessCents / 100)}) {orderDeliveryMode === "entrega" ? "na entrega" : "na retirada"}.</p> : null}
           {saveError ? <p className="qe-error">{saveError}</p> : null}
           {editable ? (
             <button className="qe-btn qe-btn-primary qe-submit" disabled={!canSubmit} onClick={submit} type="button">

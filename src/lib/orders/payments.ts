@@ -4,7 +4,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { createOrder, findOrderById, runOrderMigrations, type CreateOrderInput, type Order, type PaymentMethod } from "./repository";
 import type { QuoteCartItem } from "@/lib/commerce";
 import { applyDiscount, creditOf, type QuoteDiscount } from "@/lib/quotes/discount";
-import { assertCreditAvailable } from "@/lib/customers/credit";
+import { assertCreditAvailable, creditOrderExcess, orderCreditedCents } from "@/lib/customers/credit";
+import { NO_CUSTOMER_OWNER } from "@/lib/quotes/quoteCode";
+import { orderCode } from "./orderCode";
 
 export const STAFF_PAYMENT_METHODS: readonly PaymentMethod[] = [
   "pix", "dinheiro", "cartao_debito", "cartao_credito", "boleto", "faturamento_empresa",
@@ -31,6 +33,8 @@ export type OrderFinance = {
   deliveryAddress?: DeliveryAddress | null;
   installments: number | null; dueDate: string | null; payments: OrderPayment[];
   paymentOnPickup?: boolean;
+  /** Parte do que foi pago que virou crédito do cliente (pedido diminuiu depois de pago); paidCents já desconta. */
+  creditedCents?: number;
 };
 
 function requireText(value: unknown, label: string) {
@@ -162,12 +166,14 @@ export function getOrderFinance(db: DatabaseSync, orderId: string): OrderFinance
   }>;
   const payments = rows.map((row) => ({ id: row.id, amountCents: row.amount_cents, paymentMethod: row.payment_method,
     paidAt: row.paid_at, actorId: row.actor_id, actorName: row.actor_name }));
-  const paidCents = payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+  const creditedCents = orderCreditedCents(db, orderId);
+  const paidCents = payments.reduce((sum, payment) => sum + payment.amountCents, 0) - creditedCents;
   const order = findOrderById(db, orderId)!;
   return { paidCents, balanceCents: order.totalCents! - paidCents, createdBy: meta.actor_name,
     internalNotes: meta.internal_notes, deliveryDate: meta.delivery_date, deliveryMode: meta.delivery_mode, deliveryTime: meta.delivery_time ?? null,
     deliveryAddress: readDeliveryAddress(meta.delivery_address),
-    installments: meta.installments, dueDate: meta.due_date, payments, ...(meta.payment_on_pickup ? { paymentOnPickup: true } : {}) };
+    installments: meta.installments, dueDate: meta.due_date, payments, ...(meta.payment_on_pickup ? { paymentOnPickup: true } : {}),
+    ...(creditedCents ? { creditedCents } : {}) };
 }
 
 /**
@@ -326,10 +332,12 @@ const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: 
 
 /**
  * Equipe edita o pedido: troca itens, desconto e observação interna. Pagamentos e entrega não mudam aqui.
- * O total novo nunca fica abaixo do que já foi recebido; mudança de outra pessoa no meio do caminho é recusada.
+ * Total novo abaixo do já recebido: só com creditExcess (a diferença vira crédito do cliente).
+ * Total acima: a diferença fica como saldo, pago na retirada/entrega. Mudança de outra pessoa no meio do caminho é recusada.
  */
 export function replaceOrderItems(db: DatabaseSync, input: {
   orderId: string; items: QuoteCartItem[]; discount?: QuoteDiscount | null; internalNotes?: string; expectedUpdatedAt: string;
+  creditExcess?: { actorId: string; actorName: string };
 }): Order {
   migrateFinance(db);
   const order = findOrderById(db, input.orderId);
@@ -340,11 +348,15 @@ export function replaceOrderItems(db: DatabaseSync, input: {
   const discount = input.discount === undefined ? order.discount : input.discount;
   const subtotal = Math.round(input.items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0) * 100);
   const total = applyDiscount(subtotal, discount ?? null).totalCents;
-  const paid = getOrderFinance(db, order.id)?.paidCents ?? 0;
-  if (total < paid) throw new Error(`O novo total (${money(total)}) fica menor que o valor já recebido (${money(paid)}).`);
   db.exec("BEGIN IMMEDIATE");
   try {
+    const paid = getOrderFinance(db, order.id)?.paidCents ?? 0;
+    if (total < paid && (!input.creditExcess || order.userId === NO_CUSTOMER_OWNER)) {
+      throw new Error(`O novo total (${money(total)}) fica menor que o valor já recebido (${money(paid)}).`);
+    }
     assertCreditAvailable(db, order.userId, Math.round(creditOf(discount) * 100), order.id);
+    if (total < paid) creditOrderExcess(db, { ownerId: order.userId, orderId: order.id, amountCents: paid - total,
+      reason: `Diferença do pedido ${orderCode(order.id)} (ficou menor que o já pago)`, ...input.creditExcess! });
     const result = db.prepare("UPDATE fare_orders SET items_snapshot = ?, total_cents = ?, discount_json = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
       .run(JSON.stringify(input.items), total, discount ? JSON.stringify(discount) : null, new Date().toISOString(), order.id, input.expectedUpdatedAt);
     if (Number(result.changes) !== 1) throw new Error("O pedido foi alterado por outra pessoa. Abra de novo.");

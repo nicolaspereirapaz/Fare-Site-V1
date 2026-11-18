@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import type { QuoteCartItem } from "@/lib/commerce";
 import { createDirectOrder, getOrderFinance, replaceOrderItems } from "@/lib/orders/payments";
 import { findOrderById } from "@/lib/orders/repository";
+import { creditBalanceCents } from "@/lib/customers/credit";
+import { paymentPlan } from "@/lib/orders/paymentPlan";
 
 const item = (id: string, productName: string, quantity: number, unitPrice: number): QuoteCartItem => ({
   id, productName, slug: `avulso:${id}`, quantity, selections: {}, artworkName: null, unitPrice,
@@ -40,5 +42,24 @@ describe("editar pedido", () => {
     db.prepare("UPDATE fare_orders SET status = 'concluido' WHERE id = ?").run(created.id);
     expect(() => replaceOrderItems(db, { orderId: created.id, expectedUpdatedAt: created.updatedAt, items: [item("a", "Caneca", 20, 20)] }))
       .toThrow(/não pode mais ser alterado/);
+  });
+
+  it("diminuir depois de pago: a diferença vira crédito do cliente; aumentar: o cliente paga na retirada", () => {
+    const db = new DatabaseSync(":memory:");
+    const created = order(db, "edit-3", 20000);
+    const actor = { actorId: "s", actorName: "Equipe" };
+    const smaller = replaceOrderItems(db, { orderId: created.id, expectedUpdatedAt: created.updatedAt, items: [item("a", "Caneca", 7, 20)], creditExcess: actor });
+    expect(creditBalanceCents(db, created.userId)).toBe(6000);
+    expect(getOrderFinance(db, created.id)).toMatchObject({ paidCents: 14000, balanceCents: 0, creditedCents: 6000 });
+    expect(paymentPlan(getOrderFinance(db, created.id)!).receipts.at(-1)).toMatchObject({ label: "Virou crédito do cliente" });
+    // Diminuir de novo: só a nova diferença vira crédito.
+    const again = replaceOrderItems(db, { orderId: created.id, expectedUpdatedAt: smaller.updatedAt, items: [item("a", "Caneca", 5, 20)], creditExcess: actor });
+    expect(creditBalanceCents(db, created.userId)).toBe(10000);
+    // Aumentar: o que passou do pago fica como saldo, cobrado na retirada.
+    replaceOrderItems(db, { orderId: created.id, expectedUpdatedAt: again.updatedAt, items: [item("a", "Caneca", 8, 20)] });
+    const finance = getOrderFinance(db, created.id)!;
+    expect(finance).toMatchObject({ paidCents: 10000, balanceCents: 6000 });
+    expect(paymentPlan(finance).remainder).toMatchObject({ label: "Falta pagar · na retirada" });
+    expect(creditBalanceCents(db, created.userId)).toBe(10000);
   });
 });

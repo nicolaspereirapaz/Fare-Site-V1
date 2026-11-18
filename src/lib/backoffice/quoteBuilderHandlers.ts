@@ -349,7 +349,7 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         customerRef: order.userId === NO_CUSTOMER_OWNER ? null : order.userId.startsWith("painel:") ? order.userId : `conta:${order.userId}`,
         customerProfessional: isProfessional(deps.database(), order.userId),
         customer: { name: order.customer.name, company: order.customer.company ?? "", phone: order.customer.phone ?? "", notes: order.customer.notes ?? "" },
-        items, products, paidCents: finance?.paidCents ?? 0,
+        items, products, paidCents: finance?.paidCents ?? 0, deliveryMode: finance?.deliveryMode ?? "retirada",
       });
     },
 
@@ -380,6 +380,8 @@ export function createQuoteBuilderHandlers(deps: QuoteBuilderDeps) {
         });
         const updated = replaceOrderItems(deps.database(), {
           orderId, items: merged, discount, expectedUpdatedAt: String(body.updatedAt ?? ""),
+          // Total abaixo do já pago: a equipe marcou "deixar a diferença como crédito".
+          ...(body.creditExcess === true ? { creditExcess: { actorId: access.session.user.id, actorName: access.session.user.name } } : {}),
           ...(typeof body.internalNotes === "string" ? { internalNotes: body.internalNotes.trim().slice(0, 2000) } : {}),
         });
         return json({ id: updated.id, updatedAt: updated.updatedAt, orderStatus: updated.status });

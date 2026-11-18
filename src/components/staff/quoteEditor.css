@@ -503,3 +503,5 @@
 }
 /* Aviso de crédito do cliente no editor. */
 .qe-credit-notice { margin: 0 0 6px; padding: 6px 10px; border-radius: 8px; background: #e8f4ec; color: #1d6b3a; font-size: 13px; font-weight: 600; }
+.qe-credit-excess { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; cursor: pointer; }
+.qe-credit-excess input { margin-top: 2px; }
