@@ -155,6 +155,47 @@ describe("pedido de fotos", () => {
       expect(near(await pixel(sheet2, 10, 10), [217, 217, 217])).toBe(true); // cinza (recortado)
     });
 
+    it("foto com ímã: montada na folha cinza 15,2 × 10,2 sem borda; 5 × 7 = 4 por folha, 9 × 12 = 1 no meio", async () => {
+      const [a, b, c] = [await upload("ima-a.jpg", 1200, 1600), await upload("ima-b.jpg", 1600, 1200), await upload("ima-c.jpg", 1200, 1600)];
+      const { order } = await createPhotoOrder(database, { id: "cliente-ima" }, {
+        customer: { name: "Rita Ima", phone: "(11) 97777-5555" },
+        delivery: "retirada",
+        photos: [
+          { ...edits, landscape: false, uploadId: a.id, sizeId: "ima-5x7", paper: "brilho", copies: 3 },
+          { ...edits, landscape: true, uploadId: b.id, sizeId: "ima-5x7", paper: "brilho", copies: 2 },
+          { ...edits, landscape: false, uploadId: c.id, sizeId: "ima-9x12", paper: "brilho", copies: 2 },
+        ],
+      }, { staff: true });
+      const five = path.join(order.folder, "5x7 com ímã Brilho");
+      expect(readdirSync(five).sort()).toEqual(["folha-01 (fotos 01 e 02).jpg", "folha-02 (foto 02).jpg"]);
+      expect(readdirSync(path.join(order.folder, "9x12 com ímã Brilho"))).toEqual(["foto-03 (2 copias).jpg"]);
+      expect(order.lines.find((line) => line.sizeId === "ima-5x7")!.realSize).toBe("folha 10,2 × 15,2 cm com 4 por folha, recortar em 5 × 7 cm");
+
+      const pixel = async (file: string, x: number, y: number) => {
+        const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
+        const at = (y * info.width + x) * info.channels;
+        return [data[at], data[at + 1], data[at + 2]];
+      };
+      const near = (rgb: number[], target: number[]) => rgb.every((v, i) => Math.abs(v - target[i]) < 12);
+      const [blue, grey] = [[51, 102, 204], [217, 217, 217]];
+      const sheet1 = path.join(five, "folha-01 (fotos 01 e 02).jpg");
+      const meta = await sharp(sheet1).metadata();
+      expect([meta.width, meta.height, meta.density]).toEqual([1795, 1205, 300]);
+      // 4 fotos 7 × 5 deitadas (2 × 2), sem borda branca: a foto vai até a beirada da posição.
+      for (const [x, y] of [[460, 303], [1335, 303], [460, 901], [1335, 901], [52, 303]]) expect(near(await pixel(sheet1, x, y), blue)).toBe(true);
+      expect(near(await pixel(sheet1, 20, 20), grey)).toBe(true); // canto cinza
+      expect(near(await pixel(sheet1, 897, 303), grey)).toBe(true); // cinza entre as colunas (corte)
+      const sheet2 = path.join(five, "folha-02 (foto 02).jpg");
+      expect(near(await pixel(sheet2, 460, 303), blue)).toBe(true);
+      expect(near(await pixel(sheet2, 1335, 303), grey)).toBe(true); // posição vazia
+
+      const nine = path.join(order.folder, "9x12 com ímã Brilho", "foto-03 (2 copias).jpg");
+      const nineMeta = await sharp(nine).metadata();
+      expect([nineMeta.width, nineMeta.height]).toEqual([1795, 1205]);
+      expect(near(await pixel(nine, 897, 602), blue)).toBe(true); // no meio, girada para deitar
+      expect(near(await pixel(nine, 100, 602), grey)).toBe(true);
+    });
+
     it("recusa foto que não chegou ao servidor e tamanho que não existe", async () => {
       const base = { customer: { name: "Ana", phone: "(11) 98888-7777" }, delivery: "retirada" as const };
       await expect(createPhotoOrder(database, { id: "c" }, { ...base, photos: [{ ...edits, uploadId: "00000000-0000-4000-8000-000000000000", sizeId: "10x15", paper: "brilho", copies: 1 }] }))

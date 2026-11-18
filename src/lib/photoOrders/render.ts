@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { FILTERS, layout, photoCss, sizeById, type Frame, type Photo } from "@/components/fotos/catalog";
+import { FILTERS, layout, photoCss, printSize, sizeById, type Frame, type Photo, type Size } from "@/components/fotos/catalog";
 import { PRINT_DPI } from "./config";
 
 /** O que o cliente escolheu no editor para uma foto (sem a imagem). */
@@ -84,8 +84,10 @@ const JPEG = { quality: 95, chromaSubsampling: "4:4:4" } as const;
 export async function renderPrint(sourceFile: string, size: { width: number; height: number }, edits: PhotoEdits, output: string) {
   const printSize = sizeById(edits.sizeId);
   const frame = printSize.frame;
+  // Foto com ímã de 1 por folha (9 × 12): no meio da folha cinza 15,2 × 10,2.
+  const magnet = magnetSheet(printSize);
+  if (frame || magnet) return renderSheet((frame ?? magnet)!, [await renderSlotCard(sourceFile, size, edits, magnet?.landscape)], output);
   const card = await renderCard(sourceFile, size, edits);
-  if (frame) return renderSheet(frame, [card.buffer], output);
   // Tamanho digitado (revelação/ampliação): sai no papel do tamanho da tabela em que cabe, folha cinza
   // como a da Instax, com a foto no tamanho pedido no centro (a equipe corta). Grande formato: plotter, direto.
   if (printSize.base) return renderOnSheet(card, printSize.base.real ?? printSize.base.size, output);
@@ -109,8 +111,43 @@ export async function renderOnSheet(card: { buffer: Buffer; width: number; heigh
   return { width, height };
 }
 
-/** Folha de foto retrô: fundo cinza e um cartão em cada posição do modelo (Instax: até 2). */
-export async function renderSheet(frame: Frame, cards: Buffer[], output: string) {
+/** Folha com várias fotos: medidas e posições (cm). `landscape`: orientação das fotos nas posições (foto com ímã). */
+export type SheetLayout = Pick<Frame, "sheet" | "slots"> & { landscape?: boolean };
+/** Folha da foto com ímã: 15,2 × 10,2 (deitada), cinza como a da Instax. */
+const MAGNET_SHEET = { width: 15.2, height: 10.2 };
+
+/**
+ * Foto com ímã que cabe na folha 15,2 × 10,2: quantas cabem (na orientação que cabe mais) e onde cada uma fica,
+ * com a sobra dividida por igual entre as fotos e as bordas. Ex.: 5 × 7 = 4, 5 × 5 = 6. Maior que a folha ou retrô: null.
+ */
+export function magnetSheet(size: Size): SheetLayout | null {
+  if (!size.magnet || size.frame) return null;
+  const print = printSize(size);
+  const short = Math.min(print.width, print.height);
+  const long = Math.max(print.width, print.height);
+  const grid = (w: number, h: number) => ({ w, h, cols: Math.floor(MAGNET_SHEET.width / w + 1e-6), rows: Math.floor(MAGNET_SHEET.height / h + 1e-6) });
+  const [best] = [grid(long, short), grid(short, long)].sort((a, b) => b.cols * b.rows - a.cols * a.rows);
+  if (!best.cols || !best.rows) return null;
+  const gapX = (MAGNET_SHEET.width - best.cols * best.w) / (best.cols + 1);
+  const gapY = (MAGNET_SHEET.height - best.rows * best.h) / (best.rows + 1);
+  // 10 × 15 já é a folha inteira: sai como foto normal.
+  if (best.cols * best.rows === 1 && gapX < 0.05 && gapY < 0.05) return null;
+  const slots = Array.from({ length: best.rows * best.cols }, (_, i) => ({
+    left: gapX + (i % best.cols) * (best.w + gapX),
+    top: gapY + Math.floor(i / best.cols) * (best.h + gapY),
+  }));
+  return { sheet: MAGNET_SHEET, slots, landscape: best.w > best.h };
+}
+
+/** Foto para uma posição da folha: com ímã, gira para a orientação da posição (quadrada não gira). */
+export async function renderSlotCard(sourceFile: string, size: { width: number; height: number }, edits: PhotoEdits, landscape?: boolean) {
+  const card = await renderCard(sourceFile, size, edits);
+  if (landscape === undefined || card.width === card.height || card.width > card.height === landscape) return card.buffer;
+  return sharp(card.buffer).rotate(90).png().toBuffer();
+}
+
+/** Folha com fundo cinza e uma foto em cada posição: retrô (Instax: até 2) e foto com ímã (5 × 7: até 4). */
+export async function renderSheet(frame: SheetLayout, cards: Buffer[], output: string) {
   const width = cmToPx(frame.sheet.width);
   const height = cmToPx(frame.sheet.height);
   await sharp({ create: { width, height, channels: 3, background: SHEET_GREY } })

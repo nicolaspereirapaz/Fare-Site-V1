@@ -17,7 +17,7 @@ import { renderOrderHtml } from "@/lib/proposals/html";
 import type { OrderDocument } from "@/lib/proposals/orderDocument";
 import { FARE_COMPANY } from "@/lib/proposals/proposal";
 import { dayFolder, ORDERS_DIR } from "./config";
-import { renderCard, renderPrint, renderSheet, type PhotoEdits } from "./render";
+import { magnetSheet, renderPrint, renderSheet, renderSlotCard, type PhotoEdits, type SheetLayout } from "./render";
 import { codeExists, customerNumberFor, insertPhotoOrder, type PhotoOrder, type PhotoOrderLine, type StoredPhoto } from "./repository";
 import { readUpload, removeUpload, type PhotoUpload } from "./uploads";
 
@@ -290,8 +290,11 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
         await mkdir(path.join(orderDir, folder), { recursive: true });
         const files: PhotoOrderLine["files"] = [];
         const frame = group.size.frame;
-        if (frame && frame.slots.length > 1) {
-          // Instax: 2 cartões por folha. Cada cópia ocupa um cartão; as folhas juntam fotos diferentes.
+        // Instax: 2 cartões por folha. Foto com ímã que cabe na folha 15,2 × 10,2: montada nela, sem borda (5 × 7: 4 por folha).
+        const magnet = magnetSheet(group.size);
+        const sheetLayout: SheetLayout | null = frame && frame.slots.length > 1 ? frame : magnet && magnet.slots.length > 1 ? magnet : null;
+        if (sheetLayout) {
+          // Cada cópia ocupa uma posição; as folhas juntam fotos diferentes.
           // Cartão de cada foto feito uma vez e solto da memória quando a última cópia entra na folha.
           const cards = new Map<Photo, Promise<Buffer>>();
           const remaining = new Map<Photo, number>();
@@ -302,23 +305,25 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
             const original = path.join("Originais", originalName(Number(photo.id)));
             jobs.push(() => copyFile(upload.original, path.join(orderDir, original)));
             remaining.set(photo, photo.copies);
-            const card = () => cards.get(photo) ?? cards.set(photo, renderCard(upload.source, { width: upload.width, height: upload.height }, photo).then((c) => c.buffer)).get(photo)!;
+            const card = () => cards.get(photo) ?? cards.set(photo, renderSlotCard(upload.source, { width: upload.width, height: upload.height }, photo, sheetLayout.landscape)).get(photo)!;
             const used = () => { const left = remaining.get(photo)! - 1; remaining.set(photo, left); if (!left) cards.delete(photo); };
             return Array.from({ length: photo.copies }, () => ({ number, original, card, used }));
           });
-          const sheetDigits = Math.max(2, String(Math.ceil(slots.length / frame.slots.length)).length);
-          for (let start = 0; start < slots.length; start += frame.slots.length) {
-            const sheet = slots.slice(start, start + frame.slots.length);
+          const perSheet = sheetLayout.slots.length;
+          const sheetDigits = Math.max(2, String(Math.ceil(slots.length / perSheet)).length);
+          for (let start = 0; start < slots.length; start += perSheet) {
+            const sheet = slots.slice(start, start + perSheet);
             const numbers = [...new Set(sheet.map((slot) => slot.number))];
-            const file = path.join(folder, `folha-${String(start / frame.slots.length + 1).padStart(sheetDigits, "0")} (foto${numbers.length > 1 ? "s" : ""} ${numbers.join(" e ")}).jpg`);
+            const list = numbers.length > 1 ? `${numbers.slice(0, -1).join(", ")} e ${numbers.at(-1)}` : numbers[0];
+            const file = path.join(folder, `folha-${String(start / perSheet + 1).padStart(sheetDigits, "0")} (foto${numbers.length > 1 ? "s" : ""} ${list}).jpg`);
             files.push({ file, copies: 1, original: sheet[0].original });
             jobs.push(async () => {
-              await renderSheet(frame, await Promise.all(sheet.map((slot) => slot.card())), path.join(orderDir, file));
+              await renderSheet(sheetLayout, await Promise.all(sheet.map((slot) => slot.card())), path.join(orderDir, file));
               sheet.forEach((slot) => slot.used());
             });
           }
         }
-        for (const listed of frame && frame.slots.length > 1 ? [] : line.photos) {
+        for (const listed of sheetLayout ? [] : line.photos) {
           const photo = asPhotos[Number(listed.id)];
           const { number } = numbered.find((item) => item.photo === photo)!;
           const upload = uploads.get(data.photos[Number(photo.id)].uploadId)!;
@@ -333,7 +338,10 @@ export async function assemblePhotoFolder(database: DatabaseSync, input: {
         lines.push({
           sizeId: group.size.id, title: `${groupOf(group.size.group).item} ${group.size.label}`, paper: paperLabel(line.paper), folder,
           // Tamanho digitado: sai na folha cinza do tamanho da tabela; a equipe recorta no tamanho pedido.
-          realSize: group.size.base ? `papel ${group.size.base.label}, recortar em ${group.size.label}` : realLabel(group.size), photos: line.photos.length, copies: line.copies,
+          realSize: group.size.base ? `papel ${group.size.base.label}, recortar em ${group.size.label}`
+            : magnet ? `folha 10,2 × 15,2 cm com ${magnet.slots.length} por folha, recortar em ${group.size.label.replace(" com ímã", "")}`
+            : realLabel(group.size),
+          photos: line.photos.length, copies: line.copies,
           unitCents: Math.round(unit * 100), totalCents: Math.round(line.copies * unit * 100), files,
         });
       }
