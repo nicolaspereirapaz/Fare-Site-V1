@@ -10,6 +10,13 @@ import { promisify } from "node:util";
 export const PRINT_DIR = process.env.FARE_PRINT_DIR || path.join(process.cwd(), "data", "impressao");
 const run = promisify(execFile);
 
+/** Comando que transforma o PDF em PNG 300 dpi: Poppler (`pdftoppm -png`, Linux) ou, se FARE_PDFTOPNG
+ *  apontar para ele, o `pdftopng` do Xpdf (Windows do oraculo: o pdftoppm do Xpdf não tem -png). */
+export function pngCommand(pdf: string, root: string, env: NodeJS.ProcessEnv = process.env): [string, string[]] {
+  const xpdf = env.FARE_PDFTOPNG?.trim();
+  return xpdf ? [xpdf, ["-r", "300", pdf, root]] : ["pdftoppm", ["-r", "300", "-png", pdf, root]];
+}
+
 /** Coloca um PDF na fila. Devolve quantas páginas entraram. Sem pdftoppm no servidor: erro claro. */
 export async function queuePdfForPrinting(pdf: Uint8Array, name: string, dir = PRINT_DIR): Promise<number> {
   await mkdir(dir, { recursive: true });
@@ -20,7 +27,8 @@ export async function queuePdfForPrinting(pdf: Uint8Array, name: string, dir = P
     const base = `${Date.now()}-${safe}`;
     await writeFile(path.join(work, "doc.pdf"), pdf);
     try {
-      await run("pdftoppm", ["-r", "300", "-png", path.join(work, "doc.pdf"), path.join(work, base)], { timeout: 60_000 });
+      const [command, args] = pngCommand(path.join(work, "doc.pdf"), path.join(work, base));
+      await run(command, args, { timeout: 60_000 });
     } catch (error) {
       throw new Error((error as NodeJS.ErrnoException).code === "ENOENT" ? "Impressão direta não configurada neste servidor (falta pdftoppm)." : "Não foi possível preparar a impressão.");
     }
