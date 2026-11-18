@@ -12,7 +12,7 @@ const run = promisify(execFile);
 
 /** Comando que transforma o PDF em PNG 300 dpi: Poppler (`pdftoppm -png`, Linux) ou, se FARE_PDFTOPNG
  *  apontar para ele, o `pdftopng` do Xpdf (Windows do oraculo: o pdftoppm do Xpdf não tem -png). */
-export function pngCommand(pdf: string, root: string, env: NodeJS.ProcessEnv = process.env): [string, string[]] {
+export function pngCommand(pdf: string, root: string, env: Partial<NodeJS.ProcessEnv> = process.env): [string, string[]] {
   const xpdf = env.FARE_PDFTOPNG?.trim();
   return xpdf ? [xpdf, ["-r", "300", pdf, root]] : ["pdftoppm", ["-r", "300", "-png", pdf, root]];
 }
