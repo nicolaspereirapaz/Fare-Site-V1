@@ -10,7 +10,8 @@ export const staffDatabasePath = process.env.STAFF_DATABASE_PATH ?? path.join(pr
 mkdirSync(path.dirname(staffDatabasePath), { recursive: true });
 
 const globalStaff = globalThis as typeof globalThis & { fareStaffDatabase?: DatabaseSync };
-export const staffDatabase = globalStaff.fareStaffDatabase ?? new DatabaseSync(staffDatabasePath);
+// timeout: espera o banco ocupado (build em paralelo, backup) em vez de falhar com "database is locked".
+export const staffDatabase = globalStaff.fareStaffDatabase ?? new DatabaseSync(staffDatabasePath, { timeout: 5000 });
 if (process.env.NODE_ENV !== "production") globalStaff.fareStaffDatabase = staffDatabase;
 migrateStaffDatabase(staffDatabase);
 

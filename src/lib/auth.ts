@@ -11,7 +11,8 @@ const globalAuth = globalThis as typeof globalThis & {
   fareFotoDatabase?: DatabaseSync;
 };
 
-export const database = globalAuth.fareFotoDatabase ?? new DatabaseSync(databasePath);
+// timeout: espera o banco ocupado (outro processo gravando: build em paralelo, backup) em vez de falhar na hora.
+export const database = globalAuth.fareFotoDatabase ?? new DatabaseSync(databasePath, { timeout: 5000 });
 if (process.env.NODE_ENV !== "production") globalAuth.fareFotoDatabase = database;
 
 export const auth = betterAuth(buildAuthOptions(database));
