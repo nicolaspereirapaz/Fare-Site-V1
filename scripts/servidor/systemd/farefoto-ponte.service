@@ -1,0 +1,16 @@
+[Unit]
+Description=Ponte WhatsApp do numero da loja (painel de atendimento Fare Foto, porta 3002, so localhost)
+After=network-online.target farefoto.service
+Wants=network-online.target
+
+[Service]
+User=fare
+WorkingDirectory=/home/fare/hermes-painel/extensions/fare_atendimento
+Environment=NODE_NO_WARNINGS=1
+ExecStart=/usr/bin/node /home/fare/hermes-painel/extensions/fare_atendimento/ponte_loja.mjs
+Restart=always
+RestartSec=5
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

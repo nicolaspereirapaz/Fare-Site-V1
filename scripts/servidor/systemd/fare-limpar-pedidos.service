@@ -1,0 +1,6 @@
+[Unit]
+Description=Apaga da VPS as fotos dos pedidos com mais de 3 dias ja confirmadas pelo oraculo
+[Service]
+Type=oneshot
+Environment=FARE_PEDIDOS_DIAS=3
+ExecStart=/usr/local/bin/fare-limpar-pedidos

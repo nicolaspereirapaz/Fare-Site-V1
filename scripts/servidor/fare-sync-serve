@@ -1,0 +1,23 @@
+#!/bin/sh
+# Único comando que a chave do oraculo pode rodar.
+#   list / get          : pedidos (/srv/fare/pedidos) para o D:\Digital
+#   print-list / print-get NOME / print-done NOME : fila de impressão (/srv/fare/impressao)
+#   backup-get          : último ponto de restauração dos bancos (/srv/fare/backups/ponto-restauracao), em tar
+#   midias-list / midias-get : mídias das conversas (/srv/fare/data/atendimento-midias) para o backup da loja
+#   ack                 : o oraculo confirma ("tamanho<TAB>caminho" na entrada) o que já gravou no D:\Digital;
+#                         só isso é apagado da VPS depois de 3 dias (fare-limpar-pedidos)
+set -- $SSH_ORIGINAL_COMMAND
+case "$1" in
+  list) cd /srv/fare/pedidos && find . -type f -printf "%s\t%P\n" ;;
+  get) cd /srv/fare/pedidos && grep -v -e "^/" -e "\.\./" | tar --format=pax -cf - --no-recursion -T - ;;
+  print-list) cd /srv/fare/impressao && ls -1 -- *.png 2>/dev/null || true ;;
+  print-get|print-done)
+    case "$2" in ""|*/*|.*) echo "nome invalido" >&2; exit 1 ;; esac
+    f="/srv/fare/impressao/$2"; [ -f "$f" ] || { echo "nao existe" >&2; exit 1; }
+    if [ "$1" = print-get ]; then cat "$f"; else rm -f "$f"; fi ;;
+  backup-get) cd /srv/fare/backups && tar --format=pax -cf - ponto-restauracao ;;
+  midias-list) cd /srv/fare/data/atendimento-midias && find . -type f -printf "%s\t%P\n" ;;
+  midias-get) cd /srv/fare/data/atendimento-midias && grep -v -e "^/" -e "\.\./" | tar --format=pax -cf - --no-recursion -T - ;;
+  ack) TAB=$(printf "\t"); grep -E "^[0-9]+${TAB}[^/]" | grep -v -e "\.\./" | flock /var/lib/fare-sync/confirmados.lock tee -a /var/lib/fare-sync/confirmados.txt | wc -l ;;
+  *) echo "comando nao permitido" >&2; exit 1 ;;
+esac

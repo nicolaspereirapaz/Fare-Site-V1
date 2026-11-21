@@ -1,0 +1,12 @@
+#!/usr/bin/python3
+# limitar BYTES_POR_SEG: copia stdin->stdout no máximo nessa taxa (o TCP segura quem envia).
+import sys, time
+rate = int(sys.argv[1]); inp = sys.stdin.buffer; out = sys.stdout.buffer
+start = time.monotonic(); total = 0
+while True:
+    chunk = inp.read1(65536)
+    if not chunk: break
+    out.write(chunk); total += len(chunk)
+    ahead = total / rate - (time.monotonic() - start)
+    if ahead > 0: time.sleep(ahead)
+out.flush()

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy automático no servidor (Google Cloud): roda a cada 2 min (farefoto-deploy.timer).
+# Deploy automático no servidor (VPS): roda a cada 2 min (farefoto-deploy.timer).
 # Se o GitHub (master) tem commit novo: build numa cópia; só troca o site se o build passar.
 # Log: /home/fare/deploy.log   Forçar: FORCE=1 ~/auto-deploy.sh
 set -euo pipefail
@@ -15,6 +15,15 @@ git fetch -q origin master
 NEW=$(git rev-parse origin/master)
 OLD=$(cat /home/fare/deployed-commit 2>/dev/null || echo none)
 [ "$NEW" = "$OLD" ] && [ -z "${FORCE:-}" ] && exit 0
+
+# Commit que só mexe nos scripts dos servidores não muda o site: marca como publicado sem build nem reinício
+# (reiniciar derruba quem está enviando fotos).
+if [ -z "${FORCE:-}" ] && git cat-file -e "$OLD^{commit}" 2>/dev/null \
+   && git diff --quiet "$OLD" "$NEW" -- . ':(exclude)scripts/servidor' ':(exclude)scripts/oraculo' ':(exclude)scripts/ponte'; then
+  echo "$NEW" > /home/fare/deployed-commit
+  log "sem build: $OLD -> $NEW só mexe em scripts/servidor|oraculo|ponte ($(git log -1 --format=%s origin/master))"
+  exit 0
+fi
 
 log "deploy $OLD -> $NEW ($(git log -1 --format=%s origin/master))"
 LOCK_BEFORE=$(git rev-parse HEAD:package-lock.json 2>/dev/null || echo none)

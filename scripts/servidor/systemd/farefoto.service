@@ -1,0 +1,18 @@
+[Unit]
+Description=Site Fare Foto
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=farefoto
+WorkingDirectory=/srv/fare/app
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node --no-warnings server.js
+Restart=always
+RestartSec=5
+# Fotos grandes: sem limite de memória do Node abaixo do que a máquina tem
+Environment=NODE_OPTIONS=--max-old-space-size=4096
+
+[Install]
+WantedBy=multi-user.target

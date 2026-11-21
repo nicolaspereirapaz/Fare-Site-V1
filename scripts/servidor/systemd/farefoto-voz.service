@@ -1,0 +1,17 @@
+[Unit]
+Description=Transcricao de audio do painel Fare Foto (porta 8652, so localhost)
+After=network-online.target
+
+[Service]
+User=fare
+WorkingDirectory=/home/fare/hermes-painel
+Environment=PYTHONUTF8=1
+ExecStart=/home/fare/hermes-painel/voz-venv/bin/python /home/fare/hermes-painel/extensions/fare_atendimento/painel_voz.py
+Restart=always
+RestartSec=10
+# Prioridade menor que o site e limite de memoria: o site nao fica lento.
+Nice=10
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Ponto de restauracao dos bancos do site Fare Foto (sempre um so, sobrescrito)
+[Service]
+Type=oneshot
+User=farefoto
+Environment=FARE_DATA_DIR=/srv/fare/data FARE_BACKUP_DIR=/srv/fare/backups
+ExecStart=/usr/bin/node --no-warnings /srv/fare/backup-dados.mjs
+# o oraculo (fare-sync, grupo farefoto) puxa a copia
+ExecStartPost=/bin/chmod -R g+rX /srv/fare/backups

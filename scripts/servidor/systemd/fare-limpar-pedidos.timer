@@ -1,0 +1,7 @@
+[Unit]
+Description=Limpeza das fotos dos pedidos na VPS (de hora em hora)
+[Timer]
+OnCalendar=hourly
+Persistent=true
+[Install]
+WantedBy=timers.target

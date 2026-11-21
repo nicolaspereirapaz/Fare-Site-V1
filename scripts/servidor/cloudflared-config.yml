@@ -1,0 +1,10 @@
+tunnel: 6d12add2-aa40-4d6e-a330-fd4a3287fbe9
+credentials-file: /etc/cloudflared/6d12add2-aa40-4d6e-a330-fd4a3287fbe9.json
+ingress:
+  - hostname: www.farefoto.com.br
+    service: http://localhost:3000
+  - hostname: farefoto.com.br
+    service: http://localhost:3000
+  - hostname: reserva.farefoto.com.br
+    service: http://localhost:3000
+  - service: http_status:404

@@ -1,0 +1,18 @@
+[Unit]
+Description=IA do painel de atendimento Fare Foto (porta 8651, so localhost)
+After=network-online.target
+
+[Service]
+User=fare
+WorkingDirectory=/home/fare/hermes-agent
+Environment=HERMES_HOME=/home/fare/hermes-painel
+Environment=PYTHONPATH=/home/fare/hermes-agent
+Environment=PYTHONUTF8=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/fare/hermes-agent/.venv/bin/python /home/fare/hermes-painel/extensions/fare_atendimento/painel_ia.py
+Restart=always
+RestartSec=5
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

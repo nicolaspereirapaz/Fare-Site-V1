@@ -1,0 +1,6 @@
+[Unit]
+Description=Deploy automatico do site Fare Foto (GitHub master)
+[Service]
+Type=oneshot
+User=fare
+ExecStart=/home/fare/auto-deploy.sh

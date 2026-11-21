@@ -1,0 +1,38 @@
+#!/usr/bin/python3
+# Apaga da VPS os arquivos dos pedidos (/srv/fare/pedidos) com mais de FARE_PEDIDOS_DIAS (padrão 3) dias
+# QUE O ORACULO JÁ CONFIRMOU ter baixado para o D:\Digital (fare-sync ack -> /var/lib/fare-sync/confirmados.txt).
+# Arquivo não confirmado nunca é apagado (oraculo fora do ar = nada se perde). Roda de hora em hora (fare-limpar-pedidos.timer).
+import fcntl, os, pwd, time
+BASE = "/srv/fare/pedidos"
+DIR = "/var/lib/fare-sync"
+CONF = f"{DIR}/confirmados.txt"
+DIAS = float(os.environ.get("FARE_PEDIDOS_DIAS", "3"))
+limite = time.time() - DIAS * 86400
+with open(f"{DIR}/confirmados.lock", "a") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)  # o ack do oraculo espera a limpeza terminar
+    try:
+        conf = set(l.rstrip("\n") for l in open(CONF, encoding="utf-8", errors="surrogateescape"))
+    except FileNotFoundError:
+        conf = set()
+    apagados, total, ficam = 0, 0, set()
+    for root, _dirs, files in os.walk(BASE):
+        for f in files:
+            p = os.path.join(root, f)
+            st = os.lstat(p)
+            key = f"{st.st_size}\t{os.path.relpath(p, BASE)}"
+            if key not in conf:
+                continue
+            if st.st_mtime < limite:
+                os.remove(p); apagados += 1; total += st.st_size
+            else:
+                ficam.add(key)
+    for root, _dirs, _files in os.walk(BASE, topdown=False):
+        if root != BASE and not os.listdir(root):
+            os.rmdir(root)
+    # A lista guarda só o que ainda existe na VPS (não cresce para sempre).
+    tmp = CONF + ".novo"
+    with open(tmp, "w", encoding="utf-8", errors="surrogateescape") as out:
+        out.writelines(k + "\n" for k in sorted(ficam))
+    u = pwd.getpwnam("fare-sync"); os.chown(tmp, u.pw_uid, u.pw_gid)
+    os.replace(tmp, CONF)
+print(f"limpeza: {apagados} arquivo(s) apagado(s), {total / 1e9:.2f} GB; {len(ficam)} confirmado(s) ainda dentro de {DIAS:g} dias")

@@ -7,8 +7,8 @@ $dir = "C:\FareFoto\sync"
 $dest = "D:\Digital"
 $log = "C:\FareFoto\logs\pedidos-sync.log"
 $ssh = "C:\Windows\System32\OpenSSH\ssh.exe"
-$remote = "fare-sync@100.75.165.119"
-$opts = @("-i", "$dir\id_ed25519", "-o", "UserKnownHostsFile=$dir\known_hosts", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20")
+$remote = "fare-sync@IP-DA-VPS"
+$opts = @("-p", "63214", "-i", "$dir\id_ed25519", "-o", "UserKnownHostsFile=$dir\known_hosts", "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20")
 function Log($text) { Add-Content -Path $log -Value "$(Get-Date -Format s) $text" -Encoding UTF8 }
 # ssh direto, com entrada e saída em arquivo: por cmd ou capturado pelo PowerShell, o ssh do Windows trava.
 function Ssh($command, $inFile, $outFile) {
@@ -27,6 +27,10 @@ try {
   # Pasta nova chega em segundos, não no minuto seguinte. Erro encerra a rodada (1 aviso por minuto no log).
   $until = (Get-Date).AddSeconds(50)
   do {
+    # 0. Confirma para a VPS o que já está gravado no D:\Digital: a VPS só apaga (depois de 3 dias) o que foi confirmado.
+    $ackFile = "$dir\confirmar.txt"
+    if ((Test-Path $ackFile) -and (Get-Item $ackFile).Length) { Ssh "ack" $ackFile "$dir\ack-saida.txt"; Remove-Item $ackFile }
+
     # 1. O que existe no site: "tamanho<TAB>dia/pasta/arquivo". Saída do ssh sempre para arquivo:
     #    capturada direto pelo PowerShell, o ssh do Windows trava.
     Ssh "list" "NUL" "$dir\lista.txt"
@@ -44,10 +48,27 @@ try {
       [IO.File]::WriteAllText($list, (($need | ForEach-Object { $_.Rel }) -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
       $tarFile = "$dir\baixar.tar"
       Ssh "get" $list $tarFile
-      & tar.exe -xf $tarFile -C $dest
-      if ($LASTEXITCODE -ne 0) { throw "falha ao abrir o pacote ($LASTEXITCODE)" }
+      # tar por Start-Process: o erro dele vai para arquivo (redirecionado no PowerShell 5.1 viraria exceção).
+      $p = Start-Process -FilePath "$env:SystemRoot\System32\tar.exe" -ArgumentList @("-xf", $tarFile, "-C", $dest) `
+        -RedirectStandardError "$dir\tar-erro.txt" -NoNewWindow -PassThru
+      $null = $p.Handle
+      $p.WaitForExit()
+      $missing = @()
+      if ($p.ExitCode -ne 0) {
+        # Algum arquivo não foi gravado (ex.: emoji no nome, que o tar do Windows 10 não aceita). Anota o pacote
+        # mesmo assim: senão toda rodada baixa tudo de novo (em nov/2026 isso gerou ~1,5 TB de tráfego pago no Google).
+        # shortcut: arquivo que falhou não é tentado de novo; sai no log como ERRO para buscar à mão.
+        $missing = @($need | Where-Object {
+          try { (Get-Item -LiteralPath (Join-Path $dest ($_.Rel -replace "/", "\")) -ErrorAction Stop).Length -ne $_.Size } catch { $true }
+        })
+        $tarErr = (Get-Content "$dir\tar-erro.txt" -Raw -Encoding UTF8) -replace "\s+", " "
+        Log "ERRO: tar ($($p.ExitCode)) não gravou $($missing.Count) arquivo(s): $(($missing | ForEach-Object { $_.Rel }) -join ', ') | $tarErr"
+      }
       Remove-Item $tarFile -ErrorAction SilentlyContinue
       [IO.File]::AppendAllLines($stateFile, [string[]]($need | ForEach-Object { "$($_.Size)`t$($_.Rel)" }), (New-Object Text.UTF8Encoding $false))
+      # Só confirma o que foi gravado de verdade (o que o tar não gravou continua na VPS para buscar à mão).
+      $ok = @($need | Where-Object { $missing -notcontains $_ })
+      if ($ok.Count) { [IO.File]::AppendAllLines($ackFile, [string[]]($ok | ForEach-Object { "$($_.Size)`t$($_.Rel)" }), (New-Object Text.UTF8Encoding $false)) }
       Log "baixados $($need.Count) arquivo(s): $((($need | ForEach-Object { ($_.Rel -split '/')[0..1] -join '/' }) | Select-Object -Unique) -join ', ')"
     }
 
