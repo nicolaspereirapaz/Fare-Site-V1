@@ -76,6 +76,11 @@ describe("proposta para o cliente", () => {
     expect(() => buildProposal({ ...QUOTE, items: [{ ...ITEMS[1], unitPrice: null }] }, { seller: "Bia", now: NOW, siteUrl: SITE })).toThrow(/sem preço/i);
   });
 
+  it("gera com item de preço 0 (grátis)", () => {
+    const proposal = buildProposal({ ...QUOTE, items: [{ ...ITEMS[1], unitPrice: 0 }] }, { seller: "Bia", now: NOW, siteUrl: SITE });
+    expect(proposal.items[0].unitPrice).toBe(0);
+  });
+
   it("orçamento fechado não gera proposta", () => {
     expect(() => buildProposal({ ...QUOTE, status: "encerrado" }, { seller: "Bia", now: NOW, siteUrl: SITE })).toThrow(/fechado/i);
   });

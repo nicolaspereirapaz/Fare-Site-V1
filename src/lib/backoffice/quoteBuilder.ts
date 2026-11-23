@@ -172,7 +172,8 @@ export function buildQuoteItems(
       // Nunca troca de cor sozinho: a cor escolhida pode ter saído do catálogo.
       if (product && !variant) throw new Error(product.variants.length ? `A cor "${draft.source === "catalogo" ? draft.variant : ""}" não está mais disponível. Escolha outra.` : "Produto sem cores disponíveis.");
       if (draft.costOverride !== undefined && !(draft.costOverride >= 0)) throw new Error("Custo do produto inválido.");
-      if (draft.priceOverride !== undefined && !(cents(draft.priceOverride) > 0)) throw new Error("Preço de venda inválido.");
+      // 0 vale (item grátis); valor que só arredonda para R$ 0,00 (ex.: 0,004) é erro de digitação.
+      if (draft.priceOverride !== undefined && (!(cents(draft.priceOverride) >= 0) || (draft.priceOverride !== 0 && cents(draft.priceOverride) === 0))) throw new Error("Preço de venda inválido.");
       const productCost = draft.costOverride ?? (variant ? variant.cost : (draft as Extract<DraftItem, { source: "avulso" }>).cost);
       // Fora do catálogo: só o transporte digitado (total da quantidade). Catálogo: frete fixo do fornecedor.
       const freteFornecedor = draft.source === "avulso" ? draft.transport ?? 0 : FRETE_FORNECEDOR_PRODUTO;

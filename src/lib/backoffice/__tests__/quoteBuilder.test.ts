@@ -181,8 +181,12 @@ describe("valores digitados à mão pela equipe", () => {
   it("valores à mão inválidos viram erro no item", () => {
     const negative = buildQuoteItems([{ ...base, priceOverride: -1 }], lookup, actor, NOW);
     expect(negative.preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
+  });
+
+  it("preço de venda 0 vale (item grátis)", () => {
     const zero = buildQuoteItems([{ ...base, priceOverride: 0 }], lookup, actor, NOW);
-    expect(zero.preview[0]).toMatchObject({ ok: false, error: "Preço de venda inválido." });
+    expect(zero.preview[0]).toMatchObject({ ok: true, unitPrice: 0 });
+    expect(zero.items[0]).toMatchObject({ unitPrice: 0 });
   });
 
   it("lê os valores do navegador com vírgula; vazio = automático", () => {

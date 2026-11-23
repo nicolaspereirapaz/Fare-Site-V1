@@ -90,7 +90,7 @@ export function buildProposal(
 ): Proposal {
   if (!OPEN.includes(quote.status)) throw new Error("Este orçamento já foi fechado.");
   if (!quote.items.length) throw new Error("O orçamento não tem itens.");
-  const missing = quote.items.find((item) => item.unitPrice === null || !(item.unitPrice > 0));
+  const missing = quote.items.find((item) => item.unitPrice === null || !(item.unitPrice >= 0));
   if (missing) throw new Error(`"${missing.productName}" está sem preço. Abra o orçamento e salve os itens.`);
 
   const now = options.now ?? new Date();

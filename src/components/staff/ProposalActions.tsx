@@ -7,10 +7,16 @@ const formatDateTime = (iso: string) => new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
 }).format(new Date(iso));
 
+/** Número do cliente a partir do link wa.me que o servidor monta (null = cliente sem WhatsApp). */
+export function phoneFromWhatsAppUrl(url: string | null | undefined): string | null {
+  const digits = url ? /wa\.me\/(\d{10,15})/.exec(url)?.[1] : undefined;
+  return digits ?? null;
+}
+
 /**
  * Proposta do orçamento: ver/baixar o HTML e enviar pelo WhatsApp.
- * "Enviar" abre a conversa com a mensagem pronta e passa o orçamento para "Em negociação";
- * o HTML é anexado pelo vendedor na conversa (o WhatsApp não aceita anexo por link).
+ * "Enviar" passa o orçamento para "Em negociação" e abre a conversa no Atendimento
+ * com o HTML já anexado e "Segue proposta" escrito; o vendedor confere e envia.
  */
 export function ProposalActions({ quoteId, orderId, sentAt = null, blocked, onSent }: { quoteId?: string; orderId?: string; sentAt?: string | null; blocked: string | null; onSent: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -27,8 +33,10 @@ export function ProposalActions({ quoteId, orderId, sentAt = null, blocked, onSe
       const response = await fetch(base, { method: "POST" });
       const payload = (await response.json()) as { whatsappUrl?: string | null; text?: string; message?: string };
       if (!response.ok) throw new Error(payload.message ?? "Não foi possível gerar a proposta.");
-      if (payload.whatsappUrl && tab) {
-        tab.location.href = payload.whatsappUrl;
+      const phone = phoneFromWhatsAppUrl(payload.whatsappUrl);
+      if (phone && tab) {
+        const texto = orderId ? "Segue o pedido" : "Segue proposta";
+        tab.location.href = `/equipe/atendimento?${new URLSearchParams({ telefone: phone, anexo: base, texto })}`;
       } else {
         tab?.close();
         if (payload.text) {
@@ -63,7 +71,7 @@ export function ProposalActions({ quoteId, orderId, sentAt = null, blocked, onSe
           </button>
         </div>
       )}
-      {!blocked ? <p className="kb-proposal-hint">A conversa abre com a mensagem pronta. Baixe o HTML e anexe na conversa.</p> : null}
+      {!blocked ? <p className="kb-proposal-hint">Abre a conversa no Atendimento com o HTML anexado e a mensagem pronta.</p> : null}
       {copied ? <p className="kb-proposal-hint">Cliente sem WhatsApp cadastrado: a mensagem foi copiada.</p> : null}
       {error ? <p className="kb-dialog-warning" role="alert">{error}</p> : null}
     </section>

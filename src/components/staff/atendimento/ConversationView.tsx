@@ -1062,6 +1062,35 @@ function Composer({
     if (picked.length) setFiles((current) => [...current, ...picked].slice(0, 50));
   };
 
+  // Vindo do "Enviar no WhatsApp" do orçamento/pedido (?anexo=&texto=): o campo já abre com o documento anexado e a mensagem.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const attachment = params.get("anexo");
+    const draft = params.get("texto");
+    if (!attachment && !draft) return;
+    // Só na conversa do cliente do documento (últimos 8 dígitos: com/sem 55 e nono dígito).
+    const wanted = (params.get("telefone") ?? "").replace(/\D/g, "").slice(-8);
+    if (!wanted || conversation.phone.replace(/\D/g, "").slice(-8) !== wanted) return;
+    params.delete("anexo");
+    params.delete("texto");
+    window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
+    // Sem cancelamento: os parâmetros já saíram da URL, então uma segunda execução (StrictMode) não teria o anexo.
+    void (async () => {
+      if (draft) setText(draft.slice(0, 2000));
+      // Só documentos do próprio site (área da equipe).
+      if (!attachment || !/^\/api\/backoffice\/[\w/-]+$/.test(attachment)) return;
+      try {
+        const response = await fetch(attachment);
+        if (!response.ok) throw new Error();
+        const name = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "documento.html";
+        const blob = await response.blob();
+        setFiles((current) => [...current, new File([blob], name, { type: blob.type || "text/html" })]);
+      } catch {
+        setError("Não foi possível anexar o documento. Baixe o HTML e anexe na conversa.");
+      }
+    })();
+  }, [conversation.phone]);
+
   /** Fotos/arquivos um por um, na ordem; o texto digitado vai como legenda da primeira. */
   async function sendFiles() {
     if (!files.length || sending) return;
