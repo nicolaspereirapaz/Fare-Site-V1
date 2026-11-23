@@ -435,7 +435,7 @@ function ChatPanel({
         if (data.messages.length) {
           lastSeq.current = Math.max(lastSeq.current, ...data.messages.map((message) => message.seq));
           // Histórico antigo do WhatsApp pode chegar depois: mantém em ordem de data.
-          setMessages((list) => (first ? data.messages : byDate([...list, ...data.messages])));
+          setMessages((list) => (first ? data.messages : mergeMessages(list, data.messages)));
         }
         if(data.menuSelections?.length){const selections=new Map(data.menuSelections.map(m=>[m.id,m.menuSelection]));setMessages(list=>list.map(m=>selections.has(m.id)?{...m,menuSelection:selections.get(m.id)}:m));}
         if (data.customers) setCustomers(data.customers);
@@ -749,6 +749,16 @@ function DeliveryMark({ message, onResend }: { message: Message; onResend: (id: 
 }
 
 const byDate = (list: Message[]) => list.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.seq - b.seq));
+
+/**
+ * Junta as mensagens novas sem repetir: a consulta que já estava em andamento quando o vendedor
+ * enviou devolve a mesma mensagem que o envio acabou de pôr na tela (aparecia duplicada).
+ */
+export function mergeMessages(list: Message[], incoming: Message[]): Message[] {
+  const byId = new Map(list.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, { ...byId.get(message.id), ...message });
+  return byDate([...byId.values()]);
+}
 
 function dayLabelFor(message: Message, previous?: Message) {
   const date = new Date(message.createdAt);
