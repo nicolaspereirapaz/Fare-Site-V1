@@ -45,6 +45,16 @@ const PHOTOS: { src: string; alt: string; tags: Tag[]; group?: SizeGroup }[] = [
       { label: "10 × 15", x: 88.2, y: 70.4 },
     ],
   },
+  { src: "/images/revelacao/07-painel-madeira.webp", alt: "Painel fotográfico em madeira com laterais pretas encostado na parede, com a foto de uma família sentada no campo ao pôr do sol", tags: [{ label: "40 × 60 cm", x: 50, y: 17.5 }], group: "painel" },
+  {
+    src: "/images/revelacao/08-painel-madeira-tamanhos.webp",
+    alt: "Três painéis fotográficos em madeira de 3,5 cm com laterais pretas, do maior ao menor: praia, montanhas com lago e um cachorro",
+    tags: [
+      { label: "60 × 90 cm", x: 32.5, y: 9.8 },
+      { label: "30 × 40", x: 70.8, y: 51.5 },
+      { label: "15 × 21", x: 90, y: 65.5 },
+    ],
+  },
 ];
 
 /** Aba de "Tamanhos e preços" escolhida (detail = SizeGroup): a galeria vai para a foto desse tipo. */
