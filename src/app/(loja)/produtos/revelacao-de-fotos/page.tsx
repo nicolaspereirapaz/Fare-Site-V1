@@ -26,7 +26,8 @@ export const metadata: Metadata = {
 
 const PHOTO_FAQ: Faq[] = [
   { q: "Onde revelar fotos em Jundiaí?", a: "Na Fare Foto, na Rua do Rosário, 68, no Centro de Jundiaí. Você envia as fotos pelo site (ou pelo WhatsApp) e retira na loja ou recebe em casa." },
-  { q: "Em quanto tempo a revelação de fotos fica pronta?", a: "Revelação e ampliações até 30 × 45 cm ficam prontas em 1 hora após o pagamento. Grandes formatos ficam prontos em 3 dias úteis." },
+  { q: "Em quanto tempo a revelação de fotos fica pronta?", a: "Revelação e ampliações até 30 × 45 cm ficam prontas em 1 hora após o pagamento. Grandes formatos e painel em madeira ficam prontos em 3 dias úteis." },
+  { q: "Vocês fazem painel fotográfico em madeira?", a: "Sim. A foto sai em papel fotográfico profissional, brilho ou fosco, aplicada em painel de MDF de 3,5 cm com as laterais pintadas de preto. Tamanhos de 15 × 21 a 60 × 150 cm, a partir de R$ 100,00, prontos em 3 dias úteis." },
   { q: "Quanto custa revelar uma foto 10x15?", a: "Uma foto 10 × 15 sai por R$ 6,00. Quanto mais fotos do mesmo tamanho, menor o preço: R$ 3,50 de 2 a 9 fotos, R$ 3,00 de 10 a 50 fotos, chegando a R$ 1,00 por foto a partir de 1000 fotos." },
   { q: "Como imprimir fotos do celular?", a: "Pelo site: envie as fotos, escolha o tamanho (10 × 15, 13 × 18, 15 × 21, ampliações ou grandes formatos) e o papel brilho ou fosco, ajuste o corte e finalize. As fotos chegam para a gente na qualidade original, sem a compressão do WhatsApp." },
   { q: "Vocês imprimem fotos estilo Polaroid e Instax?", a: "Sim. As fotos retrô saem com a moldura branca nos modelos Polaroid (9 × 11 cm) e Instax (5,5 × 8,5 cm), prontas em 1 hora." },
@@ -93,7 +94,7 @@ export default async function RevelacaoPage({ searchParams }: { searchParams: Pr
           <ol className="product-steps">
             <li><Upload aria-hidden="true" /><span><strong>1. Envie e ajuste</strong>Tamanho, papel, corte, borda e filtros no próprio site.</span></li>
             <li><PackageCheck aria-hidden="true" /><span><strong>2. A equipe confere</strong>Olhamos as fotos e o pedido antes de imprimir.</span></li>
-            <li><Clock aria-hidden="true" /><span><strong>3. Retire ou receba</strong>Até 30 × 45 cm fica pronto em 1 hora após o pagamento. Grandes formatos, em 3 dias úteis.</span></li>
+            <li><Clock aria-hidden="true" /><span><strong>3. Retire ou receba</strong>Até 30 × 45 cm fica pronto em 1 hora após o pagamento. Grandes formatos e painel em madeira, em 3 dias úteis.</span></li>
           </ol>
         </div>
       </section>

@@ -461,6 +461,7 @@ function BorderPanel({ photo, edit, live }: PanelProps) {
     if (commit) edit(next); else live(next);
   };
   if (sizeById(photo.sizeId).frame) return <p className="ce-note">Fotos retrô já vêm com a moldura branca do modelo (Polaroid ou Instax).</p>;
+  if (sizeById(photo.sizeId).group === "painel") return <p className="ce-note">No painel em madeira a foto cobre a frente toda, sem borda. As laterais são pintadas de preto.</p>;
   return (
     <>
       <Group title="Borda branca nos 4 lados">

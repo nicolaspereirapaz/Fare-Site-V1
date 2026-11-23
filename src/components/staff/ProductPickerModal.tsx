@@ -514,7 +514,7 @@ function PhotoPanel({ onPick }: { onPick: (group: SizeGroup) => void }) {
           </span>
           <b>{group.label}</b>
           <small>{sizeRange(group.id)}</small>
-          <em>{group.id === "grande" ? "Pronto em 3 dias úteis" : "Pronto em 1 hora"}</em>
+          <em>{group.id === "grande" || group.id === "painel" ? "Pronto em 3 dias úteis" : "Pronto em 1 hora"}</em>
         </button>
       ))}
     </div>

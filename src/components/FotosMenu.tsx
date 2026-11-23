@@ -15,6 +15,8 @@ const ITEMS = [
   { tipo: "retro", title: "Fotos retrô", sizes: "Polaroid e Instax", note: "Pronto em 1 hora", image: "/images/revelacao/06-fotos-retro.webp" },
   { tipo: "ampliacao", title: "Ampliações", sizes: "20 × 20 a 30 × 45 cm", note: "Pronto em 1 hora", image: "/images/revelacao/04-ampliacao-30x45-parede.webp" },
   { tipo: "grande", title: "Grandes formatos", sizes: "30 × 60 até 60 × 250 cm", note: "3 dias úteis", image: "/images/revelacao/05-grande-formato-60x90.webp" },
+  // 5º item: a grade tem 4 colunas, então o painel abre a linha de baixo.
+  { tipo: "painel", title: "Painel em madeira", sizes: "15 × 21 até 60 × 150 cm", note: "3 dias úteis", image: "/images/revelacao/07-painel-madeira.webp" },
 ];
 
 export function FotosMenu({ onNavigate }: { onNavigate?: () => void }) {

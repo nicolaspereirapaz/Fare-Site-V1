@@ -76,7 +76,7 @@ export function PhotoProductPreview({ name, shortDescription, group = "revelacao
         </div>
         <div role="tabpanel"><PriceTable group={table} /></div>
         <p className="fp-note"><MessageCircle aria-hidden="true" size={18} /> {((pro && groupOf(table).proNote) || groupOf(table).note).replace(/ Pronto em [^.]+\./, "")} Papel brilho ou fosco, mesmo valor.</p>
-        <p className="fp-help fp-inline-icon"><Clock aria-hidden="true" size={15} /> Até 30 × 45: pronto em 1 hora após o pagamento. Grandes formatos: 3 dias úteis.</p>
+        <p className="fp-help fp-inline-icon"><Clock aria-hidden="true" size={15} /> Até 30 × 45: pronto em 1 hora após o pagamento. Grandes formatos e painel em madeira: 3 dias úteis.</p>
       </fieldset>
     </div>
   );

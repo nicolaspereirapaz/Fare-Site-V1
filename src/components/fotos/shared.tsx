@@ -9,7 +9,7 @@ import "./fotos.css";
 import { queueUpload, retryUpload, uploadBlob } from "@/components/fotos/upload";
 import { photoStore, setPhotos } from "@/components/fotos/store";
 import {
-  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
+  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, PAINEL_BANDS, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
   type FilterId, type Photo, type Size, type SizeGroup, type SizeId,
   PRO_PRICES,
 } from "@/components/fotos/catalog";
@@ -256,6 +256,17 @@ export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Recor
             ))}
           </>
         ) : null}
+        {group === "painel" ? (
+          <>
+            <div className="quantity-range-head fp-price-row two" aria-hidden="true"><span>Tamanho (cm)</span><span>Cada painel</span></div>
+            {PAINEL_BANDS.map((band) => (
+              <div className="quantity-range-row fp-price-row two" key={band.price}>
+                <span>{band.sizes.map(([w, h]) => `${num(w)} × ${num(h)}`).join(" / ")}</span>
+                <strong className={hit(band.sizes.some(([w, h]) => count(`painel-${w}x${h}`) > 0))}>{brl(band.price)}</strong>
+              </div>
+            ))}
+          </>
+        ) : null}
         {group === "grande" ? (
           <>
             <div className="quantity-range-head fp-price-row two" aria-hidden="true"><span>Tamanho (cm)</span><span>Cada foto</span></div>
@@ -271,7 +282,7 @@ export function PriceTable({ group, counts }: { group: SizeGroup; counts?: Recor
       {anyHit ? (
         <p className="fp-hit-legend">
           <i className="fp-hit-swatch" /> Preço das suas fotos agora
-          {group !== "grande" && ordered.some((size) => size.group === group && size.custom) ? ` (tamanho digitado: + ${brl(CUSTOM_EXTRA[group])} por foto)` : ""}
+          {group !== "grande" && group !== "painel" && ordered.some((size) => size.group === group && size.custom) ? ` (tamanho digitado: + ${brl(CUSTOM_EXTRA[group])} por foto)` : ""}
         </p>
       ) : null}
     </div>

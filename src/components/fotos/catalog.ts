@@ -4,7 +4,7 @@
 export type SizeId = string;
 export type Paper = "brilho" | "fosco";
 export type PrintSize = { width: number; height: number };
-export type SizeGroup = "revelacao" | "retro" | "ampliacao" | "grande";
+export type SizeGroup = "revelacao" | "retro" | "ampliacao" | "grande" | "painel";
 /**
  * Foto retrô (cm): cartão branco com a janela da foto. Na impressão os cartões vão numa folha 10,2 × 15,2 cinza,
  * que a loja recorta depois; no site aparece só o cartão branco com a foto.
@@ -57,6 +57,22 @@ export function bigBand(w: number, h: number) {
   return BIG_BANDS.find((band) => short <= band.short && long <= band.long) ?? null;
 }
 const big = (w: number, h: number): Size => ({ ...cm(w, h), group: "grande", price: bigBand(w, h)!.price! });
+// Painel fotográfico em madeira: papel fotográfico aplicado em MDF de 3,5 cm com laterais pretas (fornecedor).
+// Preço fixo por painel, por faixa da tabela de 23/11; só os tamanhos da tabela (sem tamanho digitado).
+export const PAINEL_BANDS: { sizes: [number, number][]; price: number }[] = [
+  { sizes: [[15, 21], [20, 20]], price: 100 },
+  { sizes: [[20, 25], [20, 30]], price: 105 },
+  { sizes: [[24, 30], [25, 30], [30, 30]], price: 115 },
+  { sizes: [[28, 35], [30, 40], [30, 45]], price: 133.75 },
+  { sizes: [[40, 50], [40, 60], [50, 60]], price: 212.5 },
+  { sizes: [[50, 70], [50, 75]], price: 265 },
+  { sizes: [[50, 80], [50, 90]], price: 321.25 },
+  { sizes: [[60, 70], [60, 80]], price: 402.5 },
+  { sizes: [[60, 90], [60, 100]], price: 452.5 },
+  { sizes: [[60, 120], [60, 150]], price: 527.5 },
+];
+export const PAINEL_SIZES: Size[] = PAINEL_BANDS.flatMap((band) =>
+  band.sizes.map(([w, h]) => ({ ...cm(w, h), id: `painel-${w}x${h}`, group: "painel" as const, price: band.price })));
 // Fotos retrô: medidas do modelo da loja ("Design sem nome.pdf"). Preços aprovados em 20/10.
 // Instax sai 2 por folha: faixas e quantidades sempre em número par.
 const retro = (id: string, name: string, frame: Frame, steps: { min: number; unit: number }[]): Size =>
@@ -102,11 +118,12 @@ export const SIZES: Size[] = [
   big(30, 60), big(40, 50), big(40, 60), big(45, 60), big(50, 60), big(50, 70), big(50, 75), big(50, 80),
   big(50, 90), big(50, 100), big(60, 80), big(60, 90), big(60, 100), big(60, 120), big(60, 180), big(60, 200),
   ...IMA_SIZES,
+  ...PAINEL_SIZES,
 ];
 // Tamanho digitado pelo cliente:
 // - revelação e ampliação: cobra como o menor tamanho da tabela em que ele cabe, + R$ 1,00 (revelação) ou + R$ 3,00 (ampliação);
 // - grandes formatos: entra na faixa de preço em que cabe.
-export const CUSTOM_EXTRA: Record<SizeGroup, number> = { revelacao: 1, retro: 0, ampliacao: 3, grande: 0 };
+export const CUSTOM_EXTRA: Record<SizeGroup, number> = { revelacao: 1, retro: 0, ampliacao: 3, grande: 0, painel: 0 };
 // Medidas de um tamanho da tabela: a comercial e a real da máquina (lado menor × lado maior).
 const measures = (size: Size) => [size.size, size.real].filter((m): m is PrintSize => !!m);
 export const same = (a: number, b: number) => Math.abs(a - b) < 0.05;
@@ -114,7 +131,7 @@ export const same = (a: number, b: number) => Math.abs(a - b) < 0.05;
 const fits = (size: Size, short: number, long: number) =>
   measures(size).some((m) => short <= Math.min(m.width, m.height) + 0.001 && long <= Math.max(m.width, m.height) + 0.001);
 export const isListed = (id: SizeId) => SIZES.some((item) => item.id === id);
-const PREFIX: Record<SizeGroup, string> = { revelacao: "rev", retro: "retro", ampliacao: "amp", grande: "big" };
+const PREFIX: Record<SizeGroup, string> = { revelacao: "rev", retro: "retro", ampliacao: "amp", grande: "big", painel: "painel" };
 
 /** Tamanho da tabela igual ao digitado (medida comercial ou real, em qualquer orientação), se houver. */
 export function listedMatch(group: SizeGroup, w: number, h: number) {
@@ -126,8 +143,8 @@ export function listedMatch(group: SizeGroup, w: number, h: number) {
 export function customSize(group: SizeGroup, w: number, h: number): Size | null {
   const short = Math.min(w, h);
   const long = Math.max(w, h);
-  // Foto retrô só nos modelos da loja (a moldura é fixa).
-  if (!(short > 0) || group === "retro") return null;
+  // Foto retrô só nos modelos da loja (a moldura é fixa); painel só nos tamanhos do fornecedor.
+  if (!(short > 0) || group === "retro" || group === "painel") return null;
   const id = `${PREFIX[group]}-${short}x${long}`;
   if (group === "grande") {
     const price = bigBand(short, long)?.price;
@@ -158,6 +175,8 @@ export const SIZE_GROUPS: { id: SizeGroup; label: string; item: string; note: st
     proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Outros tamanhos e tamanho digitado seguem o preço normal. Pronto em 1 hora após o pagamento." },
   { id: "grande", label: "Grandes formatos", item: "Grande formato", note: "Escolha um tamanho ou digite o seu: o preço segue a faixa da tabela. Pronto em 3 dias úteis.",
     proNote: "Tabela profissional: preço único por foto, em qualquer quantidade. Outros tamanhos e tamanho digitado seguem o preço normal. Pronto em 3 dias úteis." },
+  { id: "painel", label: "Painel em madeira", item: "Painel Fotográfico em Madeira",
+    note: "Papel fotográfico profissional aplicado em painel de MDF de 3,5 cm, com laterais pintadas de preto. A foto cobre a frente toda, sem borda. Preço por painel. Pronto em 3 dias úteis." },
 ];
 /** Foto padrão do produto de cada grupo (carrinho e equipe; as fotos do cliente não aparecem). */
 export const PHOTO_PRODUCT_IMAGE: Record<SizeGroup, string> = {
@@ -165,6 +184,7 @@ export const PHOTO_PRODUCT_IMAGE: Record<SizeGroup, string> = {
   retro: "/images/revelacao/06-fotos-retro.webp",
   ampliacao: "/images/revelacao/04-ampliacao-30x45-parede.webp",
   grande: "/images/revelacao/05-grande-formato-60x90.webp",
+  painel: "/images/revelacao/07-painel-madeira.webp",
 };
 export const groupOf = (id: SizeGroup) => SIZE_GROUPS.find((group) => group.id === id)!;
 /** Preço que aparece no botão do tamanho (revelação depende da quantidade, então não mostra). */
@@ -178,9 +198,10 @@ export function sizePriceHint(size: Size) {
 }
 /** Prazo do pedido: sai tudo junto quando o item mais demorado ficar pronto. */
 export function deadline(photos: { sizeId: SizeId }[]) {
-  return photos.some((photo) => sizeById(photo.sizeId).group === "grande")
-    ? "Com grandes formatos, o pedido fica pronto em 3 dias úteis após o pagamento."
-    : "Pronto em 1 hora após o pagamento.";
+  const groups = new Set(photos.map((photo) => sizeById(photo.sizeId).group));
+  if (!groups.has("grande") && !groups.has("painel")) return "Pronto em 1 hora após o pagamento.";
+  const which = groups.has("grande") && groups.has("painel") ? "grandes formatos e painel em madeira" : groups.has("grande") ? "grandes formatos" : "painel em madeira";
+  return `Com ${which}, o pedido fica pronto em 3 dias úteis após o pagamento.`;
 }
 export const PAPERS: { id: Paper; label: string }[] = [
   { id: "brilho", label: "Brilho" },
@@ -316,7 +337,7 @@ export function layout(photo: Photo) {
   const W = photo.landscape ? long : short;
   const H = photo.landscape ? short : long;
   // Foto retrô: janela fixa da moldura (sem borda escolhida). Deitada = cartão girado, faixa larga à direita.
-  const b = frame ? 0 : photo.border;
+  const b = frame || size.group === "painel" ? 0 : photo.border; // painel: a foto cobre a frente toda
   /** Margem branca entre o papel/cartão e a foto, em cm, em cada lado. */
   let inset = frame
     ? { left: frame.window.left, top: frame.window.top, right: short - frame.window.left - frame.window.width, bottom: long - frame.window.top - frame.window.height }
