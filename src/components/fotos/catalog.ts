@@ -187,6 +187,8 @@ export const PHOTO_PRODUCT_IMAGE: Record<SizeGroup, string> = {
   painel: "/images/revelacao/07-painel-madeira.webp",
 };
 export const groupOf = (id: SizeGroup) => SIZE_GROUPS.find((group) => group.id === id)!;
+/** Painel em madeira é produto à parte, aberto só pelo menu "Fotos": nunca aparece junto dos tipos de foto (e vice-versa). */
+export const groupsFor = (group: SizeGroup | null) => SIZE_GROUPS.filter((item) => (item.id === "painel") === (group === "painel"));
 /** Preço que aparece no botão do tamanho (revelação depende da quantidade, então não mostra). */
 export function sizePriceHint(size: Size) {
   // Preço fixo primeiro: ampliação com ímã tem `price`, sem `prices`.

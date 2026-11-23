@@ -10,7 +10,7 @@ import { PaperChoice } from "@/components/fotos/PaperChoice";
 import { LinkStatus, LinkSummary, type PhotoLinkProps } from "@/components/fotos/LinkSummary";
 import { PhotoEditor } from "@/components/fotos/PhotoEditor";
 import {
-  CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SIZE_GROUPS, SizePicker, groupOf, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
+  CopiesInput, PAPERS, PhotoRender, PriceTable, SIZES, SizePicker, groupOf, groupsFor, Steps, addPhotos, brl, deadline, layout, loadDemoPhotos, loadFiles, patchPhoto, photoStore, quality,
   isListed, minimumIssues, newId, replacePhotoFile, retryUpload, setPhotos, sizeById, summarize, usePhotoState, type Photo, type SizeGroup,
 } from "@/components/fotos/shared";
 
@@ -166,7 +166,7 @@ export function Workspace({ link }: { link?: PhotoLinkProps } = {}) {
                     <div className="fp-card-selects">
                       <label><span>Tamanho</span>
                         <select onChange={(e) => patchPhoto(photo.id, { sizeId: e.target.value })} value={photo.sizeId}>
-                          {SIZE_GROUPS.map((group) => (
+                          {groupsFor(sizeById(photo.sizeId).group).map((group) => (
                             <optgroup key={group.id} label={group.label}>
                               {[...SIZES.filter((size) => size.group === group.id && (pro || !size.magnet || size.id === photo.sizeId)), ...(isListed(photo.sizeId) || sizeById(photo.sizeId).group !== group.id ? [] : [sizeById(photo.sizeId)])].map((size) => <option key={size.id} value={size.id}>{size.label.replace(" cm", "")}</option>)}
                             </optgroup>

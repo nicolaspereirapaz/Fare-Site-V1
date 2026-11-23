@@ -9,7 +9,7 @@ import "./fotos.css";
 import { queueUpload, retryUpload, uploadBlob } from "@/components/fotos/upload";
 import { photoStore, setPhotos } from "@/components/fotos/store";
 import {
-  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, PAINEL_BANDS, RETRO_SIZES, SIZES, SIZE_GROUPS, TIERS, bigBand, brl, customSize, groupOf, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
+  BIG_BANDS, BIG_MAX, CUSTOM_EXTRA, PAINEL_BANDS, RETRO_SIZES, SIZES, TIERS, bigBand, brl, customSize, groupOf, groupsFor, isListed, layout, listedMatch, num, photoCss, pricing, realLabel, same, sizeById, sizePriceHint, stepLabel,
   type FilterId, type Photo, type Size, type SizeGroup, type SizeId,
   PRO_PRICES,
 } from "@/components/fotos/catalog";
@@ -314,7 +314,7 @@ export function SizePicker({ value, onChange, layout: kind = "chips", below }: {
   return (
     <div className={`sp sp-${kind}`}>
       <div className="sp-tabs" role="tablist">
-        {SIZE_GROUPS.map((item) => (
+        {groupsFor(valueGroup).map((item) => (
           <button aria-selected={group === item.id} className={group === item.id ? "active" : ""} key={item.id} onClick={() => setGroup(item.id)} role="tab" type="button">
             {item.label}{valueGroup === item.id ? <i aria-label="(escolhido)" className="sp-dot" /> : null}
           </button>

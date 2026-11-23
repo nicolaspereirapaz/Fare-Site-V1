@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { customSize, deadline, layout, pricing, SIZES, sizeById, type Photo } from "@/components/fotos/catalog";
+import { customSize, deadline, groupsFor, layout, pricing, SIZES, sizeById, type Photo } from "@/components/fotos/catalog";
 import { photoFromName, photoItemName } from "@/components/staff/photoItems";
 
 const photo = (sizeId: string): Photo => ({
@@ -16,6 +16,12 @@ describe("painel fotográfico em madeira", () => {
     expect(pricing("painel-60x150", 1).unit).toBe(527.5);
     // Mesma medida da ampliação, outro produto: ids diferentes.
     expect(sizeById("20x20").group).toBe("ampliacao");
+  });
+
+  it("painel nunca aparece junto dos tipos de foto (só pelo menu)", () => {
+    expect(groupsFor("painel").map((group) => group.id)).toEqual(["painel"]);
+    expect(groupsFor("revelacao").map((group) => group.id)).not.toContain("painel");
+    expect(groupsFor(null).map((group) => group.id)).toEqual(["revelacao", "retro", "ampliacao", "grande"]);
   });
 
   it("só os tamanhos da tabela; a foto cobre a frente toda (sem borda)", () => {

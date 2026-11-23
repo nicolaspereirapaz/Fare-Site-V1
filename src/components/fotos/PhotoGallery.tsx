@@ -47,6 +47,7 @@ const PHOTOS: { src: string; alt: string; tags: Tag[]; group?: SizeGroup }[] = [
   },
   { src: "/images/revelacao/07-painel-madeira.webp", alt: "Painel fotográfico em madeira com laterais pretas encostado na parede, com a foto de uma família sentada no campo ao pôr do sol", tags: [{ label: "40 × 60 cm", x: 50, y: 17.5 }], group: "painel" },
   {
+    group: "painel",
     src: "/images/revelacao/08-painel-madeira-tamanhos.webp",
     alt: "Três painéis fotográficos em madeira de 3,5 cm com laterais pretas, do maior ao menor: praia, montanhas com lago e um cachorro",
     tags: [
@@ -59,28 +60,32 @@ const PHOTOS: { src: string; alt: string; tags: Tag[]; group?: SizeGroup }[] = [
 
 /** Aba de "Tamanhos e preços" escolhida (detail = SizeGroup): a galeria vai para a foto desse tipo. */
 export const PHOTO_TYPE_EVENT = "fotos-tipo";
-const firstOf = (group?: SizeGroup) => PHOTOS.findIndex((item) => item.group === group);
+// Painel em madeira tem galeria própria; as fotos dele não aparecem na revelação (e vice-versa).
+const PAINEL_PHOTOS = PHOTOS.filter((item) => item.group === "painel");
+const PHOTO_PHOTOS = PHOTOS.filter((item) => item.group !== "painel");
+const firstOf = (list: typeof PHOTOS, group?: SizeGroup) => list.findIndex((item) => item.group === group);
 
 export function PhotoGallery({ badge, group }: { badge?: string; group?: SizeGroup }) {
-  const [index, setIndex] = useState(() => Math.max(0, firstOf(group)));
+  const photos = group === "painel" ? PAINEL_PHOTOS : PHOTO_PHOTOS;
+  const [index, setIndex] = useState(() => Math.max(0, firstOf(photos, group)));
   useEffect(() => {
     const onType = (event: Event) => {
-      const found = firstOf((event as CustomEvent<SizeGroup>).detail);
+      const found = firstOf(photos, (event as CustomEvent<SizeGroup>).detail);
       if (found >= 0) setIndex(found);
     };
     window.addEventListener(PHOTO_TYPE_EVENT, onType);
     return () => window.removeEventListener(PHOTO_TYPE_EVENT, onType);
-  }, []);
+  }, [photos]);
   const touchX = useRef<number | null>(null);
-  const go = (step: number) => setIndex((current) => (current + step + PHOTOS.length) % PHOTOS.length);
-  const photo = PHOTOS[index];
+  const go = (step: number) => setIndex((current) => (current + step + photos.length) % photos.length);
+  const photo = photos[index];
 
   return (
     <div className="product-gallery photo-gallery">
       <div aria-label="Fotos do produto" className="product-thumbnail-rail">
-        {PHOTOS.map((item, i) => (
+        {photos.map((item, i) => (
           <button
-            aria-label={`Ver foto ${i + 1} de ${PHOTOS.length}`}
+            aria-label={`Ver foto ${i + 1} de ${photos.length}`}
             aria-pressed={i === index}
             className={`product-thumbnail product-thumbnail-button${i === index ? " active" : ""}`}
             key={item.src}
@@ -115,7 +120,7 @@ export function PhotoGallery({ badge, group }: { badge?: string; group?: SizeGro
         <button aria-label="Foto anterior" className="pg-arrow pg-prev" onClick={() => go(-1)} type="button"><ChevronLeft aria-hidden="true" size={22} /></button>
         <button aria-label="Próxima foto" className="pg-arrow pg-next" onClick={() => go(1)} type="button"><ChevronRight aria-hidden="true" size={22} /></button>
         <span aria-hidden="true" className="pg-dots">
-          {PHOTOS.map((item, i) => <i className={i === index ? "active" : ""} key={item.src} />)}
+          {photos.map((item, i) => <i className={i === index ? "active" : ""} key={item.src} />)}
         </span>
       </div>
     </div>
