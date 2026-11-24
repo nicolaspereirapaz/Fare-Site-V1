@@ -62,6 +62,53 @@ function Get-IppAttributes($uri) {
   Read-IppResponse (Invoke-Ipp $uri $ms.ToArray())
 }
 
+# A WF-7840 responde "ok" a um trabalho enviado enquanto ela está ocupada (outra página, ou um trabalho de um PC
+# pelo driver, que não aparece na fila IPP) e depois o descarta sem aviso: a 2ª página da comanda sumia.
+# Por isso: espera a impressora livre antes de enviar (Wait-IppIdle) e confirma que o trabalho existiu e terminou (Wait-IppJob).
+
+# printer-state: 3 = livre, 4 = imprimindo, 5 = parada. queued-job-count: trabalhos IPP na fila.
+function Get-IppPrinterState($uri) {
+  $ms = New-IppWriter; Write-Header $ms 0x000B $uri
+  Write-Attr $ms 0x44 "requested-attributes" (Text "printer-state")
+  Write-Attr $ms 0x44 "" (Text "queued-job-count")
+  Write-Bytes $ms ([byte[]]@(0x03))
+  $a = (Read-IppResponse (Invoke-Ipp $uri $ms.ToArray())).Attributes
+  [pscustomobject]@{ State = "$($a['printer-state'] | Select-Object -First 1)"; Queued = "$($a['queued-job-count'] | Select-Object -First 1)" }
+}
+
+function Wait-IppIdle($uri, [int]$timeoutSeconds = 300) {
+  $until = (Get-Date).AddSeconds($timeoutSeconds)
+  while ($true) {
+    $p = Get-IppPrinterState $uri
+    if ($p.State -eq "3" -and $p.Queued -eq "0") { return }
+    if ((Get-Date) -gt $until) { throw "impressora ocupada há mais de $timeoutSeconds s (estado $($p.State), fila $($p.Queued)): confira o painel" }
+    Start-Sleep 2
+  }
+}
+
+# Devolve $true quando o trabalho terminou impresso; $false se ainda imprime depois do prazo (não reenviar: duplicaria).
+# Sem job-id, cancelado, abortado ou sumido = erro: o chamador não marca como impresso e a página é enviada de novo.
+function Wait-IppJob($uri, [string]$jobId, [int]$timeoutSeconds = 300) {
+  if (-not $jobId) { throw "impressora não criou o trabalho (resposta sem job-id)" }
+  $until = (Get-Date).AddSeconds($timeoutSeconds)
+  while ($true) {
+    $ms = New-IppWriter; Write-Header $ms 0x0009 $uri
+    Write-Attr $ms 0x21 "job-id" (Int32Bytes ([int]$jobId))
+    Write-Attr $ms 0x44 "requested-attributes" (Text "job-state")
+    Write-Attr $ms 0x44 "" (Text "job-state-reasons")
+    Write-Bytes $ms ([byte[]]@(0x03))
+    $r = Read-IppResponse (Invoke-Ipp $uri $ms.ToArray())
+    if ($r.Status -notmatch '^0x00[0-9a-fA-F]{2}$') { throw "trabalho $jobId sumiu da impressora ($($r.Status))" }
+    $state = "$($r.Attributes['job-state'] | Select-Object -First 1)"
+    # A Epson responde "ok" sem job-state para trabalho que não existe.
+    if (-not $state) { throw "trabalho $jobId sumiu da impressora ($($r.Status), sem job-state)" }
+    if ($state -eq "9") { return $true }
+    if ($state -in "7", "8") { throw "trabalho $jobId $(if ($state -eq '7') { 'cancelado' } else { 'abortado' }) ($($r.Attributes['job-state-reasons'] -join ' '))" }
+    if ((Get-Date) -gt $until) { return $false }
+    Start-Sleep 2
+  }
+}
+
 # Imprime um documento (a Epson aceita image/jpeg, não PDF): gaveta (media-source: main = gaveta 1),
 # tamanho em centésimos de mm, tipo de papel (stationery = papel comum).
 function Send-IppDocument($uri, [byte[]]$data, [string]$jobName, [string]$format = "image/jpeg", [string]$source = "main", [int]$width = 14850, [int]$height = 21000, [string]$type = "stationery") {

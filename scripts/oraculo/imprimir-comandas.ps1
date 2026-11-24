@@ -35,9 +35,14 @@ function Print-Image($file, $title) {
     $jpeg = New-Object IO.MemoryStream
     $image.Save($jpeg, $codec, $params)
   } finally { $image.Dispose() }
+  # Uma página por vez e só com a impressora livre: a Epson descarta o que chega enquanto está ocupada (a 2ª página sumia).
+  Wait-IppIdle $printerUri
   $r = Send-IppDocument $printerUri $jpeg.ToArray() $title "image/jpeg" "main" 14850 21000 "stationery"
   # 0x0000-0x00FF = sucesso no IPP (0x0007 tambem imprimiu; tratar como erro duplicava a comanda).
   if ($r.Status -notmatch '^0x00[0-9a-fA-F]{2}$') { throw "impressora recusou ($($r.Status)): $($r.Attributes['status-message'] -join ' ')" }
+  # "ok" não basta: confirma que o trabalho existiu e saiu (senão a página fica na fila e vai de novo).
+  $jobId = "$($r.Attributes['job-id'] | Select-Object -First 1)"
+  if (-not (Wait-IppJob $printerUri $jobId)) { Log "AVISO: trabalho $jobId ainda imprimindo depois de 5 min ($title)" }
 }
 $lock = "$work\rodando.lock"
 if ((Test-Path $lock) -and ((Get-Item $lock).LastWriteTime -gt (Get-Date).AddMinutes(-5))) { exit 0 }
