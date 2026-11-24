@@ -20,8 +20,8 @@ export const UPLOADS_DIR = process.env.FARE_PHOTO_UPLOADS_DIR || path.join(proce
 /** Envio que nunca virou pedido é apagado depois de tantos dias. Pedidos finalizados nunca são apagados sozinhos. */
 export const ABANDONED_UPLOAD_DAYS = Number(process.env.FARE_ABANDONED_UPLOAD_DAYS || 7);
 
-/** Tamanho máximo de cada foto enviada (padrão 200 MB; fotos de celular e câmera ficam bem abaixo). */
-export const MAX_UPLOAD_BYTES = Number(process.env.FARE_MAX_UPLOAD_MB || 200) * 1024 * 1024;
+/** Tamanho máximo de cada arquivo enviado (padrão 1 GB). Acima de 50 MB o navegador manda em partes (limite do Cloudflare). */
+export const MAX_UPLOAD_BYTES = Number(process.env.FARE_MAX_UPLOAD_MB || 1024) * 1024 * 1024;
 
 /** Máximo de pixels por foto (≈ 16.000 × 16.000): bloqueia "imagem-bomba" que travaria o servidor. 60×90 cm a 300 dpi ≈ 75 milhões. */
 export const MAX_UPLOAD_PIXELS = 268_402_689;

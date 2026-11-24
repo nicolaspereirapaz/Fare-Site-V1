@@ -50,6 +50,21 @@ describe("pedido de fotos", () => {
     expect(safeFolderName("👩‍👧🤎")).toBe("Cliente");
   });
 
+  it("junta um arquivo enviado em partes e recusa parte fora de ordem", async () => {
+    const { appendUploadPart, finishUploadParts } = await import("@/lib/photoOrders/uploads");
+    const jpeg = new Uint8Array(await sharp({ create: { width: 900, height: 600, channels: 3, background: "#cc3366" } }).jpeg().toBuffer());
+    const id = "0b6f8f6e-3c1a-4d2b-9e7f-1a2b3c4d5e6f";
+    const half = Math.floor(jpeg.length / 2);
+    await appendUploadPart(id, 0, new Blob([jpeg.slice(0, half)]).stream());
+    await expect(appendUploadPart(id, 0, new Blob([jpeg.slice(0, half)]).stream())).rejects.toThrow("fora de ordem");
+    await appendUploadPart(id, half, new Blob([jpeg.slice(half)]).stream());
+    const done = await finishUploadParts(id, "grande.jpg");
+    expect([done.width, done.height]).toEqual([900, 600]);
+    expect(await readUpload(done.id)).not.toBeNull();
+    expect(existsSync(path.join(root, "envios", `${id}.parte`))).toBe(false);
+    await expect(appendUploadPart("../fora", 0, new Blob([jpeg]).stream())).rejects.toThrow("inválido");
+  });
+
   describe("montagem", () => {
     let photos: Array<{ id: string }> = [];
     beforeAll(async () => {

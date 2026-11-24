@@ -1,4 +1,5 @@
-import { cleanupAbandonedUploads, saveUpload } from "@/lib/photoOrders/uploads";
+import { randomUUID } from "node:crypto";
+import { appendUploadPart, cleanupAbandonedUploads, finishUploadParts, saveUpload } from "@/lib/photoOrders/uploads";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +15,19 @@ export async function POST(request: Request) {
   if (isCampaignOnlyMode()) return Response.json({ error: "Não encontrado." }, { status: 404 });
   if (!request.body) return Response.json({ error: "Arquivo vazio." }, { status: 400 });
   const name = decodeURIComponent(request.headers.get("x-file-name") ?? "foto");
+  // Arquivo grande vem em partes: ?inicio=<bytes já enviados>&parte=<id> (a 1ª vem sem id) e &fim=1 na última.
+  const params = new URL(request.url).searchParams;
+  const start = params.get("inicio");
   try {
-    const upload = await saveUpload(request.body, name);
+    let upload;
+    if (start !== null) {
+      const id = params.get("parte") ?? randomUUID();
+      await appendUploadPart(id, Number(start), request.body);
+      if (params.get("fim") !== "1") return Response.json({ parte: id });
+      upload = await finishUploadParts(id, name);
+    } else {
+      upload = await saveUpload(request.body, name);
+    }
     void cleanupAbandonedUploads().catch((error) => console.error("[fotos] limpeza de envios abandonados", error));
     return Response.json({ id: upload.id, width: upload.width, height: upload.height, convertedFrom: upload.convertedFrom });
   } catch (error) {

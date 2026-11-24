@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -55,8 +55,8 @@ export async function sniff(file: string): Promise<"jpeg" | "png" | "other" | "u
 }
 
 /** Corta o envio que passar do limite (ninguém enche o disco do servidor). */
-function sizeLimit(max: number) {
-  let total = 0;
+function sizeLimit(max: number, alreadyReceived = 0) {
+  let total = alreadyReceived;
   return new Transform({
     transform(chunk: Buffer, _encoding, done) {
       total += chunk.length;
@@ -119,6 +119,38 @@ export async function saveUpload(body: ReadableStream<Uint8Array>, fileName: str
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
     throw error;
+  }
+}
+
+/**
+ * Envio grande chega em partes (o Cloudflare recusa requisição acima de 100 MB), uma por vez e em ordem,
+ * juntadas em <UPLOADS_DIR>/<id>.parte. Parte largada no meio cai na limpeza de envios abandonados.
+ */
+const partOf = (id: string) => path.join(UPLOADS_DIR, `${id}.parte`);
+
+/** Junta mais uma parte. `start` tem de ser o que já chegou (parte repetida ou fora de ordem é recusada). */
+export async function appendUploadPart(id: string, start: number, body: ReadableStream<Uint8Array>) {
+  if (!isUploadId(id)) throw new Error("Envio inválido.");
+  const file = partOf(id);
+  await mkdir(UPLOADS_DIR, { recursive: true });
+  const received = await stat(file).then((info) => info.size, () => 0);
+  if (start !== received) throw new Error(`Parte fora de ordem (esperava ${received}, veio ${start}).`);
+  try {
+    await pipeline(Readable.fromWeb(body as unknown as WebReadableStream<Uint8Array>), sizeLimit(MAX_UPLOAD_BYTES, received), createWriteStream(file, { flags: "a" }));
+  } catch (error) {
+    await rm(file, { force: true });
+    throw error;
+  }
+}
+
+/** Chegou a última parte: o arquivo inteiro vira um envio normal. */
+export async function finishUploadParts(id: string, fileName: string): Promise<PhotoUpload> {
+  if (!isUploadId(id)) throw new Error("Envio inválido.");
+  const file = partOf(id);
+  try {
+    return await saveUpload(Readable.toWeb(createReadStream(file)) as unknown as ReadableStream<Uint8Array>, fileName);
+  } finally {
+    await rm(file, { force: true });
   }
 }
 

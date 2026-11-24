@@ -10,19 +10,24 @@ const files = new Map<string, { blob: Blob; name: string }>();
 const waiting: string[] = [];
 let running = 0;
 
+/** O Cloudflare recusa requisição acima de 100 MB: arquivo maior que isto vai em partes, uma por vez. */
+export const PART_BYTES = 50 * 1024 * 1024;
+
+type Reply = Partial<SentPhoto> & { parte?: string; error?: string };
+
 /** POST do arquivo cru (sem multipart), com progresso. */
-export function uploadBlob(blob: Blob, name: string, onProgress?: (fraction: number) => void): Promise<SentPhoto> {
+function post(url: string, blob: Blob, name: string, onProgress?: (fraction: number) => void): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open("POST", "/api/fotos/envios");
+    request.open("POST", url);
     request.setRequestHeader("x-file-name", encodeURIComponent(name));
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
     };
     request.onload = () => {
       try {
-        const data = JSON.parse(request.responseText) as SentPhoto & { error?: string };
-        if (request.status >= 200 && request.status < 300 && data.id) resolve(data);
+        const data = JSON.parse(request.responseText) as Reply;
+        if (request.status >= 200 && request.status < 300 && !data.error) resolve(data);
         else reject(new Error(data.error || "Falha no envio."));
       } catch {
         reject(new Error("Falha no envio."));
@@ -31,6 +36,27 @@ export function uploadBlob(blob: Blob, name: string, onProgress?: (fraction: num
     request.onerror = () => reject(new Error("Sem conexão."));
     request.send(blob);
   });
+}
+
+const sent = (data: Reply): SentPhoto => {
+  if (!data.id) throw new Error("Falha no envio.");
+  return data as SentPhoto;
+};
+
+/** Envia a foto (até 1 GB); acima de PART_BYTES, em partes que o servidor junta. */
+export async function uploadBlob(blob: Blob, name: string, onProgress?: (fraction: number) => void): Promise<SentPhoto> {
+  if (blob.size <= PART_BYTES) return sent(await post("/api/fotos/envios", blob, name, onProgress));
+  let part = "";
+  for (let start = 0; start < blob.size; start += PART_BYTES) {
+    const end = Math.min(start + PART_BYTES, blob.size);
+    const last = end === blob.size;
+    const url = `/api/fotos/envios?inicio=${start}${part ? `&parte=${part}` : ""}${last ? "&fim=1" : ""}`;
+    const data = await post(url, blob.slice(start, end), name, (fraction) => onProgress?.((start + fraction * (end - start)) / blob.size));
+    if (last) return sent(data);
+    if (!data.parte) throw new Error("Falha no envio.");
+    part = data.parte;
+  }
+  throw new Error("Arquivo vazio.");
 }
 
 const exists = (photoId: string) => photoStore.get().photos.some((photo) => photo.id === photoId);
