@@ -110,6 +110,9 @@ export function runAtendimentoMigrations(db: DatabaseSync) {
   addColumn(db, "atd_messages", "menu_selection", "TEXT");
   // v12: reações (JSON {quem: emoji}; "{}" = já teve reação, para o painel ver quando tiram).
   addColumn(db, "atd_messages", "reactions", "TEXT NOT NULL DEFAULT ''");
+  // v13: mensagem da loja editada ou apagada pela equipe (data; o painel mostra "editada" / "apagada").
+  addColumn(db, "atd_messages", "edited_at", "TEXT");
+  addColumn(db, "atd_messages", "deleted_at", "TEXT");
   // v7: anexo nas mensagens rápidas.
   for (const [column, definition] of [["media_file", "TEXT"], ["media_kind", "TEXT"], ["media_mime", "TEXT"], ["media_name", "TEXT"], ["media_size", "INTEGER"], ["media_thumb", "INTEGER NOT NULL DEFAULT 0"]]) {
     addColumn(db, "atd_quick_replies", column, definition);
@@ -255,6 +258,8 @@ function toMessage(row: ConversationRow): Message {
     transcript: String(row.transcript ?? ""),
     transcriptStatus: (String(row.transcript_status ?? "") as Message["transcriptStatus"]) || "",
     ...(row.reactions ? { reactions: parseReactions(row.reactions) } : {}),
+    ...(row.edited_at ? { editedAt: String(row.edited_at) } : {}),
+    ...(row.deleted_at ? { deletedAt: String(row.deleted_at) } : {}),
     createdAt: String(row.created_at),
   };
 }
@@ -331,6 +336,30 @@ export function recentTranscripts(db: DatabaseSync, conversationId: string): Arr
 
 export function recentMenuSelections(db: DatabaseSync, conversationId: string): Array<Pick<Message,'id'|'menuSelection'>> {
   return db.prepare('SELECT id,menu_selection FROM atd_messages WHERE conversation_id=? AND menu_selection IS NOT NULL ORDER BY seq DESC LIMIT 100').all(conversationId).map(row=>({id:String(row.id),menuSelection:JSON.parse(String(row.menu_selection))}));
+}
+
+/** Troca o texto de uma mensagem (edição). A prévia da lista muda se ela for a última da conversa. */
+export function setMessageText(db: DatabaseSync, message: Message, body: string, deliveredText: string) {
+  db.prepare("UPDATE atd_messages SET body = ?, delivered_text = ?, edited_at = ? WHERE id = ?").run(body, deliveredText, nowIso(), message.id);
+  db.prepare("UPDATE atd_conversations SET last_message_preview = ? WHERE id = ? AND last_message_at = ?").run(body.replace(/\s+/g, " ").slice(0, 140), message.conversationId, message.createdAt);
+}
+
+/** Apaga o conteúdo da mensagem (fica o registro "apagada"); devolve o arquivo da mídia para quem chamou tirar do disco. */
+export function clearMessage(db: DatabaseSync, message: Message): string | null {
+  const file = mediaFileOf(db, message.id)?.file ?? null;
+  db.prepare(
+    `UPDATE atd_messages SET body = '', delivered_text = '', transcript = '', transcript_status = '', interactive = NULL, reactions = '',
+       media_file = NULL, media_kind = NULL, media_mime = NULL, media_name = NULL, media_size = NULL, media_thumb = 0, deleted_at = ? WHERE id = ?`,
+  ).run(nowIso(), message.id);
+  db.prepare("UPDATE atd_conversations SET last_message_preview = ? WHERE id = ? AND last_message_at = ?").run("Mensagem apagada", message.conversationId, message.createdAt);
+  return file;
+}
+
+/** Mensagens editadas ou apagadas recentemente (mudam depois que já apareceram no painel). */
+export function recentChanges(db: DatabaseSync, conversationId: string): Message[] {
+  return (db
+    .prepare("SELECT * FROM atd_messages WHERE conversation_id = ? AND (edited_at IS NOT NULL OR deleted_at IS NOT NULL) ORDER BY seq DESC LIMIT 50")
+    .all(conversationId) as ConversationRow[]).map(toMessage);
 }
 
 export function recentDeliveries(db: DatabaseSync, conversationId: string): Array<Pick<Message, "id" | "delivery" | "deliveryError">> {

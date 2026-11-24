@@ -32,8 +32,8 @@ import os from "node:os";
 import nodePath from "node:path";
 import { createRealBrain, realAiConfig, summaryFrom, toWhatsAppFormat } from "@/lib/atendimento/hermesBrain";
 import { detectIntent, extractName, simulatedBrain, type Brain } from "@/lib/atendimento/simulatedBrain";
-import { deliverToWhatsApp, importWhatsAppHistory, isReactionEmoji, parseInbound, reactToMessage, receiveWhatsAppMessage, receiveWhatsAppReaction, tokenMatches } from "@/lib/atendimento/whatsapp";
-import { conversationForPhone, recentReactions } from "@/lib/atendimento/repository";
+import { changeMessage, deliverToWhatsApp, importWhatsAppHistory, isReactionEmoji, parseInbound, reactToMessage, receiveWhatsAppMessage, receiveWhatsAppReaction, tokenMatches } from "@/lib/atendimento/whatsapp";
+import { conversationForPhone, recentChanges, recentReactions } from "@/lib/atendimento/repository";
 import { acceptedMime, crc32, downloadOnlyMime, kindFromMime, mediaPath, mediaRetentionDays, pruneOldMedia, redoThumbs, safeFileName, saveMedia } from "@/lib/atendimento/media";
 import { mediaZipPlan } from "@/lib/atendimento/mediaZip";
 import { formatNumberList, parseNumberList } from "@/lib/atendimento/numberList";
@@ -440,6 +440,45 @@ describe("WhatsApp pela ponte", () => {
     receiveWhatsAppReaction(db, { reaction: { id: "RG", emoji: "🔥" }, chatId: group, pushName: "Bia" });
     receiveWhatsAppReaction(db, { reaction: { id: "RG", emoji: "👏" }, chatId: group, fromPhone: true });
     expect(listMessages(db, groupId)[0].reactions).toEqual({ Bia: "🔥", loja: "👏" });
+  });
+
+  it("editar e apagar: no WhatsApp vai pela ponte (com a assinatura), respeita os prazos e só vale para mensagens da loja", async () => {
+    const { conversationId: id } = receiveWhatsAppMessage(db, inbound("E1", "oi"));
+    const ok = fakeBridge();
+    const [staffMessage] = sendStaffMessages(db, id, ana, "Oi, tudo bem?", { sign: true });
+    await deliverToWhatsApp(db, [staffMessage], bridge, ok.fetcher);
+
+    const edited = await changeMessage(db, id, staffMessage.id, { text: "Oi, tudo bom?" }, bridge, ok.fetcher);
+    expect(ok.sent.at(-1)).toEqual({ url: "http://ponte.local/fare/painel/editar", token: "tk", body: { chatId: "5511977776666@s.whatsapp.net", messageId: "WA1", text: "*Ana:*\nOi, tudo bom?" } });
+    expect(edited).toMatchObject({ body: "Oi, tudo bom?", deliveredText: "*Ana:*\nOi, tudo bom?" });
+    expect(edited.editedAt).toBeTruthy();
+    expect(getConversation(db, id).lastMessagePreview).toBe("Oi, tudo bom?");
+    // Ponte fora do ar: não grava.
+    await expect(changeMessage(db, id, staffMessage.id, { text: "x" }, bridge, fakeBridge(503).fetcher)).rejects.toThrow(AtendimentoError);
+    expect(listMessages(db, id).at(-1)?.body).toBe("Oi, tudo bom?");
+    // Depois de 15 min o WhatsApp não deixa editar; apagar ainda dá.
+    const later = Date.parse(staffMessage.createdAt) + 16 * 60_000;
+    await expect(changeMessage(db, id, staffMessage.id, { text: "x" }, bridge, ok.fetcher, later)).rejects.toThrow("15 minutos");
+    const removed = await changeMessage(db, id, staffMessage.id, { remove: true }, bridge, ok.fetcher, later);
+    expect(ok.sent.at(-1)).toEqual({ url: "http://ponte.local/fare/painel/apagar", token: "tk", body: { chatId: "5511977776666@s.whatsapp.net", messageId: "WA1" } });
+    expect(removed).toMatchObject({ body: "", deliveredText: "", media: null });
+    expect(removed.deletedAt).toBeTruthy();
+    expect(recentChanges(db, id).map((message) => message.id)).toEqual([staffMessage.id]);
+    await expect(changeMessage(db, id, staffMessage.id, { remove: true }, bridge, ok.fetcher)).rejects.toThrow(AtendimentoError);
+
+    // Mensagem do cliente: não.
+    const customer = listMessages(db, id)[0];
+    await expect(changeMessage(db, id, customer.id, { remove: true }, bridge, ok.fetcher)).rejects.toThrow(AtendimentoError);
+    // Nota interna: só no painel, sem ponte.
+    const sentBefore = ok.sent.length;
+    const note = addNote(db, id, ana, "ligar amanhã");
+    expect((await changeMessage(db, id, note.id, { text: "ligar sexta" }, bridge, ok.fetcher)).body).toBe("ligar sexta");
+    expect((await changeMessage(db, id, note.id, { remove: true }, bridge, ok.fetcher)).deletedAt).toBeTruthy();
+    // Não chegou ao WhatsApp (falhou): muda só no painel; o reenvio já sai com o texto novo.
+    const [failed] = sendStaffMessages(db, id, ana, "Teste", { sign: false });
+    await deliverToWhatsApp(db, [failed], bridge, fakeBridge(503).fetcher);
+    expect((await changeMessage(db, id, failed.id, { text: "Teste 2" }, bridge, ok.fetcher)).deliveredText).toBe("Teste 2");
+    expect(ok.sent).toHaveLength(sentBefore);
   });
 
   it("emoji de reação válido", () => {

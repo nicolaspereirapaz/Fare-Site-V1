@@ -17,6 +17,7 @@ import {
   Inbox,
   Mic,
   Paperclip,
+  Pencil,
   MessageSquareDot,
   MessageSquareText,
   Send,
@@ -49,6 +50,7 @@ import {
   CONVERSATION_STATUSES,
   CONVERSATION_STATUS_LABELS,
   isGroupChat,
+  PIX_CARD_TEXT,
   type ConversationStatus,
 } from "@/lib/atendimento/types";
 import { stripWhatsApp,
@@ -428,6 +430,7 @@ function ChatPanel({
           transcripts?: Array<Pick<Message, "id" | "transcript" | "transcriptStatus">>;
           menuSelections?: Array<Pick<Message,"id"|"menuSelection">>;
           reactions?: Array<{ id: string; reactions: Record<string, string> }>;
+          changes?: Message[];
         }>(
           `/api/atendimento/conversas/${conversation.id}?depois=${lastSeq.current}${first ? "" : "&clientes=0"}`,
         );
@@ -466,6 +469,12 @@ function ChatPanel({
               ? list.map((message) => (reactions.has(message.id) ? { ...message, reactions: reactions.get(message.id) } : message))
               : list,
           );
+        }
+        // Editada / apagada (por outra pessoa da equipe): troca o balão.
+        const changes = new Map((data.changes ?? []).map((entry) => [entry.id, entry]));
+        if (changes.size) {
+          const stale = (message: Message) => changes.has(message.id) && (changes.get(message.id)!.editedAt !== message.editedAt || changes.get(message.id)!.deletedAt !== message.deletedAt);
+          setMessages((list) => (list.some(stale) ? list.map((message) => (stale(message) ? changes.get(message.id)! : message)) : list));
         }
         if (data.conversation.unread) {
           const read = await api<{ conversation: Conversation }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { action: "lida" } });
@@ -526,7 +535,27 @@ function ChatPanel({
       setError(reactError instanceof Error ? reactError.message : "Não foi possível reagir.");
     }
   }
+  async function changeMessage(message: Message, body: { action: "editar"; text: string } | { action: "apagar" }) {
+    setError(null);
+    try {
+      const data = await api<{ message: Message }>(`/api/atendimento/conversas/${conversation.id}`, { method: "PATCH", body: { ...body, messageId: message.id } });
+      setMessages((list) => list.map((entry) => (entry.id === data.message.id ? data.message : entry)));
+      return true;
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : "Não foi possível mudar a mensagem.");
+      return false;
+    }
+  }
+  const whatsapp = conversation.channel === "whatsapp";
+  const changes: Changes = {
+    edit: (message, text) => changeMessage(message, { action: "editar", text }),
+    remove: (message) => {
+      const everyone = whatsapp && message.author !== "nota" && message.delivery === "enviada";
+      if (window.confirm(everyone ? "Apagar para todos? A mensagem some também no WhatsApp do cliente." : "Apagar esta mensagem?")) void changeMessage(message, { action: "apagar" });
+    },
+  };
   const quoteProps: QuoteProps = {
+    changes,
     lookup,
     onJump: jumpTo,
     onReply: setReplyTo,
@@ -789,7 +818,63 @@ type QuoteProps = {
   onForward?: (ids: string[]) => void;
   onReact?: (message: Message, emoji: string) => void;
   selection?: Selection;
+  changes?: Changes;
 };
+/** Editar (texto) e apagar mensagens da loja e notas; o servidor confere os prazos do WhatsApp. */
+type Changes = { edit: (message: Message, text: string) => Promise<boolean>; remove: (message: Message) => void };
+const canChange = (message: Message) => !message.deletedAt && (message.author === "vendedor" || message.author === "ia" || message.author === "nota");
+const canEdit = (message: Message) => canChange(message) && Boolean(message.body) && !message.media && !message.interactive && message.body !== PIX_CARD_TEXT;
+
+/** Campo de edição no lugar do texto: Enter salva, Shift+Enter quebra linha, Esc cancela. */
+function EditBox({ message, changes, onDone }: { message: Message; changes: Changes; onDone: () => void }) {
+  const [draft, setDraft] = useState(message.body);
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (saving) return;
+    if (draft.trim() === message.body) return onDone();
+    setSaving(true);
+    if (await changes.edit(message, draft)) onDone();
+    setSaving(false);
+  }
+  return (
+    <div className="at-edit">
+      <textarea
+        aria-label="Editar mensagem"
+        autoFocus
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onDone();
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            void save();
+          }
+        }}
+        rows={Math.min(8, draft.split("\n").length + 1)}
+        value={draft}
+      />
+      <div className="at-edit-actions">
+        <button className="at-btn at-btn-quiet" onClick={onDone} type="button">Cancelar</button>
+        <button className="at-btn at-btn-primary" disabled={saving || !draft.trim()} onClick={() => void save()} type="button">{saving ? "Salvando…" : "Salvar"}</button>
+      </div>
+    </div>
+  );
+}
+
+function ChangeButtons({ message, changes, onEdit }: { message: Message; changes?: Changes; onEdit: () => void }) {
+  if (!changes || !canChange(message)) return null;
+  return (
+    <>
+      {canEdit(message) ? (
+        <button aria-label="Editar esta mensagem" className="at-reply-btn at-edit-btn" onClick={onEdit} title="Editar" type="button">
+          <Pencil aria-hidden="true" size={14} />
+        </button>
+      ) : null}
+      <button aria-label="Apagar esta mensagem" className="at-reply-btn at-delete-btn" onClick={() => changes.remove(message)} title="Apagar" type="button">
+        <Trash2 aria-hidden="true" size={14} />
+      </button>
+    </>
+  );
+}
 
 /** Modo de seleção: caixinha no lugar dos botões; clicar no balão (foto, link, texto) marca/desmarca em vez de abrir. */
 function selectable(ids: string[], selection?: Selection) {
@@ -947,7 +1032,9 @@ function MessageBubble({
   onReact,
   selection,
   group,
+  changes,
 }: { menuStale?: boolean; message: Message; previous?: Message; onResend: (id: string) => void; onOpenPhoto: (id: string) => void; group?: boolean } & QuoteProps) {
+  const [editing, setEditing] = useState(false);
   const dayLabel = dayLabelFor(message, previous);
   const showDay = Boolean(dayLabel);
   if (message.author === "nota") {
@@ -957,8 +1044,15 @@ function MessageBubble({
         <div className="at-note">
           <span className="at-note-head">
             <StickyNote aria-hidden="true" size={12} /> Nota interna · {message.authorName} · {clockTime(message.createdAt)}
+            {message.editedAt && !message.deletedAt ? " · editada" : ""}
+            {changes && canChange(message) && !editing ? (
+              <span className="at-note-actions">
+                <button aria-label="Editar nota" onClick={() => setEditing(true)} title="Editar" type="button"><Pencil aria-hidden="true" size={12} /></button>
+                <button aria-label="Apagar nota" onClick={() => changes.remove(message)} title="Apagar" type="button"><Trash2 aria-hidden="true" size={12} /></button>
+              </span>
+            ) : null}
           </span>
-          <WhatsAppText text={message.body} />
+          {message.deletedAt ? <em className="at-deleted">Nota apagada</em> : editing && changes ? <EditBox changes={changes} message={message} onDone={() => setEditing(false)} /> : <WhatsAppText text={message.body} />}
         </div>
       </>
     );
@@ -981,23 +1075,30 @@ function MessageBubble({
         id={`msg-${message.id}`}
         onClickCapture={select.onClickCapture}
       >
-        {select.box ?? (
-          <>
-            <ReplyButton message={message} onReply={onReply} />
-            <ForwardButton ids={[message.id]} onForward={onForward} />
-            <ReactButton message={message} onReact={onReact} />
-          </>
-        )}
+        {select.box ??
+          (message.deletedAt || editing ? null : (
+            <>
+              <ReplyButton message={message} onReply={onReply} />
+              <ForwardButton ids={[message.id]} onForward={onForward} />
+              <ReactButton message={message} onReact={onReact} />
+              <ChangeButtons changes={changes} message={message} onEdit={() => setEditing(true)} />
+            </>
+          ))}
         {!sameAuthor ? <AuthorLabel group={group} message={message} /> : null}
         <QuotedSnippet id={message.replyToId} lookup={lookup} onJump={onJump} />
         <MessageMediaView message={message} onOpen={onOpenPhoto} />
         <InteractiveOptions message={message} stale={menuStale} />
-        {message.body ? (
+        {message.deletedAt ? (
+          <div className="at-bubble-text at-deleted">🚫 Mensagem apagada</div>
+        ) : editing && changes ? (
+          <EditBox changes={changes} message={message} onDone={() => setEditing(false)} />
+        ) : message.body ? (
           <div className="at-bubble-text">
             <WhatsAppText text={message.interactive ? message.body.replace('\n[Opções apenas para leitura; selecione pelo WhatsApp.]', '') : message.body} />
           </div>
         ) : null}
         <span className="at-bubble-time">
+          {message.editedAt && !message.deletedAt ? "editada · " : ""}
           {message.author === "vendedor" && message.deliveredText !== message.body ? "assinada · " : ""}
           <DeliveryMark message={message} onResend={onResend} />
           {clockTime(message.createdAt)}

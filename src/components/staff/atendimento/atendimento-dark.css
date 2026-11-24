@@ -208,3 +208,7 @@
 [data-atd-theme="dark"] .at-ai-toggle:not(.is-on) { border-color: #6a3524; color: #ffb59a; }
 [data-atd-theme="dark"] .at-ai-toggle.is-on { border-color: #1f5c3a; color: #8fe0b5; }
 .at-ai-toggle:disabled { opacity: 1; cursor: default; }
+[data-atd-theme="dark"] .at-edit textarea { border-color: var(--d-line, #3b4a54); background: var(--d-raised); color: inherit; }
+[data-atd-theme="dark"] .at-deleted { color: #8696a0; }
+[data-atd-theme="dark"] .at-note-actions button { color: #e0b84d; }
+[data-atd-theme="dark"] .at-note-actions button:hover { background: #3d3415; }

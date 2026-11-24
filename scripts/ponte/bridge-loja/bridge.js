@@ -1248,6 +1248,28 @@ app.post('/fare/painel/reagir', async (req, res) => {
     return res.status(502).json({ error: String(error?.message || error).slice(0, 200) });
   }
 });
+// Editar (texto) ou apagar para todos uma mensagem que a loja mandou. O site confere os prazos do WhatsApp.
+for (const action of ['editar', 'apagar']) {
+  app.post(`/fare/painel/${action}`, async (req, res) => {
+    if (!painel.enabled) return res.status(404).json({ error: 'Modo painel desligado' });
+    if (!painel.authorized(req.get('x-fare-token'))) return res.status(401).json({ error: 'AUTH' });
+    const { chatId, messageId, text: body } = req.body || {};
+    if (!painelTarget(chatId)) return res.status(403).json({ error: 'Destino não autorizado' });
+    if (typeof messageId !== 'string' || !messageId || messageId.length > 200) return res.status(400).json({ error: 'Mensagem inválida' });
+    if (action === 'editar' && (typeof body !== 'string' || !body.trim() || body.length > MAX_MESSAGE_LENGTH)) return res.status(400).json({ error: 'Texto inválido' });
+    if (!sock || connectionState !== 'connected') return res.status(503).json({ error: 'Not connected to WhatsApp' });
+    try {
+      // Chave original guardada (no grupo ela traz o participant); senão, montada com o id.
+      const key = messageStore.get(messageId)?.key || { remoteJid: chatId, id: messageId, fromMe: true };
+      const sent = await sendWithTimeout(chatId, action === 'editar' ? { text: body, edit: key } : { delete: key }, { [FARE_BYPASS]: true });
+      trackSentMessageId(sent);
+      painel.markOwn(sent?.key?.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(502).json({ error: String(error?.message || error).slice(0, 200) });
+    }
+  });
+}
 // Pix do painel com o botão "Copiar chave Pix" (mensagem payment_info, igual ao WhatsApp Web).
 app.post('/fare/painel/enviar-pix', async (req, res) => {
   if (!painel.enabled) return res.status(404).json({ error: 'Modo painel desligado' });

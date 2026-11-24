@@ -100,6 +100,9 @@ export type Message = {
   transcriptStatus: "" | "pendente" | "ok" | "falhou";
   /** Reações (emoji) por quem reagiu: "loja" = a Fare (painel ou celular), "cliente" = o contato; no grupo, o nome de quem reagiu. */
   reactions?: Record<string, string>;
+  /** Editada / apagada pela equipe (data). Apagada: texto e mídia já saíram do banco. */
+  editedAt?: string;
+  deletedAt?: string;
   createdAt: string;
 };
 

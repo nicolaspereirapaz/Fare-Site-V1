@@ -1,7 +1,7 @@
 import { validateInteractive } from './interactive';
 import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
-import { mediaPath } from "@/lib/atendimento/media";
+import { mediaPath, removeMedia } from "@/lib/atendimento/media";
 import {
   AtendimentoError,
   openForStaff,
@@ -12,6 +12,8 @@ import {
   getConversation,
   externalIdOf,
   getMessage,
+  clearMessage,
+  setMessageText,
   mediaFileOf,
   messageByExternalId,
   oldestWhatsAppConversation,
@@ -236,6 +238,67 @@ export async function reactToMessage(
     }
   }
   setReaction(db, messageId, "loja", emoji);
+  return getMessage(db, messageId)!;
+}
+
+/** Limites do WhatsApp: editar até 15 min depois de enviar; "apagar para todos" até ~2 dias (usamos 48 h). */
+export const EDIT_WINDOW_MS = 15 * 60_000;
+export const DELETE_WINDOW_MS = 48 * 3_600_000;
+
+/**
+ * Editar (só texto) ou apagar uma mensagem da loja (IA, vendedor, celular) ou uma nota interna.
+ * Já entregue no WhatsApp: a ponte edita / apaga para todos antes de gravar. Não entregue (falhou): só no painel.
+ */
+export async function changeMessage(
+  db: DatabaseSync,
+  conversationId: string,
+  messageId: string,
+  change: { text: string } | { remove: true },
+  config = bridgeConfig(),
+  fetcher: typeof fetch = fetch,
+  now = Date.now(),
+): Promise<Message> {
+  const message = getMessage(db, messageId);
+  if (!message || message.conversationId !== conversationId || message.deletedAt || !["ia", "vendedor", "nota"].includes(message.author)) {
+    throw new AtendimentoError("INVALID_REQUEST", "Só dá para editar ou apagar mensagens da loja.");
+  }
+  const edit = "text" in change ? change.text.trim() : null;
+  if (edit !== null) {
+    if (message.media || message.interactive || message.body === PIX_CARD_TEXT || !message.body) throw new AtendimentoError("INVALID_REQUEST", "Só dá para editar mensagens de texto.");
+    if (!edit) throw new AtendimentoError("INVALID_REQUEST", "Mensagem vazia: use Apagar.");
+    if (edit.length > 4000) throw new AtendimentoError("INVALID_REQUEST", "Mensagem longa demais.");
+  }
+  // Assinatura ("*Ana:*" + quebra de linha) continua igual na edição.
+  const prefix = message.deliveredText.endsWith(message.body) ? message.deliveredText.slice(0, message.deliveredText.length - message.body.length) : "";
+  const conversation = getConversation(db, conversationId);
+  if (conversation.channel === "whatsapp" && message.author !== "nota" && message.delivery !== "falhou") {
+    if (message.delivery === "pendente") throw new AtendimentoError("INVALID_REQUEST", "Mensagem ainda sendo enviada: espere um instante.");
+    const externalId = externalIdOf(db, messageId);
+    if (!config) throw new AtendimentoError("INVALID_REQUEST", "WhatsApp não configurado neste site.");
+    if (!conversation.waChatId || !externalId) throw new AtendimentoError("INVALID_REQUEST", "Essa mensagem não chegou ao WhatsApp: não dá para mudar lá.");
+    const age = now - Date.parse(message.createdAt);
+    if (edit !== null && age > EDIT_WINDOW_MS) throw new AtendimentoError("INVALID_REQUEST", "O WhatsApp só deixa editar até 15 minutos depois de enviar.");
+    if (edit === null && age > DELETE_WINDOW_MS) throw new AtendimentoError("INVALID_REQUEST", "O WhatsApp só deixa apagar para todos até 2 dias depois de enviar.");
+    // Mensagem longa saiu em pedaços: a ponte só guarda o id do último.
+    if ((prefix + (edit ?? message.body)).length > 4096 || message.deliveredText.length > 4096) throw new AtendimentoError("INVALID_REQUEST", "Mensagem longa demais para editar ou apagar pelo painel: faça pelo celular.");
+    let response: Response;
+    try {
+      response = await fetcher(`${config.url}/fare/painel/${edit === null ? "apagar" : "editar"}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-fare-token": config.token },
+        body: JSON.stringify({ chatId: conversation.waChatId, messageId: externalId, ...(edit === null ? {} : { text: prefix + edit }) }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new AtendimentoError("INVALID_REQUEST", "Não consegui falar com o WhatsApp da loja agora. Tente de novo em instantes.");
+    }
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new AtendimentoError("INVALID_REQUEST", response.status === 404 ? "A ponte do WhatsApp ainda não sabe editar/apagar (precisa atualizar)." : `Não foi possível no WhatsApp: ${data.error || response.status}`);
+    }
+  }
+  if (edit !== null) setMessageText(db, message, edit, prefix + edit);
+  else await removeMedia(clearMessage(db, message)).catch(() => undefined);
   return getMessage(db, messageId)!;
 }
 

@@ -562,6 +562,15 @@ button.at-media-image { padding: 0; border: 0; background: none; cursor: zoom-in
 
 /* Encaminhar: botão abaixo do "citar"; no modo de seleção, caixinha no lugar e balão marcado com contorno. */
 .at-bubble .at-forward-btn { top: 34px; }
+.at-bubble .at-edit-btn { top: 94px; }
+.at-bubble .at-delete-btn { top: 124px; }
+.at-bubble .at-delete-btn:hover { color: #c0392b; }
+.at-deleted { color: #667781; font-style: italic; }
+.at-edit textarea { display: block; width: 100%; min-width: 220px; padding: 6px 8px; border: 1px solid #c8d0d6; border-radius: 8px; font: inherit; resize: vertical; }
+.at-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.at-note-actions { display: inline-flex; gap: 2px; margin-left: auto; }
+.at-note-actions button { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: #8a6a10; cursor: pointer; }
+.at-note-actions button:hover { background: #f3e3a8; }
 .at-bubble.is-selectable { cursor: pointer; }
 .at-bubble.is-selected { box-shadow: 0 0 0 2px var(--navy); }
 .at-select-box { position: absolute; top: 6px; right: -30px; width: 18px; height: 18px; margin: 0; accent-color: var(--navy); cursor: pointer; }

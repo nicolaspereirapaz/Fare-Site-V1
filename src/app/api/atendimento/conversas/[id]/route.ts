@@ -9,6 +9,7 @@ import {
   listMessages,
   recentDeliveries,
   recentMenuSelections,
+  recentChanges,
   recentReactions,
   recentTranscripts,
   setConversationTags,
@@ -20,7 +21,7 @@ import {
 import { activeBrain, atendimentoDb, deliverInBackground, json, readJson, respondInBackground, text, withStaff } from "@/lib/atendimento/server";
 import { isAiThinking } from "@/lib/atendimento/service";
 import { isConversationStatus, isGroupChat } from "@/lib/atendimento/types";
-import { reactToMessage } from "@/lib/atendimento/whatsapp";
+import { changeMessage, reactToMessage } from "@/lib/atendimento/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export const GET = withStaff(async (_staff, request, context: Context) => {
     deliveries: conversation.channel === "whatsapp" ? recentDeliveries(db, id) : [],
     transcripts: recentTranscripts(db, id),
     reactions: recentReactions(db, id),
+    // Editadas / apagadas pela equipe (outros painéis abertos também veem).
+    changes: recentChanges(db, id),
     menuSelections: recentMenuSelections(db,id),
   });
 });
@@ -86,6 +89,11 @@ export const PATCH = withStaff(async (staff, request, context: Context) => {
       return json({ conversation: getConversation(db, id) });
     case "reagir":
       return json({ message: await reactToMessage(db, id, text(body.messageId, 80), body.emoji), conversation: getConversation(db, id) });
+    case "editar":
+    case "apagar": {
+      const change = body.action === "editar" ? { text: typeof body.text === "string" ? body.text : "" } : { remove: true as const };
+      return json({ message: await changeMessage(db, id, text(body.messageId, 80), change), conversation: getConversation(db, id) });
+    }
     default:
       throw new AtendimentoError("INVALID_REQUEST", "Ação desconhecida.");
   }
