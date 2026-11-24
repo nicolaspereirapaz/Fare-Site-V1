@@ -1474,25 +1474,40 @@ app.get('/fare/painel/foto', async (req, res) => {
   // O WhatsApp nem sempre entrega a foto pelo LID: tenta também pelo número (JID @s.whatsapp.net), e a miniatura.
   const phone = String(req.query.phone || painel.chats?.get(chatId) || '').replace(/\D/g, '');
   const ids = [chatId, ...(phone ? [phone + '@s.whatsapp.net'] : [])];
-  // Pedido simples (sem o "tctoken" que o Baileys anexa): com o token o WhatsApp não responde para a maioria
-  // dos contatos; sem ele devolve a foto em ~0,1 s (testado). Primeiro pelo LID, depois pelo número.
-  const plain = (jid) => sock.query({ tag: 'iq', attrs: { target: jid, to: 's.whatsapp.net', type: 'get', xmlns: 'w:profile:picture' },
-    content: [{ tag: 'picture', attrs: { type: 'image', query: 'url' } }] }, 8000)
+  // O tctoken (privacidade: quem mostra a foto só para contatos/conversas) vai DENTRO de <picture>.
+  // O Baileys o põe ao lado de <picture> e aí o WhatsApp não responde (408); sem token dá 401 para esses
+  // contatos. Dentro de <picture> a foto vem em ~0,3 s (testado em 23/11). Token guardado pelo LID.
+  const mapped = chatId.endsWith('@lid') ? chatId : await sock.signalRepository?.lidMapping?.getLIDForPN?.(chatId).catch(() => null);
+  const lid = mapped ? jidNormalizedUser(mapped) : null;
+  const stored = lid ? (await sock.authState.keys.get('tctoken', [lid]).catch(() => null))?.[lid]?.token : null;
+  const token = stored?.length ? Buffer.from(stored) : null;
+  const ask = (jid, type = 'image') => sock.query({ tag: 'iq', attrs: { target: jid, to: 's.whatsapp.net', type: 'get', xmlns: 'w:profile:picture' },
+    content: [{ tag: 'picture', attrs: { type, query: 'url' }, ...(token ? { content: [{ tag: 'tctoken', attrs: {}, content: token }] } : {}) }] }, 8000)
     .then((result) => result?.content?.find?.((node) => node.tag === 'picture')?.attrs?.url);
-  const ways = ids.map((id) => () => plain(id));
-  for (const way of ways) {
+  // Primeiro pelo LID, depois pelo número (JID @s.whatsapp.net) e, por fim, a miniatura.
+  const ways = [
+    ...ids.map((id) => [`${id} foto`, () => ask(id)]),
+    [`${ids[0]} miniatura`, () => ask(ids[0], 'preview')],
+  ];
+  const tries = [];
+  let unsure = false;
+  for (const [name, way] of ways) {
     try {
       const url = await way();
-      if (!url) continue;
+      if (!url) { tries.push(`${name}: sem url`); continue; }
       const picture = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      if (!picture.ok) continue;
+      if (!picture.ok) { unsure = true; tries.push(`${name}: download ${picture.status}`); continue; }
       res.set('content-type', picture.headers.get('content-type') || 'image/jpeg');
       return res.send(Buffer.from(await picture.arrayBuffer()));
-    } catch {
-      // sem foto por esse jeito (privacidade, 404): tenta o próximo
+    } catch (error) {
+      // 401 = privacidade, 404 = não tem foto: respostas certas do WhatsApp. O resto (tempo esgotado, rede) é incerto.
+      const code = Number(error?.data) || error?.output?.statusCode || 0; // Baileys: código do WhatsApp em `data`
+      if (code !== 401 && code !== 404) unsure = true;
+      tries.push(`${name}: ${code || String(error?.message || error).slice(0, 60)}`);
     }
   }
-  return res.status(404).json({ error: 'Sem foto' });
+  // Incerto: 502, e o site usa a última foto que tinha em vez de marcar "sem foto" por horas.
+  return res.status(unsure ? 502 : 404).json({ error: unsure ? 'Falha ao buscar a foto' : 'Sem foto', token: !!token, tentativas: tries });
 });
 // Poll for new messages (long-poll style)
 app.get('/messages', (req, res) => {
