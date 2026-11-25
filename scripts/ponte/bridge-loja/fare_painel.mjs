@@ -38,10 +38,45 @@ export function pixPaymentContent({ key, keyType, name }, newId = () => randomBy
 /** Nó "biz" que o WhatsApp exige para mostrar o cartão de pagamento (o Baileys não põe sozinho). */
 export const PIX_BIZ_NODE = { tag: 'biz', attrs: { native_flow_name: 'payment_info' } };
 
+const PIX_KEY_TYPES = { CPF: 'CPF', CNPJ: 'CNPJ', EMAIL: 'e-mail', PHONE: 'telefone', EVP: 'aleatória' };
+
+/**
+ * Cartão de Pix do WhatsApp (botão payment_info ou review_and_pay): sem display_text, virava menu vazio no painel.
+ * Mostra nome, chave, valor e o copia e cola, para o vendedor conferir/copiar.
+ */
+function painelPixText(interactive, clean) {
+  const buttons = Array.isArray(interactive?.nativeFlowMessage?.buttons) ? interactive.nativeFlowMessage.buttons : [];
+  const pay = buttons.filter((button) => button?.name === 'payment_info' || button?.name === 'review_and_pay');
+  if (!pay.length) return '';
+  const lines = ['[Pix do WhatsApp]'];
+  const add = (label, value) => { const text = clean(String(value ?? '')); if (text && !lines.includes(`${label}: ${text}`)) lines.push(`${label}: ${text}`); };
+  add('Mensagem', interactive.body?.text);
+  for (const button of pay) {
+    let params;
+    try { params = typeof button.buttonParamsJson === 'string' && button.buttonParamsJson.length <= 32000 ? JSON.parse(button.buttonParamsJson) : null; } catch { params = null; }
+    if (!params || typeof params !== 'object') continue;
+    const total = params.total_amount;
+    if (Number(total?.value) > 0 && Number(total?.offset) > 0) {
+      add('Valor', (Number(total.value) / Number(total.offset)).toLocaleString('pt-BR', { style: 'currency', currency: params.currency || 'BRL' }));
+    }
+    for (const setting of Array.isArray(params.payment_settings) ? params.payment_settings.slice(0, 10) : []) {
+      const pix = setting?.pix_static_code || setting?.pix_dynamic_code;
+      if (!pix || typeof pix !== 'object') continue;
+      add('Nome', pix.merchant_name);
+      add(`Chave Pix${PIX_KEY_TYPES[pix.key_type] ? ` (${PIX_KEY_TYPES[pix.key_type]})` : ''}`, pix.key);
+      add('Pix copia e cola', pix.code);
+    }
+  }
+  if (lines.length === 1) lines.push('[Abra no celular para ver os dados do Pix.]');
+  return lines.join('\n').slice(0, 4000);
+}
+
 /** Read-only menu text. Never invent numeric choices or expose opaque internal IDs. */
 function painelMenuText(content) {
   const template=content.templateMessage;
   if(template?.interactiveMessageTemplate)return painelMenuText({interactiveMessage:template.interactiveMessageTemplate});
+  const pixText=painelPixText(content.interactiveMessage,value=>typeof value==='string'?value.replace(/[\x00-\x1f]/g,' ').trim().slice(0,1000):'');
+  if(pixText)return pixText;
   const reply=content.listResponseMessage || content.buttonsResponseMessage || content.templateButtonReplyMessage || content.interactiveResponseMessage;
   const menu=content.listMessage || content.buttonsMessage || content.interactiveMessage || template || reply;
   if (!menu) return '';
