@@ -14,17 +14,32 @@ export function formatBytes(size: number) {
   return `${(size / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
-/** Envia um arquivo como corpo bruto (sem guardar tudo na memória do servidor). */
-export async function uploadFile<T>(url: string, file: File, headers: Record<string, string> = {}): Promise<T> {
-  const response = await fetch(url, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": file.type || "application/octet-stream", "x-file-name": encodeURIComponent(file.name), ...headers },
-    body: file,
-  });
+/** O Cloudflare recusa requisição acima de 100 MB: arquivo maior que isto vai em partes, uma por vez. */
+export const PART_BYTES = 50 * 1024 * 1024;
+
+async function post<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await fetch(url, { method: "POST", cache: "no-store", ...init });
   const payload = (await response.json().catch(() => ({}))) as T & { error?: string; message?: string; detail?: string | null };
-  if (!response.ok) throw new ApiError(payload.error ?? "INTERNAL", payload.message ?? "Não foi possível enviar o arquivo.", payload.detail ?? null);
+  if (!response.ok) {
+    const fallback = response.status === 413 ? "Arquivo grande demais para enviar." : "Não foi possível enviar o arquivo.";
+    throw new ApiError(payload.error ?? "INTERNAL", payload.message ?? fallback, payload.detail ?? null);
+  }
   return payload;
+}
+
+/** Envia um arquivo como corpo bruto (sem guardar tudo na memória do servidor); acima de PART_BYTES, em partes. */
+export async function uploadFile<T>(url: string, file: File, headers: Record<string, string> = {}): Promise<T> {
+  const fileHeaders = { "content-type": file.type || "application/octet-stream", "x-file-name": encodeURIComponent(file.name), ...headers };
+  if (file.size <= PART_BYTES) return post<T>(url, { headers: fileHeaders, body: file });
+  let part = "";
+  for (let start = 0; start < file.size; start += PART_BYTES) {
+    const data = await post<{ parte: string }>(`/api/atendimento/upload/partes?inicio=${start}${part ? `&parte=${part}` : ""}`, {
+      headers: { "content-type": "application/octet-stream" },
+      body: file.slice(start, start + PART_BYTES),
+    });
+    part = data.parte;
+  }
+  return post<T>(url, { headers: { ...fileHeaders, "x-parte": part } });
 }
 
 /** Foto, vídeo, áudio ou documento dentro do balão da conversa. */

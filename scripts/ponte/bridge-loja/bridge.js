@@ -1298,7 +1298,7 @@ app.post('/fare/painel/enviar-pix', async (req, res) => {
   }
 });
 // Foto/arquivo do painel: corpo bruto; destino e dados nos cabeçalhos (legenda e nome codificados).
-app.post('/fare/painel/enviar-midia', express.raw({ type: () => true, limit: '100mb' }), async (req, res) => {
+app.post('/fare/painel/enviar-midia', express.raw({ type: () => true, limit: '500mb' }), async (req, res) => {
   if (!painel.enabled) return res.status(404).json({ error: 'Modo painel desligado' });
   if (!painel.authorized(req.get('x-fare-token'))) return res.status(401).json({ error: 'AUTH' });
   const chatId = req.get('x-chat-id') || '';

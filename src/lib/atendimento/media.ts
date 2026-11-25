@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
-import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -17,7 +17,8 @@ import { FFMPEG } from "@/lib/photoOrders/config";
  * Ficam no disco do PC (data/atendimento-midias/<conversa>/<arquivo>), na qualidade em que chegaram.
  */
 export const MEDIA_DIR = process.env.FARE_ATENDIMENTO_MEDIA_DIR || path.join(process.cwd(), "data", "atendimento-midias");
-export const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
+// shortcut: o site e a ponte seguram o arquivo inteiro na memória ao mandar para o WhatsApp; subir só com mais RAM (ou envio em stream).
+export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
 const THUMB_SUFFIX = ".mini.jpg";
 
 /** Miniatura no formato da foto (em pé fica em pé, deitada fica deitada), até 480 px no lado maior. */
@@ -85,8 +86,8 @@ export function acceptedMime(mime: string) {
 /** Tipos que o navegador executaria (página, SVG, script): sempre baixados, nunca abertos no site. */
 export const downloadOnlyMime = (mime: string) => /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|text\/javascript|application\/javascript|application\/x-javascript)$/.test(mime);
 
-function sizeLimit(max: number) {
-  let total = 0;
+function sizeLimit(max: number, alreadyReceived = 0) {
+  let total = alreadyReceived;
   return new Transform({
     transform(chunk: Buffer, _encoding, done) {
       total += chunk.length;
@@ -96,6 +97,41 @@ function sizeLimit(max: number) {
 }
 
 export type StoredMedia = { file: string; size: number; name: string; mime: string; kind: MediaKind };
+
+/**
+ * Arquivo grande do painel chega em partes (o Cloudflare recusa requisição acima de 100 MB), uma por vez e em ordem,
+ * juntadas em <MEDIA_DIR>/.partes/<id>.parte. A última requisição (x-parte) transforma o arquivo em mídia normal.
+ */
+const PARTS_DIR = path.join(MEDIA_DIR, ".partes");
+const PART_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export function mediaPartPath(id: string) {
+  if (!PART_ID.test(id)) throw new Error("Envio inválido.");
+  return path.join(PARTS_DIR, `${id}.parte`);
+}
+
+/** Junta mais uma parte. `start` tem de ser o que já chegou (parte repetida ou fora de ordem é recusada). */
+export async function appendMediaPart(id: string, start: number, body: ReadableStream<Uint8Array>) {
+  const file = mediaPartPath(id);
+  await mkdir(PARTS_DIR, { recursive: true });
+  if (start === 0) void removeAbandonedParts().catch(() => undefined);
+  const received = await stat(file).then((info) => info.size, () => 0);
+  if (start !== received) throw new Error(`Parte fora de ordem (esperava ${received}, veio ${start}).`);
+  try {
+    await pipeline(Readable.fromWeb(body as unknown as WebReadableStream<Uint8Array>), sizeLimit(MAX_MEDIA_BYTES, received), createWriteStream(file, { flags: "a" }));
+  } catch (error) {
+    await rm(file, { force: true });
+    throw error;
+  }
+}
+
+/** Partes largadas no meio (aba fechada, queda de rede) somem depois de 1 dia. */
+async function removeAbandonedParts(now = Date.now()) {
+  for (const name of await readdir(PARTS_DIR).catch(() => [] as string[])) {
+    const file = path.join(PARTS_DIR, name);
+    const { mtimeMs } = await stat(file).catch(() => ({ mtimeMs: now }));
+    if (now - mtimeMs > 24 * 60 * 60 * 1000) await rm(file, { force: true });
+  }
+}
 
 /** Grava o arquivo recebido (stream) na pasta da conversa e faz a miniatura das fotos. */
 export async function saveMedia(

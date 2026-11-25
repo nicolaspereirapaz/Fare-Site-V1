@@ -1,6 +1,8 @@
 import { AtendimentoError } from "@/lib/atendimento/repository";
-import { existsSync } from "node:fs";
-import { acceptedMime, mediaPath, saveMedia, toVoiceNote, type StoredMedia } from "@/lib/atendimento/media";
+import { createReadStream, existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { Readable } from "node:stream";
+import { acceptedMime, mediaPartPath, mediaPath, saveMedia, toVoiceNote, type StoredMedia } from "@/lib/atendimento/media";
 import { isCampaignOnlyMode } from "@/lib/siteMode";
 
 /**
@@ -10,7 +12,9 @@ import { isCampaignOnlyMode } from "@/lib/siteMode";
 export async function readBrowserUpload(request: Request, conversationId: string, options: { asDocument?: boolean } = {}) {
   if (isCampaignOnlyMode()) throw new AtendimentoError("CONVERSATION_NOT_FOUND", "Não encontrado.");
   const mime = (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-  if (!request.body) throw new AtendimentoError("INVALID_REQUEST", "Arquivo vazio.");
+  // x-parte: arquivo grande já chegou em partes (/api/atendimento/upload/partes); esta requisição vem sem corpo.
+  const partId = request.headers.get("x-parte");
+  if (!partId && !request.body) throw new AtendimentoError("INVALID_REQUEST", "Arquivo vazio.");
   if (!acceptedMime(mime)) throw new AtendimentoError("INVALID_REQUEST", "Tipo de arquivo não aceito.");
   const decode = (value: string | null) => {
     try {
@@ -20,8 +24,11 @@ export async function readBrowserUpload(request: Request, conversationId: string
     }
   };
   let stored: StoredMedia;
+  let partFile: string | null = null;
   try {
-    stored = await saveMedia(request.body, {
+    partFile = partId ? mediaPartPath(partId) : null;
+    const body = partFile ? (Readable.toWeb(createReadStream(partFile)) as unknown as ReadableStream<Uint8Array>) : request.body!;
+    stored = await saveMedia(body, {
       conversationId,
       name: decode(request.headers.get("x-file-name")),
       mime,
@@ -29,6 +36,8 @@ export async function readBrowserUpload(request: Request, conversationId: string
     });
   } catch (error) {
     throw new AtendimentoError("INVALID_REQUEST", error instanceof Error ? error.message : "Falha ao gravar o arquivo.");
+  } finally {
+    if (partFile) await rm(partFile, { force: true });
   }
   // Gravação do painel (webm do navegador) vira mensagem de voz do WhatsApp (ogg/opus).
   try {
